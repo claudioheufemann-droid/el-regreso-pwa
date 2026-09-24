@@ -1,10 +1,10 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ChevronDown, ChevronRight, Wallet, ChevronLeft, Search, X, Users, Coins,
-  MessageCircle, Phone, FileDown, Loader2,
+  MessageCircle, Phone, FileDown, Loader2, ArrowUp, ArrowDown, ArrowUpDown,
 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import { useIsDesktop } from '@/lib/useIsDesktop'
@@ -992,13 +992,79 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clien
   )
 }
 
-// ── Tabla de escritorio (tema oscuro existente) ──────────────────────────────
+// ── Tabla de escritorio (tema claro, columnas ordenables) ────────────────────
+// ── Orden de la tabla desktop ────────────────────────────────────────────────
+// Cada columna se ordena con un clic en su encabezado (el segundo clic invierte
+// el sentido) o desde el selector "Ordenar por" del panel de filtros; los dos
+// comparten el mismo estado. Las columnas de montos y días parten de mayor a
+// menor, las de texto de la A a la Z.
+type ColOrden = 'cliente' | 'vendedor' | 'deuda' | 'dias' | 'saldo' | 'barriles' | 'pago'
+type DirOrden = 'asc' | 'desc'
+
+const DIR_INICIAL: Record<ColOrden, DirOrden> = {
+  cliente: 'asc', vendedor: 'asc', deuda: 'desc', dias: 'desc', saldo: 'desc', barriles: 'desc', pago: 'desc',
+}
+
+const OPCIONES_ORDEN: { col: ColOrden; dir: DirOrden; label: string; soloAdmin?: boolean }[] = [
+  { col: 'deuda',    dir: 'desc', label: 'Deuda vencida: mayor a menor' },
+  { col: 'deuda',    dir: 'asc',  label: 'Deuda vencida: menor a mayor' },
+  { col: 'dias',     dir: 'desc', label: 'Días vencida: más a menos' },
+  { col: 'dias',     dir: 'asc',  label: 'Días vencida: menos a más' },
+  { col: 'saldo',    dir: 'desc', label: 'Saldo total: mayor a menor' },
+  { col: 'saldo',    dir: 'asc',  label: 'Saldo total: menor a mayor' },
+  { col: 'barriles', dir: 'desc', label: 'Barriles: más a menos' },
+  { col: 'barriles', dir: 'asc',  label: 'Barriles: menos a más' },
+  { col: 'pago',     dir: 'asc',  label: 'Último pago: más antiguo primero' },
+  { col: 'pago',     dir: 'desc', label: 'Último pago: más reciente primero' },
+  { col: 'cliente',  dir: 'asc',  label: 'Cliente: A → Z' },
+  { col: 'cliente',  dir: 'desc', label: 'Cliente: Z → A' },
+  { col: 'vendedor', dir: 'asc',  label: 'Vendedor: A → Z', soloAdmin: true },
+  { col: 'vendedor', dir: 'desc', label: 'Vendedor: Z → A', soloAdmin: true },
+]
+
+function valorOrden(d: Deudor, col: ColOrden): number | string | null {
+  switch (col) {
+    case 'cliente':  return d.nombre_fantasia.toLowerCase()
+    case 'vendedor': return (vendedorCanonico(d.vendedor) || '').toLowerCase()
+    case 'deuda':    return d.deuda_comercial || 0
+    case 'dias':     return diasMoraDe(d)
+    case 'saldo':    return d.saldo_comercial || 0
+    case 'barriles': return d.barriles_adeudados || 0
+    case 'pago':     return d.ultimo_pago ? new Date(d.ultimo_pago).getTime() : null
+  }
+}
+
+function ordenarDeudores(lista: Deudor[], col: ColOrden, dir: DirOrden): Deudor[] {
+  const signo = dir === 'asc' ? 1 : -1
+  return [...lista].sort((a, b) => {
+    const va = valorOrden(a, col)
+    const vb = valorOrden(b, col)
+    // Sin fecha de pago: siempre al final, sin importar el sentido.
+    if (va === null && vb === null) return 0
+    if (va === null) return 1
+    if (vb === null) return -1
+    const cmp = typeof va === 'string' && typeof vb === 'string'
+      ? va.localeCompare(vb, 'es')
+      : (va as number) - (vb as number)
+    // Empate: desempata por deuda vencida, de mayor a menor.
+    return cmp !== 0 ? cmp * signo : (b.deuda_comercial || 0) - (a.deuda_comercial || 0)
+  })
+}
+
+// Paleta clara de la tabla desktop — misma base que la vista móvil (MC).
+const TD = {
+  ...MC,
+  inputBg: '#F8FAFC', accent: '#B45309', accentSoft: '#FFF7ED', accentLine: '#F59E0B',
+  purple: '#9333EA', purpleSoft: '#FAF5FF', hover: '#F8FAFC', head: '#F8FAFC',
+}
+
 function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
   deudores: Deudor[]; isAdmin: boolean; clientesPorVendedor: Record<string, number>
 }) {
   const [cartera, setCartera] = useState<string>('todos')
   const [filterDeudaVencida, setFilterDeudaVencida] = useState<'todos' | 'vencida' | 'sin-vencida'>('todos')
   const [searchText, setSearchText] = useState('')
+  const [orden, setOrden] = useState<{ col: ColOrden; dir: DirOrden }>({ col: 'deuda', dir: 'desc' })
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
   const [waTarget, setWaTarget] = useState<WATarget | null>(null)
   const [showSaldoNoVencido, setShowSaldoNoVencido] = useState(false)
@@ -1018,13 +1084,23 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
     [universo, clientesPorVendedor],
   )
 
-  const filteredDeudores = universo.filter(d => {
-    if (isAdmin && cartera !== 'todos' && vendedorCanonico(d.vendedor) !== cartera) return false
-    if (filterDeudaVencida === 'vencida' && d.deuda_comercial <= 0) return false
-    if (filterDeudaVencida === 'sin-vencida' && d.deuda_comercial > 0) return false
-    if (searchText && !d.nombre_fantasia.toLowerCase().includes(searchText.toLowerCase())) return false
-    return true
-  })
+  const filteredDeudores = useMemo(() => {
+    const q = searchText.toLowerCase()
+    const res = universo.filter(d => {
+      if (isAdmin && cartera !== 'todos' && vendedorCanonico(d.vendedor) !== cartera) return false
+      if (filterDeudaVencida === 'vencida' && d.deuda_comercial <= 0) return false
+      if (filterDeudaVencida === 'sin-vencida' && d.deuda_comercial > 0) return false
+      if (q && !d.nombre_fantasia.toLowerCase().includes(q)) return false
+      return true
+    })
+    return ordenarDeudores(res, orden.col, orden.dir)
+  }, [universo, isAdmin, cartera, filterDeudaVencida, searchText, orden])
+
+  const clicEncabezado = (col: ColOrden) => {
+    setOrden(o => o.col === col
+      ? { col, dir: o.dir === 'asc' ? 'desc' : 'asc' }
+      : { col, dir: DIR_INICIAL[col] })
+  }
 
   const totals = {
     deudores: filteredDeudores.length,
@@ -1043,27 +1119,43 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
   const clientesTotal = isAdmin ? (cartera === 'todos' ? total.clientes : (clientesPorVendedor[cartera] ?? 0)) : null
 
   const inputStyle: React.CSSProperties = {
-    width: '100%', padding: '8px 12px',
-    background: 'var(--bg)', border: '1px solid var(--border)',
-    borderRadius: 8, color: 'var(--cream)', fontSize: 13,
+    width: '100%', padding: '10px 12px', minHeight: 42,
+    background: TD.inputBg, border: `1px solid ${TD.border}`,
+    borderRadius: 10, color: TD.text, fontSize: 14,
     outline: 'none',
   }
 
   const selectStyle: React.CSSProperties = {
     ...inputStyle,
-    appearance: 'none',
-    backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'12\' height=\'12\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%23888\' stroke-width=\'2\'%3E%3Cpolyline points=\'6 9 12 15 18 9\'/%3E%3C/svg%3E")',
+    appearance: 'none', cursor: 'pointer', fontWeight: 600,
+    backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'12\' height=\'12\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%2364748B\' stroke-width=\'2\'%3E%3Cpolyline points=\'6 9 12 15 18 9\'/%3E%3C/svg%3E")',
     backgroundRepeat: 'no-repeat',
-    backgroundPosition: 'right 10px center',
-    paddingRight: 32,
+    backgroundPosition: 'right 12px center',
+    paddingRight: 34,
   }
 
+  const labelStyle: React.CSSProperties = {
+    fontSize: 11.5, color: TD.muted, fontWeight: 700, letterSpacing: '0.04em', display: 'block', marginBottom: 6,
+  }
+
+  const columnas: { col: ColOrden | null; label: string; align: 'left' | 'right' | 'center' }[] = [
+    { col: 'cliente', label: 'Cliente', align: 'left' },
+    ...(isAdmin ? [{ col: 'vendedor' as const, label: 'Vendedor', align: 'left' as const }] : []),
+    { col: 'deuda', label: 'Deuda vencida', align: 'right' },
+    { col: 'dias', label: 'Días vencida', align: 'right' },
+    { col: 'saldo', label: 'Saldo total', align: 'right' },
+    { col: 'barriles', label: 'Barriles', align: 'right' },
+    { col: 'pago', label: 'Último pago', align: 'left' },
+    { col: null, label: '', align: 'center' },
+  ]
+
   return (
+    <div style={{ minHeight: '100vh', background: TD.bg }}>
     <div style={{ padding: '24px 20px 60px', maxWidth: 1400, margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 4 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Wallet size={22} style={{ color: 'var(--gold)' }} />
-          <h1 style={{ fontSize: 24, fontWeight: 900, color: 'var(--cream)', letterSpacing: '-0.5px' }}>Deudores</h1>
+          <Wallet size={22} style={{ color: TD.accent }} />
+          <h1 style={{ fontSize: 26, fontWeight: 900, color: TD.text, letterSpacing: '-0.5px' }}>Deudores</h1>
         </div>
         {filteredDeudores.length > 0 && (
           <button
@@ -1078,11 +1170,11 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
             }}
             style={{
               display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0,
-              padding: '9px 16px', borderRadius: 10, minHeight: 38,
-              background: exportando ? 'var(--surface)' : 'rgba(212,175,55,0.1)',
-              border: `1px solid ${exportando ? 'var(--border)' : 'rgba(212,175,55,0.35)'}`,
-              color: exportando ? 'var(--muted)' : 'var(--gold)',
-              fontSize: 13, fontWeight: 700, cursor: exportando ? 'default' : 'pointer',
+              padding: '9px 16px', borderRadius: 10, minHeight: 40,
+              background: exportando ? TD.card : TD.accentSoft,
+              border: `1px solid ${exportando ? TD.border : '#FED7AA'}`,
+              color: exportando ? TD.muted : TD.accent,
+              fontSize: 13.5, fontWeight: 700, cursor: exportando ? 'default' : 'pointer',
             }}>
             {exportando
               ? <><Loader2 size={15} className="animate-spin" /> Generando {exportando.hecho}/{exportando.total}…</>
@@ -1090,7 +1182,7 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
           </button>
         )}
       </div>
-      <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 20 }}>
+      <p style={{ fontSize: 14, color: TD.muted, marginBottom: 20 }}>
         {isAdmin
           ? 'Suma de las carteras de los 4 vendedores. No incluye incobrables, CERVECERÍA ni cuentas internas.'
           : 'Deuda de tus clientes asignados.'}
@@ -1098,25 +1190,26 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
 
       <div className="kpi-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 20 }}>
         {[
-          { label: 'Total Deudores', value: totals.deudores, format: 'n', color: '#60a5fa' },
-          { label: 'Deuda Vencida', value: totals.deuda_vencida, format: '$', color: '#f87171' },
-          { label: 'Saldo Total', value: totals.saldo_total, format: '$', color: 'var(--gold)' },
-          { label: 'Barriles', value: totals.barriles_adeudados, format: 'n', color: '#c084fc' },
+          { label: 'Total Deudores', value: totals.deudores, format: 'n', color: TD.blue },
+          { label: 'Deuda Vencida', value: totals.deuda_vencida, format: '$', color: TD.red },
+          { label: 'Saldo Total', value: totals.saldo_total, format: '$', color: TD.accent },
+          { label: 'Barriles', value: totals.barriles_adeudados, format: 'n', color: TD.purple },
         ].map(({ label, value, format, color }) => {
           const esSaldo = label === 'Saldo Total'
           const esDeudores = label === 'Total Deudores'
           return (
             <div key={label} style={{
-              background: 'var(--surface)', border: '1px solid var(--border)',
+              background: TD.card, border: `1px solid ${TD.border}`,
               borderTop: `3px solid ${color}`, borderRadius: 12, padding: '16px 20px',
+              boxShadow: '0 1px 2px rgba(15,23,42,0.04)',
             }}>
-              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 6 }}>
+              <p style={{ fontSize: 11.5, fontWeight: 700, color: TD.muted, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 6 }}>
                 {label}
               </p>
-              <p style={{ fontSize: 22, fontWeight: 900, color }}>
+              <p style={{ fontSize: 24, fontWeight: 900, color }}>
                 {format === '$' ? formatCurrency(value) : value.toLocaleString('es-CL')}
                 {esDeudores && clientesTotal !== null && clientesTotal > 0 && (
-                  <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--muted)' }}>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: TD.muted }}>
                     {' '}de {clientesTotal} ({Math.round((totals.deudores / clientesTotal) * 100)}%)
                   </span>
                 )}
@@ -1124,7 +1217,7 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
               {/* "Deudor" acá mezcla clientes con plata YA vencida y clientes
                   que sólo tienen saldo dentro de plazo (no vencido). */}
               {esDeudores && (
-                <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>
+                <p style={{ fontSize: 12, color: TD.muted, marginTop: 6 }}>
                   {conVencida} con deuda vencida{soloNoVencida > 0 ? ` · ${soloNoVencida} solo dentro de plazo` : ''}
                 </p>
               )}
@@ -1133,8 +1226,8 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
               {esSaldo && (
                 <button onClick={() => setShowSaldoNoVencido(true)}
                   style={{ display: 'flex', alignItems: 'center', gap: 3, marginTop: 6, padding: 0,
-                    background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)',
-                    fontSize: 11, fontWeight: 600 }}>
+                    background: 'none', border: 'none', cursor: 'pointer', color: TD.blue,
+                    fontSize: 12, fontWeight: 600 }}>
                   Ver saldo no vencido
                   <ChevronRight size={12} />
                 </button>
@@ -1155,15 +1248,16 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
               <button key={f.vendedor} onClick={() => setCartera(f.vendedor)}
                 style={{
                   textAlign: 'left', cursor: 'pointer', font: 'inherit',
-                  background: activo ? 'rgba(212,175,55,0.08)' : 'var(--surface)',
-                  border: `1px solid ${activo ? 'var(--gold)' : 'var(--border)'}`,
+                  background: activo ? TD.accentSoft : TD.card,
+                  border: `1px solid ${activo ? TD.accentLine : TD.border}`,
+                  boxShadow: activo ? `0 0 0 1px ${TD.accentLine}` : '0 1px 2px rgba(15,23,42,0.04)',
                   borderRadius: 12, padding: '13px 16px',
                 }}>
-                <p style={{ fontSize: 11, fontWeight: 700, color: activo ? 'var(--gold)' : 'var(--muted)', letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 6 }}>
+                <p style={{ fontSize: 11.5, fontWeight: 700, color: activo ? TD.accent : TD.muted, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 6 }}>
                   {f.nombre}
                 </p>
-                <p style={{ fontSize: 18, fontWeight: 900, color: '#f87171' }}>{formatCurrency(f.vencida)}</p>
-                <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>
+                <p style={{ fontSize: 19, fontWeight: 900, color: TD.red }}>{formatCurrency(f.vencida)}</p>
+                <p style={{ fontSize: 12, color: TD.muted, marginTop: 3 }}>
                   {f.deudores} deudor{f.deudores === 1 ? '' : 'es'}{f.clientes > 0 ? ` de ${f.clientes}` : ''}
                 </p>
               </button>
@@ -1173,14 +1267,12 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
       )}
 
       <div className="grid-stack-mobile" style={{
-        background: 'var(--surface)', border: '1px solid var(--border)',
+        background: TD.card, border: `1px solid ${TD.border}`,
         borderRadius: 12, padding: '16px 20px', marginBottom: 16,
-        display: 'grid', gridTemplateColumns: isAdmin ? 'repeat(3,1fr)' : 'repeat(2,1fr)', gap: 12,
+        display: 'grid', gridTemplateColumns: isAdmin ? 'repeat(4,1fr)' : 'repeat(3,1fr)', gap: 12,
       }}>
         <div>
-          <label style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 700, display: 'block', marginBottom: 6 }}>
-            BUSCAR
-          </label>
+          <label style={labelStyle}>BUSCAR</label>
           <input
             type="text" value={searchText}
             onChange={e => setSearchText(e.target.value)}
@@ -1190,9 +1282,7 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
         </div>
         {isAdmin && (
           <div>
-            <label style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 700, display: 'block', marginBottom: 6 }}>
-              VENDEDOR
-            </label>
+            <label style={labelStyle}>VENDEDOR</label>
             <select value={cartera} onChange={e => setCartera(e.target.value)} style={selectStyle}>
               <option value="todos">Todos los vendedores</option>
               {filas.map(f => <option key={f.vendedor} value={f.vendedor}>{f.vendedor}</option>)}
@@ -1200,9 +1290,7 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
           </div>
         )}
         <div>
-          <label style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 700, display: 'block', marginBottom: 6 }}>
-            ESTADO
-          </label>
+          <label style={labelStyle}>ESTADO</label>
           <select
             value={filterDeudaVencida}
             onChange={e => setFilterDeudaVencida(e.target.value as typeof filterDeudaVencida)}
@@ -1213,15 +1301,30 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
             <option value="sin-vencida">Sin deuda vencida</option>
           </select>
         </div>
+        <div>
+          <label style={labelStyle}>ORDENAR POR</label>
+          <select
+            value={`${orden.col}:${orden.dir}`}
+            onChange={e => {
+              const [col, dir] = e.target.value.split(':') as [ColOrden, DirOrden]
+              setOrden({ col, dir })
+            }}
+            style={selectStyle}
+          >
+            {OPCIONES_ORDEN.filter(o => isAdmin || !o.soloAdmin).map(o => (
+              <option key={`${o.col}:${o.dir}`} value={`${o.col}:${o.dir}`}>{o.label}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div style={{
-        background: 'var(--surface)', border: '1px solid var(--border)',
-        borderRadius: 12, overflow: 'hidden',
+        background: TD.card, border: `1px solid ${TD.border}`,
+        borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 2px rgba(15,23,42,0.04)',
       }}>
         {filteredDeudores.length === 0 ? (
           <div style={{ padding: '48px 24px', textAlign: 'center' }}>
-            <p style={{ color: 'var(--muted)', fontSize: 14 }}>
+            <p style={{ color: TD.muted, fontSize: 14 }}>
               {universo.length === 0
                 ? (isAdmin ? 'Todavía no hay deudores cargados.' : 'Ninguno de tus clientes tiene deuda registrada.')
                 : 'No hay deudores que coincidan con los filtros'}
@@ -1229,19 +1332,34 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
               <thead>
-                <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                  {[...(isAdmin ? ['Cliente', 'Vendedor'] : ['Cliente']), 'Deuda Vencida', 'Días Vencida', 'Saldo Total', 'Barriles', 'Último Pago', ''].map(h => (
-                    <th key={h} style={{
-                      padding: '10px 14px', textAlign: h === 'Deuda Vencida' || h === 'Saldo Total' || h === 'Barriles' || h === 'Días Vencida' ? 'right' : 'left',
-                      fontSize: 11, fontWeight: 700, color: 'var(--muted)',
-                      letterSpacing: '0.5px', textTransform: 'uppercase',
-                      whiteSpace: 'nowrap',
-                    }}>
-                      {h}
-                    </th>
-                  ))}
+                <tr style={{ borderBottom: `1px solid ${TD.border}`, background: TD.head }}>
+                  {columnas.map(({ col, label, align }) => {
+                    const activa = col !== null && orden.col === col
+                    const Icono = !activa ? ArrowUpDown : orden.dir === 'desc' ? ArrowDown : ArrowUp
+                    return (
+                      <th key={label || 'acciones'} style={{ padding: 0, textAlign: align, whiteSpace: 'nowrap' }}
+                        aria-sort={activa ? (orden.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
+                        {col === null ? null : (
+                          <button
+                            onClick={() => clicEncabezado(col)}
+                            title="Ordenar por esta columna"
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 5,
+                              flexDirection: align === 'right' ? 'row-reverse' : 'row',
+                              width: '100%', justifyContent: align === 'right' ? 'flex-start' : 'flex-start',
+                              padding: '12px 14px', background: 'none', border: 'none', cursor: 'pointer',
+                              font: 'inherit', fontSize: 11.5, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase',
+                              color: activa ? TD.text : TD.muted,
+                            }}>
+                            <Icono size={13} style={{ color: activa ? TD.accent : TD.faint, flexShrink: 0 }} />
+                            {label}
+                          </button>
+                        )}
+                      </th>
+                    )
+                  })}
                 </tr>
               </thead>
               <tbody>
@@ -1252,63 +1370,63 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
                   const diasFila = expandedRow === deudor.id && cobranza
                     ? cobranza.detalle.diasMoraMaxima
                     : diasMoraDe(deudor)
+                  const abierta = expandedRow === deudor.id
                   return (
-                  <>
+                  <Fragment key={deudor.id}>
                     <tr
-                      key={deudor.id}
-                      onClick={() => { setExpandedRow(expandedRow === deudor.id ? null : deudor.id); setCobranza(null) }}
+                      onClick={() => { setExpandedRow(abierta ? null : deudor.id); setCobranza(null) }}
                       style={{
-                        borderBottom: '1px solid var(--border)', cursor: 'pointer',
-                        background: expandedRow === deudor.id ? 'rgba(212,175,55,0.04)' : 'transparent',
+                        borderBottom: `1px solid ${TD.border}`, cursor: 'pointer',
+                        background: abierta ? TD.accentSoft : 'transparent',
                         transition: 'background 0.1s',
                       }}
-                      onMouseEnter={e => { if (expandedRow !== deudor.id) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.03)' }}
-                      onMouseLeave={e => { if (expandedRow !== deudor.id) (e.currentTarget as HTMLElement).style.background = 'transparent' }}
+                      onMouseEnter={e => { if (!abierta) (e.currentTarget as HTMLElement).style.background = TD.hover }}
+                      onMouseLeave={e => { if (!abierta) (e.currentTarget as HTMLElement).style.background = 'transparent' }}
                     >
-                      <td style={{ padding: '11px 14px', fontWeight: 700, color: 'var(--cream)', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <td style={{ padding: '12px 14px', fontWeight: 700, color: TD.text, maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {deudor.nombre_fantasia}
                       </td>
-                      {isAdmin && <td style={{ padding: '11px 14px', color: 'var(--muted)' }}>{vendedorCanonico(deudor.vendedor) || '—'}</td>}
-                      <td style={{ padding: '11px 14px', textAlign: 'right', fontWeight: 700, color: deudor.deuda_comercial > 0 ? '#f87171' : '#4ade80' }}>
+                      {isAdmin && <td style={{ padding: '12px 14px', color: TD.muted }}>{vendedorCanonico(deudor.vendedor) || '—'}</td>}
+                      <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 700, color: deudor.deuda_comercial > 0 ? TD.red : TD.green }}>
                         {formatCurrency(deudor.deuda_comercial)}
                         {deudor.maquila_vencida > 0 && (
-                          <span style={{ display: 'block', fontSize: 10.5, fontWeight: 500, color: 'var(--muted)' }}>
+                          <span style={{ display: 'block', fontSize: 11.5, fontWeight: 500, color: TD.muted }}>
                             + {formatCurrency(Math.round(deudor.maquila_vencida))} maquila
                           </span>
                         )}
                       </td>
                       {/* Días exactos de mora del documento más antiguo impago. */}
-                      <td style={{ padding: '11px 14px', textAlign: 'right', fontWeight: 700, whiteSpace: 'nowrap',
-                        color: diasFila >= 60 ? '#f87171' : diasFila > 0 ? '#fbbf24' : 'var(--muted)' }}>
+                      <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 700, whiteSpace: 'nowrap',
+                        color: diasFila >= 60 ? TD.red : diasFila > 0 ? TD.amber : TD.faint }}>
                         {diasFila > 0 ? `${diasFila} días` : '—'}
                       </td>
-                      <td style={{ padding: '11px 14px', textAlign: 'right', color: 'var(--cream)', fontWeight: 600 }}>
+                      <td style={{ padding: '12px 14px', textAlign: 'right', color: TD.text, fontWeight: 600 }}>
                         {formatCurrency(deudor.saldo_comercial)}
                       </td>
-                      <td style={{ padding: '11px 14px', textAlign: 'right', color: deudor.barriles_adeudados > 0 ? '#c084fc' : 'var(--muted)', fontWeight: 600 }}>
+                      <td style={{ padding: '12px 14px', textAlign: 'right', color: deudor.barriles_adeudados > 0 ? TD.purple : TD.faint, fontWeight: 600 }}>
                         {deudor.barriles_adeudados}
                       </td>
-                      <td style={{ padding: '11px 14px', color: 'var(--muted)' }}>
+                      <td style={{ padding: '12px 14px', color: TD.muted }}>
                         {deudor.ultimo_pago ? new Date(deudor.ultimo_pago).toLocaleDateString('es-CL') : '—'}
                       </td>
-                      <td style={{ padding: '11px 14px', textAlign: 'center' }}>
-                        {expandedRow === deudor.id
-                          ? <ChevronDown size={14} style={{ color: 'var(--gold)' }} />
-                          : <ChevronRight size={14} style={{ color: 'var(--muted)' }} />}
+                      <td style={{ padding: '12px 14px', textAlign: 'center' }}>
+                        {abierta
+                          ? <ChevronDown size={15} style={{ color: TD.accent }} />
+                          : <ChevronRight size={15} style={{ color: TD.faint }} />}
                       </td>
                     </tr>
 
-                    {expandedRow === deudor.id && (
-                      <tr key={`${deudor.id}-detail`}>
-                        <td colSpan={isAdmin ? 9 : 8} style={{
+                    {abierta && (
+                      <tr>
+                        <td colSpan={columnas.length} style={{
                           padding: '20px 24px',
-                          background: 'rgba(212,175,55,0.03)',
-                          borderBottom: '1px solid var(--border)',
-                          borderLeft: '3px solid var(--gold)',
+                          background: '#FFFBF5',
+                          borderBottom: `1px solid ${TD.border}`,
+                          borderLeft: `3px solid ${TD.accentLine}`,
                         }}>
                           {/* Mora exacta, contacto de cobranza y facturas
                               vencidas con su detalle de productos y precios. */}
-                          <PanelCobranza cliente={deudor.nombre_fantasia} tema="oscuro" onDatos={setCobranza} />
+                          <PanelCobranza cliente={deudor.nombre_fantasia} tema="claro" onDatos={setCobranza} />
 
                           <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
                             <button
@@ -1324,17 +1442,17 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
                                   documentos: cobranza ? documentosParaWA(cobranza.detalle) : undefined,
                                 })
                               }}
-                              style={{ minHeight: 38, padding: '0 16px', display: 'flex', alignItems: 'center', gap: 7,
-                                background: 'rgba(37,211,102,0.12)', border: '1px solid rgba(37,211,102,0.3)',
-                                borderRadius: 10, color: '#25D366', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
-                              <MessageCircle size={14} /> Cobrar por WhatsApp
+                              style={{ minHeight: 40, padding: '0 16px', display: 'flex', alignItems: 'center', gap: 7,
+                                background: TD.greenSoft, border: '1px solid rgba(5,150,105,0.3)',
+                                borderRadius: 10, color: TD.green, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+                              <MessageCircle size={15} /> Cobrar por WhatsApp
                             </button>
                             {deudor.telefono && (
                               <a href={`tel:${deudor.telefono}`} onClick={e => e.stopPropagation()}
-                                style={{ minHeight: 38, padding: '0 16px', display: 'flex', alignItems: 'center', gap: 7,
-                                  background: 'rgba(96,165,250,0.10)', border: '1px solid rgba(96,165,250,0.28)',
-                                  borderRadius: 10, color: '#60a5fa', fontSize: 12.5, fontWeight: 700, textDecoration: 'none' }}>
-                                <Phone size={14} /> Llamar
+                                style={{ minHeight: 40, padding: '0 16px', display: 'flex', alignItems: 'center', gap: 7,
+                                  background: TD.blueSoft, border: '1px solid rgba(37,99,235,0.28)',
+                                  borderRadius: 10, color: TD.blue, fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>
+                                <Phone size={15} /> Llamar
                               </a>
                             )}
                           </div>
@@ -1342,7 +1460,7 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
                           <div className="grid-stack-mobile" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 24 }}>
 
                             <div>
-                              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--gold)', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 10 }}>
+                              <p style={{ fontSize: 11.5, fontWeight: 700, color: TD.accent, letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 10 }}>
                                 Contacto
                               </p>
                               {[
@@ -1352,14 +1470,14 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
                                 { label: 'Razón Social', value: deudor.razon_social },
                               ].map(({ label, value }) => (
                                 <div key={label} style={{ marginBottom: 6 }}>
-                                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>{label}: </span>
-                                  <span style={{ fontSize: 12, color: 'var(--cream)' }}>{value || '—'}</span>
+                                  <span style={{ fontSize: 12.5, color: TD.muted }}>{label}: </span>
+                                  <span style={{ fontSize: 13, color: TD.text }}>{value || '—'}</span>
                                 </div>
                               ))}
                             </div>
 
                             <div>
-                              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--gold)', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 10 }}>
+                              <p style={{ fontSize: 11.5, fontWeight: 700, color: TD.accent, letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 10 }}>
                                 Deuda por Antigüedad
                               </p>
                               {[
@@ -1371,8 +1489,8 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
                                 { label: '+90 días', value: deudor.deuda_mas_90_dias },
                               ].map(({ label, value }) => (
                                 <div key={label} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-                                  <span style={{ fontSize: 12, color: 'var(--muted)' }}>{label}</span>
-                                  <span style={{ fontSize: 12, fontWeight: 700, color: (value || 0) > 0 ? '#f87171' : 'var(--muted)' }}>
+                                  <span style={{ fontSize: 13, color: TD.muted }}>{label}</span>
+                                  <span style={{ fontSize: 13, fontWeight: 700, color: (value || 0) > 0 ? TD.red : TD.faint }}>
                                     {formatCurrency(value || 0)}
                                   </span>
                                 </div>
@@ -1380,7 +1498,7 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
                             </div>
 
                             <div>
-                              <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--gold)', letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 10 }}>
+                              <p style={{ fontSize: 11.5, fontWeight: 700, color: TD.accent, letterSpacing: '0.8px', textTransform: 'uppercase', marginBottom: 10 }}>
                                 Cuenta
                               </p>
                               {[
@@ -1391,8 +1509,8 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
                                 { label: 'Fecha Alta', value: deudor.fecha_alta ? new Date(deudor.fecha_alta).toLocaleDateString('es-CL') : null },
                               ].map(({ label, value }) => (
                                 <div key={label} style={{ marginBottom: 6 }}>
-                                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>{label}: </span>
-                                  <span style={{ fontSize: 12, color: 'var(--cream)' }}>{value || '—'}</span>
+                                  <span style={{ fontSize: 12.5, color: TD.muted }}>{label}: </span>
+                                  <span style={{ fontSize: 13, color: TD.text }}>{value || '—'}</span>
                                 </div>
                               ))}
                             </div>
@@ -1401,7 +1519,7 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                   )
                 })}
               </tbody>
@@ -1410,14 +1528,15 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
         )}
       </div>
 
-      <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8, textAlign: 'right' }}>
+      <p style={{ fontSize: 12, color: TD.muted, marginTop: 8, textAlign: 'right' }}>
         Mostrando {filteredDeudores.length} de {universo.length} deudores
       </p>
 
       {waTarget && <WAModal target={waTarget} onClose={() => setWaTarget(null)} />}
       {showSaldoNoVencido && (
-        <SaldoNoVencidoModal deudores={filteredDeudores} isAdmin={isAdmin} tema="oscuro" onClose={() => setShowSaldoNoVencido(false)} />
+        <SaldoNoVencidoModal deudores={filteredDeudores} isAdmin={isAdmin} tema="claro" onClose={() => setShowSaldoNoVencido(false)} />
       )}
+    </div>
     </div>
   )
 }
