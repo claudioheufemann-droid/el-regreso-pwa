@@ -19,44 +19,24 @@
  *  3. Período → el 24→23 de la app, igual que el resto del dashboard.
  */
 
+import { VENDEDORES_AREA_VENTAS_ERP } from '@/lib/types'
+
 /**
- * Vendedores cuya venta comisiona. Fuente única: se pasa por parámetro a las
- * funciones SQL, así que ajustar esta lista basta — no hay que migrar la base.
+ * Vendedores cuya venta comisiona = EXACTAMENTE la misma base que el total
+ * "Venta completa" del dashboard /ventas (VENDEDORES_AREA_VENTAS_ERP):
+ * vendedores del área expandidos a todos sus alias crudos del ERP + el
+ * marcador '@area_ventas' (Cliente Birra, La Confluencia SUP, ...).
  *
- * Nombres tal como los reporta el ERP en `ventas.vendedor_actual`.
- * "Transición 1" y "Transición 2" son carteras traspasadas que hoy atienden
- * Los Ríos y Los Lagos (confirmado por Claudio). "Equipo Ventas",
- * "CERVECERÍA", "No indica" e "Inactivo" quedan fuera a propósito.
- *
- * Corrección 2026-08-28: acá decía 'Los Rios', pero ese valor no existe ni
- * una sola vez en `ventas.vendedor_actual` — las ventas de Nicol Delgado
- * (Los Ríos) quedan con su email, `nicol.delgado@elregresobeer.com` (773
- * filas). Con 'Los Rios' su venta nunca sumó a la comisión de Claudio; no se
- * sabe desde cuándo. Ver [[project_modulo_comisiones_acceso]].
- *
- * Corrección 2026-09-10: mismo bug, esta vez con la cartera de Marion Meza
- * (Los Lagos). Claudio reportó que "Venta neta entregada del equipo" daba
- * $15.884.066 cuando el área comercial completa entregó ~$20M en el período
- * — se verificó con datos reales: la diferencia con CERVECERÍA ($14.004.136,
- * otro canal, fuera del contrato a propósito) y cuentas internas como
- * Rodrigo Solis ($2.409.381, 1 pedido) cuadraba, PERO 45 filas por $251.100
- * quedaban bajo `vendedor_actual = 'Marion'` (sin apellido, ver alias en
- * lib/types.ts) y no sumaban porque el arreglo sólo tenía 'Los Lagos'. Se
- * agrega 'Marion' acá. VER TAMBIÉN: si el ERP vuelve a renombrar esta
- * cartera, agregar el nuevo nombre crudo acá (no basta con VENDEDOR_ALIAS,
- * que sólo unifica el ranking — este arreglo filtra qué SUMA a la comisión).
+ * Corrección 2026-09-24: antes era una lista de nombres crudos escrita a
+ * mano, independiente de la del dashboard. Tercera vez que se rompía por un
+ * renombre del ERP (28-ago 'Los Rios', 10-sep 'Marion', 24-sep
+ * 'nicol.delgado@…' → 'Nicol Delgado': $7.485.909 fuera de la comisión en
+ * Sep-2026), y además no incluía los clientes extra del área ($1.438.356).
+ * Claudio veía $31,1M de venta y una comisión de $222.238 (1% de $22,2M).
+ * Ahora hay UNA sola lista: si el ERP renombra una cartera, basta agregar
+ * el alias en VENDEDOR_ALIAS (lib/types.ts) y cuadran las dos pantallas.
  */
-export const VENDEDORES_COMISIONABLES = [
-  'Yadro Fabijancic',
-  'Marcelo Diaz',
-  'Claudio Heufemann',
-  'nicol.delgado@elregresobeer.com',
-  'Los Lagos',
-  'Marion',
-  'OnLine',
-  'Transición 1',
-  'Transición 2',
-] as const
+export const VENDEDORES_COMISIONABLES: readonly string[] = VENDEDORES_AREA_VENTAS_ERP
 
 /**
  * Quién tiene acceso al módulo /ventas/comisiones — remuneración de TODO el
@@ -272,4 +252,4 @@ export function proyectarAlCierre(valor: number, desde: string, hasta: string): 
   return (valor / transcurridos) * totales
 }
 
-export const fComision = (n: number) => `$${Math.round(n).toLocaleString('es-CL')}`
+export const fComision = (n: number) => `${Math.round(n) < 0 ? '−' : ''}$${Math.abs(Math.round(n)).toLocaleString('es-CL')}`

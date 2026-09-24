@@ -3,7 +3,7 @@ import { createClient as createSbClient } from '@supabase/supabase-js'
 import { SUPABASE_URL } from '@/lib/supabase/config'
 import { getServerUser } from '@/lib/auth'
 import {
-  VENDEDORES_CONTRATO_TERCERA, VENDEDOR_ERP_VARIANTES, calcularResumenVendedor,
+  VENDEDORES_CONTRATO_TERCERA, VENDEDOR_ERP_VARIANTES, variantesErpDe, calcularResumenVendedor,
   type CanalVenta, type EventoApertura, type CarteraVendedor, type PorEntregarVendedor,
 } from '@/lib/comisionesVendedor'
 import { puedeVerComisionesEquipo } from '@/lib/comisiones'
@@ -48,9 +48,10 @@ export async function GET(req: Request) {
     const esVendedorContratoTercera = user.vendedoresErp.some(v => contratoTercera.includes(v))
     if (!esVendedorContratoTercera) return NextResponse.json({ error: 'Sin acceso' }, { status: 403 })
     // Todas las variantes con que este vendedor aparece en el ERP (ej. Yadro
-    // tiene "Yadro Fabijancic" y "Yadro Favijancic" por un typo histórico),
-    // para no perder ventas registradas bajo la otra ortografía.
-    p_vendedores = user.vendedoresErp
+    // tiene "Yadro Fabijancic" y "Yadro Favijancic" por un typo histórico;
+    // Nicol pasó de su email a "Nicol Delgado"), resueltas por VENDEDOR_ALIAS
+    // para no perder ventas cuando el ERP renombra la cartera.
+    p_vendedores = [...new Set(user.vendedoresErp.flatMap(variantesErpDe))]
   }
 
   const desde = searchParams.get('desde') ?? ''

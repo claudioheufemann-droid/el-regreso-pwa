@@ -75,7 +75,11 @@ export default function MiComision({ desde, hasta, nombrePeriodo, isDesktop = fa
     for (const p of data?.productos ?? []) {
       m.set(p.categoria, (m.get(p.categoria) ?? 0) + p.ventaNeta)
     }
-    return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2)
+    // TODAS las categorías, no sólo las 2 mayores: las notas de crédito y
+    // descuentos del ERP caen en "Otros" con monto negativo (≈ −$1,9M en
+    // Sep-2026) y al esconderlas Cerveza + Kombucha sumaban más que la
+    // comisión real. Así las filas siempre cuadran con el 1% de arriba.
+    return [...m.entries()].filter(([, v]) => Math.round(v * TASA_COMISION) !== 0).sort((a, b) => b[1] - a[1])
   }, [data])
 
   if (error) return null           // sin permiso o error: la tarjeta no existe
@@ -246,10 +250,10 @@ export default function MiComision({ desde, hasta, nombrePeriodo, isDesktop = fa
                 const total = porCategoriaMini.reduce((s, [, v]) => s + Math.max(0, v), 0)
                 return porCategoriaMini.map(([cat, venta]) => {
                   const pct = total > 0 ? (Math.max(0, venta) / total) * 100 : 0
-                  const color = cat === 'Kombucha' ? '#34D399' : cat === 'Cerveza' ? '#F59E0B' : '#A78BFA'
+                  const color = venta < 0 ? '#F87171' : cat === 'Kombucha' ? '#34D399' : cat === 'Cerveza' ? '#F59E0B' : '#A78BFA'
                   return (
                     <div key={cat} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <span style={{ fontSize: 12.5, fontWeight: 700, width: 76, flexShrink: 0 }}>{cat}</span>
+                      <span style={{ fontSize: 12.5, fontWeight: 700, width: 104, flexShrink: 0, whiteSpace: 'nowrap' }}>{nombreCategoria(cat, venta)}</span>
                       <div style={{ flex: 1, height: 6, borderRadius: 3, background: 'rgba(255,255,255,.1)', overflow: 'hidden' }}>
                         <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 3 }} />
                       </div>
@@ -268,6 +272,13 @@ export default function MiComision({ desde, hasta, nombrePeriodo, isDesktop = fa
       {abierto && <HojaDetalle data={data} desde={desde} hasta={hasta} nombrePeriodo={nombrePeriodo} onClose={() => setAbierto(false)} isDesktop={isDesktop} />}
     </>
   )
+}
+
+/** Las filas negativas de "Otros" son notas de crédito/descuentos del ERP
+ *  (litros 0, monto negativo) — se nombran como tales para que se entienda
+ *  por qué restan. */
+function nombreCategoria(cat: string, venta: number): string {
+  return venta < 0 && cat === 'Otros' ? 'Notas de crédito' : cat
 }
 
 function Esqueleto() {
@@ -495,7 +506,7 @@ function Resumen({ resumen, cartera, porCategoria }: {
           </p>
           {porCategoria.map(([cat, v]) => {
             const emoji = cat === 'Kombucha' ? '🧃' : cat === 'Cerveza' ? '🍺' : '📦'
-            const color = cat === 'Kombucha' ? C.green : cat === 'Cerveza' ? C.amber : C.purple
+            const color = v.venta < 0 ? C.red : cat === 'Kombucha' ? C.green : cat === 'Cerveza' ? C.amber : C.purple
             const total = porCategoria.reduce((s, [, x]) => s + Math.max(0, x.venta), 0)
             const pct = total > 0 ? (Math.max(0, v.venta) / total) * 100 : 0
             return (
@@ -503,8 +514,8 @@ function Resumen({ resumen, cartera, porCategoria }: {
                 <span style={{ fontSize: 15, flexShrink: 0 }}>{emoji}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 4 }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{cat}</span>
-                    <span style={{ fontSize: 11.5, fontWeight: 700, color }}>{Math.round(pct)}%</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{nombreCategoria(cat, v.venta)}</span>
+                    {v.venta >= 0 && <span style={{ fontSize: 11.5, fontWeight: 700, color }}>{Math.round(pct)}%</span>}
                   </div>
                   <div style={{ height: 5, borderRadius: 3, background: C.line, overflow: 'hidden' }}>
                     <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 3 }} />

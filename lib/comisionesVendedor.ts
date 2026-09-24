@@ -31,6 +31,8 @@
  *     como nota informativa.
  */
 
+import { nombresErpDe, vendedorCanonico } from '@/lib/types'
+
 /**
  * Vendedores bajo la cláusula TERCERA — Yadro y Marcelo por nombre propio.
  * Marion Meza (Los Lagos) aparece como 'Los Lagos' porque así es como el ERP
@@ -47,20 +49,25 @@ export const VENDEDORES_CONTRATO_TERCERA = ['Yadro Fabijancic', 'Marcelo Diaz', 
 
 /**
  * Variantes con que cada vendedor aparece en `ventas.vendedor_actual` /
- * `clientes.vendedor` — mismo dato que `users.vendedores_erp`, pero acá
- * hace falta hardcodeado: cuando un ADMIN pide la comisión de otro
- * vendedor (módulo /ventas/comisiones) no hay sesión de ese vendedor de
- * la cual leer su `vendedoresErp`, así que no hay otra fuente posible.
- * Yadro tiene dos por un typo histórico en el ERP ("Fabijancic" vs
- * "Favijancic"); si a futuro aparece una variante nueva, agregarla acá
- * Y al arreglo `vendedores_erp` de su fila en `users`.
+ * `clientes.vendedor`. Se derivan de VENDEDOR_ALIAS (lib/types.ts), la misma
+ * fuente que usa el dashboard /ventas: la clave es el valor que identifica
+ * al vendedor (el de `users.vendedores_erp`), el valor son TODOS los nombres
+ * crudos de su cartera.
+ *
+ * Corrección 2026-09-24: antes era una lista a mano y quedó desfasada con
+ * dos renombres del ERP — las ventas de Nicol pasaron de
+ * 'nicol.delgado@elregresobeer.com' a 'Nicol Delgado' ($7,49M en Sep-2026,
+ * su comisión salía en $0) y las de Marion cargadas como 'Marion' ($0,9M)
+ * nunca sumaron a la suya. Para un renombre nuevo basta con agregar el alias
+ * en VENDEDOR_ALIAS.
  */
-export const VENDEDOR_ERP_VARIANTES: Record<string, string[]> = {
-  'Yadro Fabijancic': ['Yadro Fabijancic', 'Yadro Favijancic'],
-  'Marcelo Diaz': ['Marcelo Diaz'],
-  'nicol.delgado@elregresobeer.com': ['nicol.delgado@elregresobeer.com'],
-  'Los Lagos': ['Los Lagos'],
+export function variantesErpDe(vendedor: string): string[] {
+  return nombresErpDe(vendedorCanonico(vendedor))
 }
+
+export const VENDEDOR_ERP_VARIANTES: Record<string, string[]> = Object.fromEntries(
+  VENDEDORES_CONTRATO_TERCERA.map(v => [v, variantesErpDe(v)]),
+)
 
 /** Cláusula SEGUNDA — remuneración fija bruta mensual (igual en ambos contratos). */
 export const SUELDO_BASE_BRUTO = 592_885
