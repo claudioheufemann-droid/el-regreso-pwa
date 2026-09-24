@@ -3,11 +3,11 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine, ErrorBar,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts'
 import {
   Banknote, ArrowUpRight, ArrowDownRight, Clock, Upload, Search, ArrowUpDown,
-  TriangleAlert, Info, CalendarCheck, ArrowRight, Store, ChevronDown, CheckCircle2,
+  TriangleAlert, Info, CalendarCheck, ArrowRight, ChevronDown, Target, Activity,
 } from 'lucide-react'
 import type { DatosCobros, ComportamientoPago } from './page'
 import { LABEL_METODO, type MetodoPago } from '@/lib/administracion/movimientosCtaCte'
@@ -52,6 +52,16 @@ function fFechaCorta(iso: string): string {
   const [, m, d] = iso.split('-')
   const meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
   return `${Number(d)} ${meses[Number(m) - 1]}`
+}
+
+/** Número de semana del año (ISO 8601: la semana que contiene el primer jueves
+ *  de enero es la semana 1). Se usa para etiquetar la proyección porque es la
+ *  forma en que Administración habla de "la semana X", no "próxima semana". */
+function semanaISO(fechaISO: string): number {
+  const d = new Date(Date.parse(`${fechaISO}T00:00:00Z`))
+  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7))
+  const inicioAno = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
+  return Math.ceil(((d.getTime() - inicioAno.getTime()) / 86_400_000 + 1) / 7)
 }
 
 /** Tramos de comportamiento, en lenguaje de negocio y no de percentiles. */
@@ -176,10 +186,13 @@ export default function IngresoRealSection({ datos }: { datos: DatosCobros }) {
         </p>
       </div>
 
-      {/* ── La pregunta principal: esta semana, próxima y subsiguiente ─────── */}
-      <ResumenTresSemanas datos={datos} />
+      {/* ── Los dos grandes items: optimista (pactado) vs. real (comportamiento) ── */}
+      <PanoramaCobranza datos={datos} />
 
-      {/* ── Los 4 números principales ─────────────────────────────────────── */}
+      {/* ── Detalle de la proyección: atrasados y quiénes pagan próximo ─────── */}
+      <ProyeccionProximaSemana datos={datos} />
+
+      {/* ── Los 4 números principales (plata YA cobrada, historia reciente) ─── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 14 }}>
         <Tarjeta
           icono={<Banknote size={15} />}
@@ -240,9 +253,6 @@ export default function IngresoRealSection({ datos }: { datos: DatosCobros }) {
           </p>
         </Tarjeta>
       </div>
-
-      {/* ── Proyección: lo que debería entrar ─────────────────────────────── */}
-      <ProyeccionProximaSemana datos={datos} />
 
       {/* ── Gráfico semanal ───────────────────────────────────────────────── */}
       <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: '18px 18px 8px' }}>
@@ -467,159 +477,124 @@ export default function IngresoRealSection({ datos }: { datos: DatosCobros }) {
   )
 }
 
-/* ── Las tres semanas que importan ────────────────────────────────────────── */
+/* ── Los dos grandes items: optimista (pactado) vs. real (comportamiento) ── */
 
 /**
- * La pregunta que Administración necesita contestar de un vistazo: cuánta
- * plata entra ESTA semana, cuánta la PRÓXIMA y cuánta la SUBSIGUIENTE.
+ * El corazón de la pestaña, pedido explícitamente por Administración
+ * (23-sep-2026) como el "apartado principal" de todo el módulo: dos cifras
+ * que contestan la misma pregunta —cuánto va a entrar— desde dos ángulos
+ * distintos, para que la diferencia entre ambos sea visible y no un dato
+ * escondido en una tabla.
  *
- * Junta dos fuentes que hasta ahora vivían en tarjetas separadas y lejanas
- * entre sí en esta misma pestaña:
- *   · Lo YA cobrado esta semana (`confirmadoEstaSemana`, plata real, del
- *     informe de pagos) — es la única de las tres semanas que tiene algo de
- *     plata "segura".
- *   · Lo que TODAVÍA se espera (`proyeccion.semanas`), cruzando facturas
- *     impagas contra el plazo real de cada cliente — ver proyeccionCobros.ts.
+ *   · "Si todos pagan como pactaron": usa `SemanaProyectada.pactado`, el
+ *     reparto que asume CERO atraso frente al plazo que cada cliente tiene
+ *     en su ficha (`PlazoCliente.pactado`) — el escenario ideal.
+ *   · "Lo que realmente va a entrar": usa `SemanaProyectada.base`, el reparto
+ *     que ya usaba el resto del módulo, calculado con el COMPORTAMIENTO
+ *     medido de cada cliente (ver BACKTEST_MAE_SEMANAL) — el número honesto
+ *     para planificar.
  *
- * "Esta semana" sólo tiene barra de "ya en caja" + "por cobrarse todavía".
- * Las otras dos son 100% proyección, así que se muestran con un rango: la
- * barra sólida es "si cada cliente paga como suele hacerlo" y la línea que
- * sobresale (el whisker) es "si se atrasan" — el cuartil lento de cada uno.
- * Mismo criterio que ya usa la tarjeta de "Total estimado" más abajo, sólo
- * que estirado a 3 semanas y llevado a gráfico en vez de texto.
+ * Son dos repartos independientes de universos de facturas parcialmente
+ * distintos (cada uno con su propio criterio de atraso — ver el comentario en
+ * proyeccionCobros.ts), así que cada total se arma sumando su propio bucket
+ * semanal MÁS su propio atrasado, igual que ya hacía `ProyeccionProximaSemana`
+ * para una sola semana.
  */
-function ResumenTresSemanas({ datos }: { datos: DatosCobros }) {
+function PanoramaCobranza({ datos }: { datos: DatosCobros }) {
   const p = datos.proyeccion
 
-  // El useMemo va ANTES del return condicional: los hooks no pueden
-  // llamarse a veces sí y a veces no según el render.
-  const filas = useMemo(() => p.semanas.slice(0, 3).map((s, i) => {
-    const proyectado = Math.round(s.base + p.mostradorSemanal)
-    const optimista = Math.round(s.optimista + p.mostradorSemanal)
-    const lento = Math.round(s.lento + p.mostradorSemanal)
-    const confirmado = i === 0 ? Math.round(datos.confirmadoEstaSemana) : 0
-    return {
-      lunes: s.lunes,
-      etiqueta: i === 0 ? 'Esta semana' : i === 1 ? 'Próxima semana' : 'Semana subsiguiente',
-      subetiqueta: fFechaCorta(s.lunes),
-      confirmado,
-      proyectado,
-      // El "whisker" (± en Recharts) es asimétrico para abajo y para arriba:
-      // baja hasta `optimista` (si pagan mejor de lo habitual) y sube hasta
-      // `lento` (si se atrasan). Los dos son el MISMO dinero de `proyectado`
-      // repartido en una fecha distinta, no plata extra ni faltante.
-      rango: [Math.max(0, proyectado - optimista), Math.max(0, lento - proyectado)] as [number, number],
-      total: confirmado + proyectado,
-      totalOptimista: confirmado + optimista,
-      totalLento: confirmado + lento,
-    }
-  }), [p.semanas, p.mostradorSemanal, datos.confirmadoEstaSemana])
+  const filas = useMemo(() => p.semanas.map(s => ({
+    lunes: s.lunes,
+    etiqueta: `Sem. ${semanaISO(s.lunes)}`,
+    subetiqueta: fFechaCorta(s.lunes),
+    pactado: Math.round(s.pactado + p.mostradorSemanal),
+    real: Math.round(s.base + p.mostradorSemanal),
+  })), [p.semanas, p.mostradorSemanal])
 
   if (!p.hayDatos) return null
 
-  // El informe de pagos se carga a mano (no hay sync automático como en
-  // ventas/stock), así que puede llevar días sin actualizarse. Sin este
-  // aviso, "esta semana" mostrando $0 en caja se lee como "no entró nada" en
-  // vez de "todavía no se cargó el informe" — dos cosas muy distintas para
-  // Administración.
-  const datosDesactualizados = datos.ultimaFecha != null && datos.ultimaFecha < filas[0]?.lunes
+  const nSemanas = p.semanas.length
+  const totalOptimista = p.semanas.reduce((s, x) => s + x.pactado, 0) + p.atrasadoPactado.monto + p.mostradorSemanal * nSemanas
+  const totalReal = p.semanas.reduce((s, x) => s + x.base, 0) + p.atrasado.monto + p.mostradorSemanal * nSemanas
+  const brecha = totalOptimista - totalReal
 
   return (
-    <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: 18 }}>
-      <h3 style={{ fontSize: 15, fontWeight: 800, color: C.text }}>
-        ¿Cuánta plata entra esta semana y las próximas dos?
-      </h3>
-      <p style={{ fontSize: 12.5, color: C.muted, marginTop: 3, lineHeight: 1.6 }}>
-        Lo oscuro ya está en caja. Lo claro es lo que falta cobrar, calculado con cuánto se demora en pagar
-        cada cliente. La rayita sobre cada barra marca el rango completo: desde si pagan más rápido de lo
-        habitual hasta si se atrasan.
-      </p>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
+        <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 16, padding: 20, borderTop: `3px solid ${C.blue}` }}>
+          <p style={{ fontSize: 11.5, fontWeight: 800, color: C.blue, textTransform: 'uppercase', letterSpacing: '.03em', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Target size={14} /> Dinero que entra, optimistamente
+          </p>
+          <p style={{ fontSize: 32, fontWeight: 900, color: C.text, marginTop: 9, fontVariantNumeric: 'tabular-nums' }}>
+            {fMoney(totalOptimista)}
+          </p>
+          <p style={{ fontSize: 12.5, color: C.muted, marginTop: 7, lineHeight: 1.65 }}>
+            Si <strong>todos</strong> los clientes pagaran exactamente al plazo que tienen pactado en su
+            ficha, sin ningún atraso — el escenario ideal, en las próximas {nSemanas} semanas.
+          </p>
+        </div>
 
-      {datosDesactualizados && (
-        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', background: C.amberSoft, border: `1px solid ${C.amberBorder}`, borderRadius: 10, padding: '10px 13px', marginTop: 12 }}>
-          <TriangleAlert size={14} style={{ color: C.amber, flexShrink: 0, marginTop: 1 }} />
-          <p style={{ fontSize: 12, color: C.text, lineHeight: 1.5 }}>
-            El informe de pagos está cargado sólo hasta la semana del {fFechaCorta(datos.ultimaFecha!)}: el
-            &quot;ya en caja&quot; de esta semana puede estar incompleto, no necesariamente en cero.{' '}
-            <Link href="/administracion/cargar-cobros" style={{ color: C.text, fontWeight: 700 }}>
-              Cargar un informe más nuevo
-            </Link>
+        <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 16, padding: 20, borderTop: `3px solid ${C.teal}` }}>
+          <p style={{ fontSize: 11.5, fontWeight: 800, color: C.teal, textTransform: 'uppercase', letterSpacing: '.03em', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Activity size={14} /> Lo que verdaderamente va a entrar
+          </p>
+          <p style={{ fontSize: 32, fontWeight: 900, color: C.text, marginTop: 9, fontVariantNumeric: 'tabular-nums' }}>
+            {fMoney(totalReal)}
+          </p>
+          <p style={{ fontSize: 12.5, color: C.muted, marginTop: 7, lineHeight: 1.65 }}>
+            Según el <strong>comportamiento de pago real</strong> medido de cada cliente (no lo que promete
+            su ficha) — el número a usar para planificar caja.
+          </p>
+        </div>
+      </div>
+
+      {brecha > 0 && (
+        <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start', background: C.amberSoft, border: `1px solid ${C.amberBorder}`, borderRadius: 12, padding: '12px 15px' }}>
+          <TriangleAlert size={15} style={{ color: C.amber, flexShrink: 0, marginTop: 1 }} />
+          <p style={{ fontSize: 12.5, color: C.text, lineHeight: 1.6 }}>
+            La diferencia entre ambos escenarios es <strong>{fMoney(brecha)}</strong>: es lo que le cuesta
+            al flujo de caja que los clientes se demoren más de lo que prometieron.
           </p>
         </div>
       )}
 
-      {/* Las 3 cifras, para leer sin mirar el gráfico */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginTop: 16, marginBottom: 4 }}>
-        {filas.map((f, i) => (
-          <div key={f.lunes} style={{ background: C.bg, borderRadius: 11, padding: 14 }}>
-            <p style={{ fontSize: 11.5, fontWeight: 700, color: C.muted, display: 'flex', alignItems: 'center', gap: 5 }}>
-              {i === 0 && <CheckCircle2 size={12} style={{ color: C.green }} />}
-              {f.etiqueta} <span style={{ fontWeight: 500, color: C.faint }}>· {f.subetiqueta}</span>
-            </p>
-            <p style={{ fontSize: 23, fontWeight: 900, color: C.text, marginTop: 5, fontVariantNumeric: 'tabular-nums' }}>
-              {fMoney(f.total)}
-            </p>
-            <p style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>
-              {i === 0
-                ? f.confirmado > 0
-                  ? <>{fMoney(f.confirmado)} ya en caja + {fMoney(f.proyectado)} por cobrarse</>
-                  : datosDesactualizados
-                    ? 'informe de pagos desactualizado, ver aviso arriba'
-                    : 'nada cobrado todavía esta semana'
-                : (() => {
-                    // No se asume que optimista siempre sea menor y lento
-                    // siempre mayor: la plata que "gana" una semana porque se
-                    // adelanta desde la siguiente puede pesar más que la que
-                    // "pierde" porque se adelanta hacia la anterior — son
-                    // sumas de facturas distintas, no un slider parejo.
-                    const lo = Math.min(f.totalOptimista, f.total, f.totalLento)
-                    const hi = Math.max(f.totalOptimista, f.total, f.totalLento)
-                    return <>entre {fMoney(lo)} y {fMoney(hi)}, según cuánto se demoren los clientes</>
-                  })()}
-            </p>
-          </div>
-        ))}
-      </div>
-
-      <div style={{ height: 220, marginTop: 12 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={filas} margin={{ top: 14, right: 8, left: 4, bottom: 0 }} barCategoryGap="28%">
-            <CartesianGrid strokeDasharray="3 3" stroke={C.line} vertical={false} />
-            <XAxis dataKey="etiqueta" tick={{ fontSize: 11.5, fill: C.muted, fontWeight: 600 }} tickLine={false} axisLine={{ stroke: C.line }} />
-            <YAxis tickFormatter={fCorto} tick={{ fontSize: 11, fill: C.muted }} tickLine={false} axisLine={false} width={52} />
-            <Tooltip
-              cursor={{ fill: 'rgba(37,99,235,.05)' }}
-              content={({ active, payload }) => {
-                if (!active || !payload?.length) return null
-                const d = payload[0].payload as (typeof filas)[number]
-                return (
-                  <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 10, padding: '11px 13px', boxShadow: '0 4px 14px rgba(0,0,0,.08)', minWidth: 210 }}>
-                    <p style={{ fontSize: 12, fontWeight: 800, color: C.text, marginBottom: 7 }}>{d.etiqueta} · {d.subetiqueta}</p>
-                    {d.confirmado > 0 && <LineaTooltip color={C.green} label="Ya en caja" valor={d.confirmado} />}
-                    <LineaTooltip color={C.blue} label="Por cobrarse" valor={d.proyectado} />
-                    <p style={{ fontSize: 12.5, fontWeight: 800, color: C.text, display: 'flex', justifyContent: 'space-between', gap: 14, borderTop: `1px solid ${C.line}`, marginTop: 6, paddingTop: 5 }}>
-                      <span>Total esperado</span>
-                      <span style={{ fontVariantNumeric: 'tabular-nums' }}>{fMoney(d.total)}</span>
-                    </p>
-                    {d.confirmado === 0 && (
-                      <p style={{ fontSize: 11, color: C.muted, marginTop: 4, lineHeight: 1.5 }}>
-                        si pagan rápido: {fMoney(d.totalOptimista)} · si se atrasan: {fMoney(d.totalLento)}
+      <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: '18px 18px 8px' }}>
+        <h3 style={{ fontSize: 15, fontWeight: 800, color: C.text }}>Cuánto entra, semana a semana</h3>
+        <p style={{ fontSize: 12.5, color: C.muted, marginTop: 3, marginBottom: 4 }}>
+          Próximas {nSemanas} semanas, identificadas por su número de semana del año. Incluye la venta de
+          mostrador, que se cobra al instante.
+        </p>
+        <div style={{ height: 260 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={filas} margin={{ top: 10, right: 8, left: 4, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke={C.line} vertical={false} />
+              <XAxis dataKey="etiqueta" tick={{ fontSize: 11, fill: C.muted }} tickLine={false} axisLine={{ stroke: C.line }} />
+              <YAxis tickFormatter={fCorto} tick={{ fontSize: 11, fill: C.muted }} tickLine={false} axisLine={false} width={52} />
+              <Tooltip
+                cursor={{ fill: 'rgba(37,99,235,.05)' }}
+                content={({ active, payload, label }) => {
+                  if (!active || !payload?.length) return null
+                  const d = payload[0]?.payload as (typeof filas)[number]
+                  return (
+                    <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 10, padding: '11px 13px', boxShadow: '0 4px 14px rgba(0,0,0,.08)', minWidth: 220 }}>
+                      <p style={{ fontSize: 12, fontWeight: 800, color: C.text, marginBottom: 7 }}>
+                        {label} · semana del {d.subetiqueta}
                       </p>
-                    )}
-                  </div>
-                )
-              }}
-            />
-            <Legend
-              verticalAlign="bottom" height={30} iconType="circle" iconSize={8}
-              formatter={v => <span style={{ fontSize: 11.5, color: C.muted }}>{v}</span>}
-            />
-            <Bar dataKey="confirmado" name="Ya en caja" stackId="s" fill={C.green} />
-            <Bar dataKey="proyectado" name="Por cobrarse" stackId="s" fill={C.blue} radius={[3, 3, 0, 0]}>
-              <ErrorBar dataKey="rango" width={5} strokeWidth={2} stroke={C.faint} direction="y" />
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+                      <LineaTooltip color={C.blue} label="Si pagan como pactaron" valor={d.pactado} />
+                      <LineaTooltip color={C.teal} label="Según comportamiento real" valor={d.real} />
+                    </div>
+                  )
+                }}
+              />
+              <Legend
+                verticalAlign="bottom" height={30} iconType="circle" iconSize={8}
+                formatter={v => <span style={{ fontSize: 11.5, color: C.muted }}>{v}</span>}
+              />
+              <Bar dataKey="pactado" name="Si pagan como pactaron" fill={C.blue} radius={[3, 3, 0, 0]} />
+              <Bar dataKey="real" name="Según comportamiento real" fill={C.teal} radius={[3, 3, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </div>
     </div>
   )
@@ -642,17 +617,6 @@ function ProyeccionProximaSemana({ datos }: { datos: DatosCobros }) {
   const [verAtrasados, setVerAtrasados] = useState(false)
   const p = datos.proyeccion
 
-  const datosProyeccion = useMemo(
-    () => p.semanas.map((s, i) => ({
-      lunes: s.lunes,
-      etiqueta: i === 0 ? 'Esta sem.' : i === 1 ? 'Próxima' : fFechaCorta(s.lunes),
-      base: Math.round(s.base),
-      mostrador: Math.round(p.mostradorSemanal),
-      facturas: s.facturas,
-    })),
-    [p.semanas, p.mostradorSemanal]
-  )
-
   if (!p.hayDatos) {
     return (
       <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: 20 }}>
@@ -665,59 +629,16 @@ function ProyeccionProximaSemana({ datos }: { datos: DatosCobros }) {
     )
   }
 
-  const totalBase = p.proximaSemana.total + p.mostradorSemanal
-  const totalLento = p.proximaSemana.lento + p.mostradorSemanal
-
   return (
     <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, overflow: 'hidden' }}>
       <div style={{ padding: '18px 18px 0' }}>
         <h3 style={{ fontSize: 15, fontWeight: 800, color: C.text }}>
-          Lo que debería entrar la próxima semana
+          Detalle de la cobranza esperada
         </h3>
         <p style={{ fontSize: 12.5, color: C.muted, marginTop: 3, lineHeight: 1.6 }}>
-          Semana del {fFechaCorta(p.proximaSemana.lunes)}. Se calcula mirando qué facturas siguen sin
-          pagarse y cuántos días suele demorarse cada cliente en pagar.
+          Qué tan confiable es el número de arriba, qué está atrasado y quiénes deberían pagar la
+          semana del {fFechaCorta(p.proximaSemana.lunes)}.
         </p>
-      </div>
-
-      {/* Las dos fuentes de plata, separadas a propósito */}
-      <div style={{ padding: 18, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 12 }}>
-        <div style={{ background: C.bg, borderRadius: 11, padding: 14 }}>
-          <p style={{ fontSize: 11.5, fontWeight: 700, color: C.muted, display: 'flex', alignItems: 'center', gap: 5 }}>
-            <Banknote size={13} style={{ color: C.blue }} /> Cobranza de facturas
-          </p>
-          <p style={{ fontSize: 24, fontWeight: 900, color: C.text, marginTop: 5, fontVariantNumeric: 'tabular-nums' }}>
-            {fMoney(p.proximaSemana.base)}
-          </p>
-          <p style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>
-            {p.proximaSemana.detalle.length} {p.proximaSemana.detalle.length === 1 ? 'factura' : 'facturas'} con
-            vencimiento esa semana
-          </p>
-        </div>
-
-        <div style={{ background: C.bg, borderRadius: 11, padding: 14 }}>
-          <p style={{ fontSize: 11.5, fontWeight: 700, color: C.muted, display: 'flex', alignItems: 'center', gap: 5 }}>
-            <Store size={13} style={{ color: C.green }} /> Venta de mostrador
-          </p>
-          <p style={{ fontSize: 24, fontWeight: 900, color: C.text, marginTop: 5, fontVariantNumeric: 'tabular-nums' }}>
-            {fMoney(p.mostradorSemanal)}
-          </p>
-          <p style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>
-            promedio semanal, se cobra al instante
-          </p>
-        </div>
-
-        <div style={{ background: C.blueSoft, border: '1px solid #BFDBFE', borderRadius: 11, padding: 14 }}>
-          <p style={{ fontSize: 11.5, fontWeight: 700, color: C.blue }}>Total estimado</p>
-          <p style={{ fontSize: 24, fontWeight: 900, color: C.text, marginTop: 5, fontVariantNumeric: 'tabular-nums' }}>
-            {fMoney(totalBase)}
-          </p>
-          <p style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>
-            {totalLento < totalBase
-              ? <>si se demoran, bajaría a <strong>{fMoney(totalLento)}</strong></>
-              : <>podría llegar a <strong>{fMoney(totalLento)}</strong></>}
-          </p>
-        </div>
       </div>
 
       {/* Qué tan confiable es este número. Se muestra el error medido en el
@@ -783,69 +704,6 @@ function ProyeccionProximaSemana({ datos }: { datos: DatosCobros }) {
           )}
         </div>
       )}
-
-      {/* ── El calendario de la plata: qué semana entra qué ───────────────
-          Es la pregunta que la pestaña tiene que contestar de un vistazo, así
-          que va como gráfico y no como lista de números. Barras apiladas
-          porque las tres fuentes se suman (cobranza que vence + recupero del
-          atraso + mostrador), y línea de referencia con el promedio real de
-          las últimas semanas para saber si la semana viene floja o cargada. */}
-      <div style={{ borderTop: `1px solid ${C.line}`, padding: '16px 18px 8px' }}>
-        <p style={{ fontSize: 13, fontWeight: 800, color: C.text }}>Cuándo entra la plata</p>
-        <p style={{ fontSize: 12, color: C.muted, marginTop: 2, marginBottom: 10 }}>
-          Próximas {p.semanas.length} semanas. La línea punteada es lo que entró por semana en promedio
-          últimamente.
-        </p>
-        <div style={{ height: 250 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={datosProyeccion} margin={{ top: 6, right: 8, left: 4, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.line} vertical={false} />
-              <XAxis
-                dataKey="etiqueta" tick={{ fontSize: 11, fill: C.muted }}
-                tickLine={false} axisLine={{ stroke: C.line }}
-              />
-              <YAxis tickFormatter={fCorto} tick={{ fontSize: 11, fill: C.muted }} tickLine={false} axisLine={false} width={52} />
-              <Tooltip
-                cursor={{ fill: 'rgba(37,99,235,.05)' }}
-                content={({ active, payload }) => {
-                  if (!active || !payload?.length) return null
-                  const d = payload[0].payload as (typeof datosProyeccion)[number]
-                  return (
-                    <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 10, padding: '11px 13px', boxShadow: '0 4px 14px rgba(0,0,0,.08)', minWidth: 210 }}>
-                      <p style={{ fontSize: 12, fontWeight: 800, color: C.text, marginBottom: 7 }}>
-                        Semana del {fFechaCorta(d.lunes)}
-                      </p>
-                      <LineaTooltip color={C.blue} label="Facturas que vencen" valor={d.base} />
-                      <LineaTooltip color={C.green} label="Mostrador" valor={d.mostrador} />
-                      <p style={{ fontSize: 12.5, fontWeight: 800, color: C.text, display: 'flex', justifyContent: 'space-between', gap: 14, borderTop: `1px solid ${C.line}`, marginTop: 6, paddingTop: 5 }}>
-                        <span>Total</span>
-                        <span style={{ fontVariantNumeric: 'tabular-nums' }}>{fMoney(d.base + d.mostrador)}</span>
-                      </p>
-                      {d.facturas > 0 && (
-                        <p style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>
-                          {d.facturas} {d.facturas === 1 ? 'factura vence' : 'facturas vencen'} esa semana
-                        </p>
-                      )}
-                    </div>
-                  )
-                }}
-              />
-              <Legend
-                verticalAlign="bottom" height={30} iconType="circle" iconSize={8}
-                formatter={v => <span style={{ fontSize: 11.5, color: C.muted }}>{v}</span>}
-              />
-              {datos.promedioSemanal > 0 && (
-                <ReferenceLine
-                  y={datos.promedioSemanal} stroke={C.faint} strokeDasharray="5 4"
-                  label={{ value: 'promedio real', position: 'right', fontSize: 10, fill: C.faint }}
-                />
-              )}
-              <Bar dataKey="base" name="Facturas que vencen" stackId="p" fill={C.blue} />
-              <Bar dataKey="mostrador" name="Mostrador" stackId="p" fill={C.green} radius={[3, 3, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
 
       {/* Detalle de quién paga la próxima semana */}
       {p.proximaSemana.detalle.length > 0 && (

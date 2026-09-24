@@ -63,16 +63,23 @@ export interface PlazoCliente {
    *  plata: el backtest lo dejó como el mejor estimador (ver BACKTEST_MAE_SEMANAL). */
   promedio: number
   /** Su cuartil rápido: 1 de cada 4 pagos suyos entra en este plazo o menos.
-   *  Da el escenario "si pagan mejor de lo habitual" — pedido explícitamente
-   *  por Administración (23-sep-2026, la fila "Cobranza Optimista" de su
-   *  planilla). Es el espejo de `p75`, no un dato con validación propia: no
-   *  hay backtest específico para el escenario optimista, sólo para
-   *  `promedio` (ver BACKTEST_MAE_SEMANAL) — se muestra como rango, igual
-   *  que `p75`, nunca como una cifra con la misma certeza. */
+   *  Da el escenario "si pagan mejor que su propio promedio". Es el espejo de
+   *  `p75`, no un dato con validación propia: no hay backtest específico para
+   *  este escenario, sólo para `promedio` (ver BACKTEST_MAE_SEMANAL). */
   p25: number
   /** Su cuartil lento: 1 de cada 4 pagos suyos tarda al menos esto. Da el
    *  escenario "si se demoran". */
   p75: number
+  /** Plazo PACTADO — lo que dice la ficha del cliente (`clientes.dias_pago`),
+   *  o la mediana declarada de toda la cartera si no tiene ficha propia.
+   *  Distinto eje que `promedio`/`p25`/`p75`: esos miden comportamiento REAL
+   *  (de `cobros_erp`); esto es la PROMESA, exista o no historial medido para
+   *  este cliente. Da el escenario "si todos cumplen lo que acordamos" — el
+   *  ideal, pedido explícitamente por Administración (23-sep-2026) para
+   *  contrastar contra lo que el comportamiento real dice que en verdad va a
+   *  pasar. Puede ser mayor O menor que `promedio`: hay clientes que pactan
+   *  30 días y pagan a 15, y otros al revés. */
+  pactado: number
   fuente: FuentePlazo
 }
 
@@ -85,9 +92,19 @@ export interface FacturaPendiente {
   fechaEsperada: string
   fechaEsperadaOptimista: string
   fechaEsperadaLenta: string
+  /** Fecha esperada si el cliente pagara exactamente a su plazo PACTADO —
+   *  independiente de `fechaEsperada` (que usa el comportamiento medido). */
+  fechaEsperadaPactada: string
   fuente: FuentePlazo
-  /** Días transcurridos desde que se esperaba el pago. 0 si todavía no vence. */
+  /** Días transcurridos desde que se esperaba el pago SEGÚN COMPORTAMIENTO
+   *  REAL. 0 si todavía no vence bajo ese criterio. */
   diasAtraso: number
+  /** Lo mismo, pero contra el plazo PACTADO — son criterios independientes:
+   *  una factura puede estar atrasada según lo pactado (ya debería haber
+   *  llegado si cumplieran) y al mismo tiempo NO estarlo según su
+   *  comportamiento real (este cliente en particular siempre tarda más que
+   *  lo que promete, así que su reloj real todavía no llegó). */
+  diasAtrasoPactado: number
 }
 
 export interface SemanaProyectada {
@@ -101,6 +118,12 @@ export interface SemanaProyectada {
   optimista: number
   /** Lo mismo pero con el cuartil lento de cada cliente. */
   lento: number
+  /** Facturas que vencen esa semana si TODOS los clientes cumplieran su
+   *  plazo pactado — el escenario ideal. Reparto INDEPENDIENTE del de
+   *  `base`/`optimista`/`lento`: usa su propio criterio de atraso
+   *  (`atrasadoPactado`, aparte de `atrasado`), así que una factura puede
+   *  estar en el `atrasado` de un reparto y en semana futura del otro. */
+  pactado: number
   /** Lo esperado esa semana. Hoy es igual a `base`; existe como campo propio
    *  porque la UI y los totales lo consumen, y si algún día se suma otro
    *  término (se probó uno de recupero del atraso y no mejoró — ver
@@ -118,6 +141,10 @@ export interface ProyeccionCobros {
    *  cobradas la próxima semana infla la proyección justo con la plata que
    *  ya demostró ser difícil. Se muestran aparte, que es lo accionable. */
   atrasado: { monto: number; facturas: number; detalle: FacturaPendiente[] }
+  /** Lo mismo, pero contra el plazo PACTADO — un pool DISTINTO al de arriba
+   *  (ver la nota en FacturaPendiente.diasAtrasoPactado): puede tener más o
+   *  menos plata, y no son las mismas facturas necesariamente. */
+  atrasadoPactado: { monto: number; facturas: number }
   /** Venta de mostrador: promedio semanal reciente, cobro inmediato. */
   mostradorSemanal: number
   totalPendiente: number
@@ -147,7 +174,12 @@ export function proyectarCobros({
   /** Números de factura que NO aparecen en `cobros_erp` (RPC facturas_impagas). */
   facturasImpagas: Set<string>
   plazoPorCliente: Map<string, PlazoCliente>
-  /** Para clientes sin plazo propio: la mediana de la cartera. */
+  /** Para clientes sin plazo propio: la mediana MEDIDA de la cartera (cubre
+   *  promedio/p25/p75). `PlazoCliente.pactado` no usa este fallback — cada
+   *  entrada del mapa ya trae su propio pactado resuelto (ficha propia o
+   *  mediana DECLARADA de la cartera), porque son ejes distintos: un cliente
+   *  puede tener comportamiento medido pero ninguna ficha con plazo, o al
+   *  revés. */
   plazoPorDefecto: number
   hoyISO: string
   mostradorSemanal: number
@@ -190,17 +222,20 @@ export function proyectarCobros({
 
   for (const [factura, v] of porFactura) {
     const plazo = plazoPorCliente.get(normalizarNombreCliente(v.cliente))
-      ?? { promedio: plazoPorDefecto, p25: plazoPorDefecto, p75: plazoPorDefecto, fuente: 'estimado' as FuentePlazo }
+      ?? { promedio: plazoPorDefecto, p25: plazoPorDefecto, p75: plazoPorDefecto, pactado: plazoPorDefecto, fuente: 'estimado' as FuentePlazo }
 
     const fechaEsperada = sumarDias(v.fechaEntrega, plazo.promedio)
     const fechaEsperadaOptimista = sumarDias(v.fechaEntrega, plazo.p25)
     const fechaEsperadaLenta = sumarDias(v.fechaEntrega, plazo.p75)
+    const fechaEsperadaPactada = sumarDias(v.fechaEntrega, plazo.pactado)
     const diasAtraso = Math.max(0, diffDias(fechaEsperada, hoyISO))
+    const diasAtrasoPactado = Math.max(0, diffDias(fechaEsperadaPactada, hoyISO))
 
     cobertura[plazo.fuente] += v.bruto
     pendientes.push({
       cliente: v.cliente, factura, fechaEntrega: v.fechaEntrega, bruto: v.bruto,
-      dias: plazo.promedio, fechaEsperada, fechaEsperadaOptimista, fechaEsperadaLenta, fuente: plazo.fuente, diasAtraso,
+      dias: plazo.promedio, fechaEsperada, fechaEsperadaOptimista, fechaEsperadaLenta, fechaEsperadaPactada,
+      fuente: plazo.fuente, diasAtraso, diasAtrasoPactado,
     })
   }
 
@@ -209,16 +244,30 @@ export function proyectarCobros({
      cuartil 25; el lento, la del cuartil 75. Son tres repartos del MISMO
      dinero, no montos distintos: por eso la suma de `optimista`/`lento` a lo
      largo de todas las semanas da lo mismo que la de `base`, sólo que
-     corrida hacia atrás o hacia adelante. */
+     corrida hacia atrás o hacia adelante.
+
+     `pactado` es un reparto APARTE con su propio criterio de atraso
+     (diasAtrasoPactado, no diasAtraso): una factura puede estar "atrasada"
+     bajo un criterio y no bajo el otro, así que no se puede reusar el mismo
+     filtro `if (p.diasAtraso > 0) continue` de arriba para repartirla. */
   const lunesHoy = lunesDe(hoyISO)
   const semanas: SemanaProyectada[] = []
   for (let i = 0; i < semanasAdelante; i++) {
-    semanas.push({ lunes: sumarDias(lunesHoy, i * 7), base: 0, optimista: 0, lento: 0, total: 0, facturas: 0 })
+    semanas.push({ lunes: sumarDias(lunesHoy, i * 7), base: 0, optimista: 0, lento: 0, pactado: 0, total: 0, facturas: 0 })
   }
   const idxDe = (fecha: string) => semanas.findIndex(s => fecha >= s.lunes && fecha < sumarDias(s.lunes, 7))
 
   const atrasado = { monto: 0, facturas: 0, detalle: [] as FacturaPendiente[] }
+  const atrasadoPactado = { monto: 0, facturas: 0 }
   for (const p of pendientes) {
+    if (p.diasAtrasoPactado > 0) {
+      atrasadoPactado.monto += p.bruto
+      atrasadoPactado.facturas++
+    } else {
+      const iPactado = idxDe(p.fechaEsperadaPactada)
+      if (iPactado >= 0) semanas[iPactado].pactado += p.bruto
+    }
+
     if (p.diasAtraso > 0) {
       atrasado.monto += p.bruto
       atrasado.facturas++
@@ -258,6 +307,7 @@ export function proyectarCobros({
       detalle: detalleProxima,
     },
     atrasado,
+    atrasadoPactado,
     mostradorSemanal,
     totalPendiente: pendientes.reduce((s, p) => s + p.bruto, 0),
     cobertura,

@@ -323,7 +323,10 @@ export default function AdministracionClient({
   // la plata?"). 'ingresos' (el modelo de facturación) y 'cobranza' (estado
   // de deuda del ERP) son consulta más puntual. Reordenado sin fusionar
   // pestañas — decisión del usuario, 15-sep-2026.
-  const [tab, setTab] = useState<'flujo' | 'cobros' | 'ingresos' | 'cobranza' | 'forecast'>('flujo')
+  // 'cobros' ("Ingreso Real") es la pantalla principal desde el 23-sep-2026 —
+  // responde la pregunta central de Administración (cuánto entra, optimista
+  // vs. según cómo realmente pagan los clientes) antes que ninguna otra.
+  const [tab, setTab] = useState<'flujo' | 'cobros' | 'ingresos' | 'cobranza' | 'forecast'>('cobros')
   const [clienteForecast, setClienteForecast] = useState(forecastClientes[0]?.nombre ?? null)
   const [proveedorCompras, setProveedorCompras] = useState(forecastCompras[0]?.nombre ?? null)
   const [serieId, setSerieId] = useState('general::')

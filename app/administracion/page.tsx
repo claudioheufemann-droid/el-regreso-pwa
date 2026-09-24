@@ -410,15 +410,35 @@ export default async function AdministracionPage() {
   const ult4 = semanasCerradas.slice(-4)
   const prev4 = semanasCerradas.slice(-8, -4)
 
+  // Mediana del plazo PACTADO de toda la cartera con ficha (excluyendo PDV,
+  // que cobra al contado por definición) — fallback para `pactado` cuando un
+  // cliente no tiene dias_pago cargado en su propia ficha. Eje DISTINTO de
+  // `medianaCartera` (abajo): ese es sobre comportamiento MEDIDO (p50 de
+  // cobros_erp); éste es sobre lo DECLARADO (clientes.dias_pago) — un
+  // cliente puede tener uno sin el otro.
+  const medianaPactadaCartera = medianaDe(
+    clientesRaw
+      .filter(c => !/pdv/i.test(c.nombre_fantasia ?? ''))
+      .map(c => c.dias_pago)
+      .filter((d): d is number => d != null)
+  ) ?? 15
+
   /* Plazo por cliente para proyectar: manda el MEDIDO (mediana de sus pagos
      reales) y, si no lo hay, el declarado en la ficha. Para el escenario
      lento se usa su p75 y para el optimista su p25; cuando sólo hay plazo
      declarado no existen esos percentiles, así que se les aplica un margen
      proporcional (30% más lento / 30% más rápido) en vez de inventar una
-     dispersión que no se midió. */
+     dispersión que no se midió.
+
+     `pactado` es un eje aparte: siempre el declarado de la ficha
+     (`declaradoPorCliente`), exista o no comportamiento medido para este
+     cliente — un cliente puede tener plazo pactado sin historial de pagos
+     todavía (cliente nuevo) o historial sin ficha con plazo cargado. */
   const plazoPorCliente = new Map<string, PlazoCliente>()
   for (const c of comportamiento) {
-    plazoPorCliente.set(normalizarNombreCliente(c.cliente), { promedio: c.promedio, p25: c.p25, p75: c.p75, fuente: 'medido' })
+    const k = normalizarNombreCliente(c.cliente)
+    const pactado = declaradoPorCliente.get(k) ?? medianaPactadaCartera
+    plazoPorCliente.set(k, { promedio: c.promedio, p25: c.p25, p75: c.p75, pactado, fuente: 'medido' })
   }
   for (const c of clientesRaw) {
     const k = normalizarNombreCliente(c.nombre_fantasia)
@@ -427,6 +447,7 @@ export default async function AdministracionPage() {
       promedio: c.dias_pago,
       p25: Math.max(1, Math.round(c.dias_pago * 0.7)),
       p75: Math.round(c.dias_pago * 1.3),
+      pactado: c.dias_pago,
       fuente: 'declarado',
     })
   }
