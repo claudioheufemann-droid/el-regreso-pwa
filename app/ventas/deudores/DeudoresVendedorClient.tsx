@@ -770,6 +770,12 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clien
     return res
   }, [base, filterBucket, searchText, sortBy])
 
+  // "Quitar filtros": vuelve a la vista con que se entra a la pantalla.
+  const hayFiltros = cartera !== 'todos' || filterBucket !== 'todos' || searchText !== '' || sortBy !== 'deuda'
+  const limpiarFiltros = () => {
+    setCartera('todos'); setFilterBucket('todos'); setSearchText(''); setSortBy('deuda')
+  }
+
   const selectStyle: React.CSSProperties = {
     padding: '9px 30px 9px 12px', borderRadius: 10, border: `1px solid ${MC.border}`,
     background: MC.card, color: MC.text, fontSize: 12.5, fontWeight: 600, outline: 'none',
@@ -886,7 +892,7 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clien
         </div>
 
         {/* Desglose + filtro por vendedor (sólo admin) */}
-        {isAdmin && <ResumenCarteras filas={filas} total={total} activo={cartera} onSelect={setCartera} />}
+        {isAdmin && <ResumenCarteras filas={filas} total={total} activo={cartera} onSelect={v => setCartera(c => (c === v ? 'todos' : v))} />}
 
         {/* Chips de rango de días */}
         <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, marginBottom: 12 }}>
@@ -937,7 +943,16 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clien
 
         {/* Contador + exportar */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-          <p style={{ fontSize: 13, fontWeight: 700, color: MC.text }}>{filtrados.length} cliente{filtrados.length === 1 ? '' : 's'}</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <p style={{ fontSize: 13, fontWeight: 700, color: MC.text }}>{filtrados.length} cliente{filtrados.length === 1 ? '' : 's'}</p>
+            {hayFiltros && (
+              <button onClick={limpiarFiltros}
+                style={{ display: 'flex', alignItems: 'center', gap: 4, minHeight: 32, padding: '0 10px', borderRadius: 10,
+                  border: `1px solid ${MC.border}`, background: MC.card, color: MC.blue, fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>
+                <X size={13} /> Quitar filtros
+              </button>
+            )}
+          </div>
           {filtrados.length > 0 && (
             <button
               disabled={!!exportando}
@@ -1096,6 +1111,13 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
     return ordenarDeudores(res, orden.col, orden.dir)
   }, [universo, isAdmin, cartera, filterDeudaVencida, searchText, orden])
 
+  // "Quitar filtros": vuelve a la vista con que se entra a la pantalla.
+  const hayFiltros = cartera !== 'todos' || filterDeudaVencida !== 'todos' || searchText !== ''
+    || orden.col !== 'deuda' || orden.dir !== 'desc'
+  const limpiarFiltros = () => {
+    setCartera('todos'); setFilterDeudaVencida('todos'); setSearchText(''); setOrden({ col: 'deuda', dir: 'desc' })
+  }
+
   const clicEncabezado = (col: ColOrden) => {
     setOrden(o => o.col === col
       ? { col, dir: o.dir === 'asc' ? 'desc' : 'asc' }
@@ -1245,7 +1267,7 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
           ].map(f => {
             const activo = cartera === f.vendedor
             return (
-              <button key={f.vendedor} onClick={() => setCartera(f.vendedor)}
+              <button key={f.vendedor} onClick={() => setCartera(c => (c === f.vendedor ? 'todos' : f.vendedor))}
                 style={{
                   textAlign: 'left', cursor: 'pointer', font: 'inherit',
                   background: activo ? TD.accentSoft : TD.card,
@@ -1317,6 +1339,19 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
           </select>
         </div>
       </div>
+
+      {hayFiltros && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 12, marginTop: -6, marginBottom: 12 }}>
+          <span style={{ fontSize: 13, color: TD.muted }}>
+            {filteredDeudores.length} de {universo.length} deudores
+          </span>
+          <button onClick={limpiarFiltros}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 5, minHeight: 36, padding: '0 14px', borderRadius: 10,
+              border: `1px solid ${TD.border}`, background: TD.card, color: TD.blue, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+            <X size={14} /> Quitar filtros
+          </button>
+        </div>
+      )}
 
       <div style={{
         background: TD.card, border: `1px solid ${TD.border}`,
