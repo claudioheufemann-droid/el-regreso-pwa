@@ -579,20 +579,30 @@ function Resumen({ resumen, cartera, porCategoria }: {
       <Bloque titulo="BONO ACTIVACIÓN DE CARTERA (CRM)" monto={resumen.bonoActivacion} color={resumen.bonoActivacion > 0 ? C.green : C.faint}>
         <Linea label="Clientes activos" valor={`${cartera.clientesActivos} de ${cartera.clientesCartera}`} />
         <Linea label="Activación" valor={fPct(resumen.pctActivacion)} destacado color={resumen.bonoActivacion > 0 ? C.green : C.amber} />
-        <Linea label="Interacciones registradas" valor={String(cartera.interacciones)} />
-        {resumen.proximaActivacion && (
-          <Linea
-            label={`Si llegas a ${resumen.proximaActivacion.minimoPct}%, ganas`}
-            valor={fComision(resumen.proximaActivacion.bono)}
-            destacado
-            color={C.green}
-          />
-        )}
+        <Linea label="Visitas registradas en Terreno" valor={String(cartera.interacciones)} />
+        {resumen.proximaActivacion && (() => {
+          // Cuántos clientes activos más hacen falta para el próximo peldaño —
+          // más accionable que sólo el %: es la cantidad de clientes que hay
+          // que visitar 2 veces (y que compren) en lo que queda del período.
+          const faltan = Math.max(0, Math.ceil(cartera.clientesCartera * resumen.proximaActivacion.minimoPct / 100) - cartera.clientesActivos)
+          return (
+            <>
+              <Linea label={`Te faltan para el ${resumen.proximaActivacion.minimoPct}%`} valor={`${faltan} ${faltan === 1 ? 'cliente' : 'clientes'}`} />
+              <Linea
+                label={`Si llegas a ${resumen.proximaActivacion.minimoPct}%, ganas`}
+                valor={fComision(resumen.proximaActivacion.bono)}
+                destacado
+                color={C.green}
+              />
+            </>
+          )
+        })()}
         <p style={{ fontSize: 11.5, color: C.muted, marginTop: 8, lineHeight: 1.5, paddingTop: 8, borderTop: `1px solid ${C.line}` }}>
-          Activo = {ESCALAS_ACTIVACION[0].minimoPct}% o más de la cartera con al menos 2
-          interacciones y 1 pedido en el período. Ojo: las interacciones salen de las
-          visitas registradas en Terreno, que es un módulo nuevo — mientras el equipo no
-          registre todas sus visitas, este porcentaje va a salir más bajo que la realidad.
+          Cartera = clientes del área que compraron en los últimos 90 días (sin OnLine).
+          Un cliente está activo si tiene 2 o más visitas registradas en Terreno y 1 pedido
+          en el período. Bono: {ESCALAS_ACTIVACION[1].minimoPct}% → {fComision(ESCALAS_ACTIVACION[1].bono)},{' '}
+          {ESCALAS_ACTIVACION[0].minimoPct}% → {fComision(ESCALAS_ACTIVACION[0].bono)}.
+          Las visitas que no se registren en Terreno no cuentan.
         </p>
       </Bloque>
 
