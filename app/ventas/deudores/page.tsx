@@ -2,7 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getServerUser } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { vendedorCanonico } from '@/lib/types'
-import { esLineaMaquila, maquilaVencidaDe, type FilaVenta } from '@/lib/cobranza'
+import { calcularMaquila } from '@/lib/deudaComercial'
 import DeudoresVendedorClient from './DeudoresVendedorClient'
 
 // Apartado de Deudores dentro de Ventas (distinto de /ventas/admin/deudores,
@@ -65,65 +65,4 @@ export default async function DeudoresVentasPage() {
       maquilaPorCliente={maquilaPorCliente}
     />
   )
-}
-
-type DeudorRow = { nombre_fantasia: string; deuda_vencida: number | null }
-
-interface CalculoMaquila {
-  /** { nombre_fantasia → plata vencida que es maquila }. Sólo los que tienen. */
-  maquilaPorCliente: Record<string, number>
-  /** Clientes cuya venta reconstruida es 100% maquila (nunca compraron cerveza ni kombucha). */
-  soloMaquila: Set<string>
-}
-
-async function calcularMaquila(
-  supabase: ReturnType<typeof createAdminClient>,
-  deudores: DeudorRow[],
-): Promise<CalculoMaquila> {
-  if (deudores.length === 0) return { maquilaPorCliente: {}, soloMaquila: new Set() }
-
-  // Paso 1: qué deudores tienen alguna venta de maquila (sin filtrar por deuda:
-  // un cliente 100% maquila igual hay que detectarlo aunque su deuda no esté
-  // vencida todavía).
-  const { data: filasMaquila } = await supabase
-    .from('ventas')
-    .select('nombre_fantasia')
-    .or('producto.ilike.%maquila%,producto.ilike.%latas finales%')
-    .in('nombre_fantasia', deudores.map(d => d.nombre_fantasia))
-
-  const clientes = [...new Set((filasMaquila ?? []).map(f => f.nombre_fantasia as string))]
-  if (clientes.length === 0) return { maquilaPorCliente: {}, soloMaquila: new Set() }
-
-  // Paso 2: TODA su venta reconstruida — sirve para (a) saber cuáles facturas
-  // de maquila siguen impagas y (b) si alguna vez vendieron algo que no sea
-  // maquila (si no, el cliente entero se saca de Deudores).
-  const { data: ventas } = await supabase
-    .from('ventas')
-    .select('nombre_fantasia, pedido, fecha_pedido, producto, envase, categoria_producto, litros, total_sin_impuesto')
-    .in('nombre_fantasia', clientes)
-
-  const porCliente = new Map<string, FilaVenta[]>()
-  for (const v of (ventas ?? []) as (FilaVenta & { nombre_fantasia: string })[]) {
-    const arr = porCliente.get(v.nombre_fantasia)
-    if (arr) arr.push(v)
-    else porCliente.set(v.nombre_fantasia, [v])
-  }
-
-  const soloMaquila = new Set<string>()
-  for (const nombre of clientes) {
-    const filas = porCliente.get(nombre) ?? []
-    if (filas.length > 0 && filas.every(f => esLineaMaquila(f.producto))) soloMaquila.add(nombre)
-  }
-
-  const maquilaPorCliente: Record<string, number> = {}
-  for (const d of deudores) {
-    if ((Number(d.deuda_vencida) || 0) <= 0) continue
-    if (!porCliente.has(d.nombre_fantasia)) continue
-    const monto = maquilaVencidaDe(
-      d as Parameters<typeof maquilaVencidaDe>[0],
-      porCliente.get(d.nombre_fantasia) ?? [],
-    )
-    if (monto > 0) maquilaPorCliente[d.nombre_fantasia] = monto
-  }
-  return { maquilaPorCliente, soloMaquila }
 }

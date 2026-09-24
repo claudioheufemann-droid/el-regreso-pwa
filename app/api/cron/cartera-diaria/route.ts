@@ -8,6 +8,11 @@
  * cartera no siempre calzan 1 a 1), y el resumen de admin queda segmentado
  * por vendedor en vez de un solo total global.
  *
+ * La deuda sale de lib/deudaComercial.ts — la misma cifra que las tarjetas
+ * "Todos / Claudio / Nicol…" de /ventas/deudores (sin maquila, sólo carteras
+ * de cobranza). Antes se sumaba `deuda_vencida` cruda de toda la tabla y el
+ * total del celular no calzaba con la pantalla (Claudio, 2026-09-24).
+ *
  * SERVICE ROLE a propósito: el RLS de `deudores`/`client_scores`/`users`
  * exige sesión autenticada; el cron no tiene una. Ver lib/supabase/admin.ts.
  *
@@ -19,9 +24,10 @@
  */
 import { NextResponse } from 'next/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
-import { vendedorCanonico, nombresErpDe, esClienteExcluido } from '@/lib/types'
+import { vendedorCanonico, nombresErpDe, esClienteExcluido, nombreCorto } from '@/lib/types'
 import { calcularStock, riesgoDeBand, type FrequencyStat } from '@/lib/stockRiesgo'
 import { sendPushToUsers, sendPushToAllAdmins } from '@/lib/push'
+import { resumenDeudaComercial } from '@/lib/deudaComercial'
 
 export const runtime = 'nodejs'
 
@@ -42,11 +48,11 @@ export async function GET(req: Request) {
   if (!url || !key) return NextResponse.json({ error: 'Servidor mal configurado' }, { status: 500 })
   const supabase = createServiceClient(url, key)
 
-  const [{ data: scoresRaw }, { data: clientesRaw }, { data: deudoresRaw }, { data: vendedoresRaw }] = await Promise.all([
+  const [{ data: scoresRaw }, { data: clientesRaw }, deudaComercial, { data: vendedoresRaw }] = await Promise.all([
     supabase.from('client_scores')
       .select('nombre_fantasia, ciclo_promedio_dias, dias_sin_compra, total_pedidos, litros_totales, revenue_total, siguiente_compra_estimada, temporada_baja, ultima_compra'),
     supabase.from('clientes').select('nombre_fantasia, vendedor'),
-    supabase.from('deudores').select('nombre_fantasia, deuda_vencida, vendedor').gt('deuda_vencida', 0),
+    resumenDeudaComercial(supabase),
     supabase.from('users').select('id, nombre, vendedores_erp').eq('is_admin', false),
   ])
 
@@ -72,14 +78,8 @@ export async function GET(req: Request) {
     riesgo.push({ nombre, vendedorRaw: vendedorPorCliente.get(nombre) ?? null })
   }
 
-  // ── Clientes con deuda vencida ───────────────────────────────────────────
-  const deuda = (deudoresRaw ?? [])
-    .filter(d => !esClienteExcluido(d.nombre_fantasia as string))
-    .map(d => ({
-      nombre: d.nombre_fantasia as string,
-      monto: d.deuda_vencida as number,
-      vendedorRaw: (d.vendedor as string | null) ?? vendedorPorCliente.get(d.nombre_fantasia as string) ?? null,
-    }))
+  // ── Clientes con deuda vencida (área comercial) ──────────────────────────
+  const deuda = deudaComercial.clientes
 
   if (riesgo.length === 0 && deuda.length === 0) {
     return NextResponse.json({ ok: true, message: 'Sin riesgo de stock ni deuda vencida hoy' })
@@ -95,10 +95,10 @@ export async function GET(req: Request) {
     const scopeRaw = new Set(nombresErpDe(canonico))
 
     const miRiesgo = riesgo.filter(r => r.vendedorRaw && scopeRaw.has(r.vendedorRaw))
-    const miDeuda = deuda.filter(d => d.vendedorRaw && scopeRaw.has(d.vendedorRaw))
+    const miDeuda = deuda.filter(d => d.vendedor === canonico)
     if (miRiesgo.length === 0 && miDeuda.length === 0) continue
 
-    const montoDeuda = miDeuda.reduce((s, d) => s + d.monto, 0)
+    const montoDeuda = miDeuda.reduce((s, d) => s + d.vencida, 0)
     resumenPorVendedor.push({ id: v.id, nombre: v.nombre, riesgo: miRiesgo.length, deuda: miDeuda.length, montoDeuda })
 
     const partes: string[] = []
@@ -113,28 +113,28 @@ export async function GET(req: Request) {
     })
   }
 
-  // ── Resumen a admins, segmentado por vendedor ───────────────────────────
-  if (resumenPorVendedor.length > 0) {
-    const lineas = resumenPorVendedor
-      .sort((a, b) => (b.riesgo + b.deuda) - (a.riesgo + a.deuda))
-      .map(r => `${r.nombre.split(' ')[0]}: ${r.riesgo} riesgo · ${r.deuda} deuda (${fmtPeso(r.montoDeuda)})`)
+  // ── Resumen a admins: deuda del área comercial + detalle por cartera ─────
+  // Mismo total y mismas tarjetas que /ventas/deudores ("Todos" + una por
+  // vendedor, de mayor a menor). El riesgo de stock va en una línea al final.
+  const { total, carteras } = deudaComercial
+  const lineas = carteras
+    .filter(c => c.vencida > 0)
+    .map(c => `${nombreCorto(c.vendedor)}: ${fmtPeso(c.vencida)} (${c.deudores} deudores)`)
+  if (riesgo.length > 0) lineas.push(`📦 ${riesgo.length} clientes en riesgo de quiebre de stock`)
 
-    const totalRiesgo = riesgo.length
-    const totalDeuda = deuda.reduce((s, d) => s + d.monto, 0)
-
-    await sendPushToAllAdmins({
-      title: `📋 Cartera: ${totalRiesgo} en riesgo de stock, ${deuda.length} con deuda`,
-      body: `${fmtPeso(totalDeuda)} vencido en total\n${lineas.join('\n')}`,
-      url: '/ventas/clientes',
-      tag: 'cartera-diaria',
-    })
-  }
+  await sendPushToAllAdmins({
+    title: `💰 Deuda vencida área comercial: ${fmtPeso(total.vencida)}`,
+    body: `${total.deudores} deudores en total\n${lineas.join('\n')}`,
+    url: total.vencida > 0 ? '/ventas/deudores' : '/ventas/clientes',
+    tag: 'cartera-diaria',
+  })
 
   return NextResponse.json({
     ok: true,
     totalRiesgo: riesgo.length,
     totalDeuda: deuda.length,
-    montoDeuda: deuda.reduce((s, d) => s + d.monto, 0),
+    montoDeuda: total.vencida,
+    carteras,
     porVendedor: resumenPorVendedor,
   })
 }
