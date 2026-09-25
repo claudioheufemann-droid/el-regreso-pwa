@@ -154,6 +154,10 @@ export interface ProyeccionCobros {
    *  pagos, así que quedan fuera de la proyección. Se informa para que el
    *  número no parezca más completo de lo que es. */
   sinRastreo: { monto: number; filas: number }
+  /** Facturas sin pago cruzado en `cobros_erp` que el ERP igual da por
+   *  pagadas (el cliente no tiene saldo suficiente en el informe Deudores).
+   *  Ver `recortarContraSaldoErp`. */
+  pagadasSegunErp: { monto: number; facturas: number }
 }
 
 function sumarDias(fechaISO: string, dias: number): string {
@@ -166,13 +170,72 @@ function diffDias(desdeISO: string, hastaISO: string): number {
   )
 }
 
+/** Tolerancia entre el bruto reconstruido de una factura y el saldo del ERP
+ *  (redondeos de IVA/ILA por línea — ver lib/cobranza.ts). */
+const TOLERANCIA_SALDO = 100
+
+/**
+ * Descarta las facturas "impagas" que el ERP ya da por pagadas.
+ *
+ * `facturas_impagas` marca como impaga toda factura sin un pago en
+ * `cobros_erp` con ese mismo número. Pero el ERP no siempre imputa el pago a
+ * una factura: depósitos globales, abonos y pagos contra guía llegan con
+ * `factura` vacía. Esas facturas quedaban para siempre como "ya debería haber
+ * entrado" aunque el cliente estuviera al día — detectado el 25-sep-2026 con
+ * Madre Mía (Marion): $252 mil "atrasados" con saldo $0 en el ERP, y ~80
+ * clientes más en la misma situación.
+ *
+ * El saldo del informe Deudores es la verdad (misma regla que
+ * lib/cobranza.ts): por cliente, las facturas más NUEVAS se quedan con el
+ * saldo —los pagos cancelan primero lo más viejo— y lo que no alcanza a
+ * cubrir se da por pagado. Sólo se tocan facturas despachadas ANTES de la
+ * carga del informe; las posteriores todavía no pueden figurar en él.
+ */
+function recortarContraSaldoErp(
+  porFactura: Map<string, { cliente: string; fechaEntrega: string; bruto: number }>,
+  saldoErp: { saldos: Map<string, number>; cargadoISO: string },
+): { monto: number; facturas: number } {
+  const descartadas = { monto: 0, facturas: 0 }
+  const porCliente = new Map<string, [string, { fechaEntrega: string; bruto: number }][]>()
+  for (const entrada of porFactura) {
+    if (entrada[1].fechaEntrega >= saldoErp.cargadoISO) continue
+    const k = normalizarNombreCliente(entrada[1].cliente)
+    const lista = porCliente.get(k) ?? []
+    lista.push(entrada)
+    porCliente.set(k, lista)
+  }
+
+  for (const [k, facturas] of porCliente) {
+    let disponible = Math.max(0, saldoErp.saldos.get(k) ?? 0)
+    facturas.sort((a, b) => b[1].fechaEntrega.localeCompare(a[1].fechaEntrega))
+    for (const [factura, v] of facturas) {
+      if (disponible + TOLERANCIA_SALDO >= v.bruto) { disponible -= v.bruto; continue }
+      if (disponible > TOLERANCIA_SALDO) {
+        // Abono parcial: queda pendiente sólo lo que el ERP todavía cobra.
+        descartadas.monto += v.bruto - disponible
+        v.bruto = disponible
+        disponible = 0
+        continue
+      }
+      descartadas.monto += v.bruto
+      descartadas.facturas++
+      porFactura.delete(factura)
+    }
+  }
+  return descartadas
+}
+
 export function proyectarCobros({
-  ventas, facturasImpagas, plazoPorCliente, plazoPorDefecto, hoyISO,
+  ventas, facturasImpagas, saldoErp, plazoPorCliente, plazoPorDefecto, hoyISO,
   mostradorSemanal, semanasAdelante = 6,
 }: {
   ventas: FilaVentaFinanzas[]
   /** Números de factura que NO aparecen en `cobros_erp` (RPC facturas_impagas). */
   facturasImpagas: Set<string>
+  /** Saldo total por cliente (nombre normalizado) del informe Deudores y la
+   *  fecha de esa carga. Null si el informe no está cargado: en ese caso no
+   *  se recorta nada, antes que dar todo por pagado. */
+  saldoErp: { saldos: Map<string, number>; cargadoISO: string } | null
   plazoPorCliente: Map<string, PlazoCliente>
   /** Para clientes sin plazo propio: la mediana MEDIDA de la cartera (cubre
    *  promedio/p25/p75). `PlazoCliente.pactado` no usa este fallback — cada
@@ -216,6 +279,10 @@ export function proyectarCobros({
     if (f.fecha_entrega > acc.fechaEntrega) acc.fechaEntrega = f.fecha_entrega
     porFactura.set(factura, acc)
   }
+
+  const pagadasSegunErp = saldoErp
+    ? recortarContraSaldoErp(porFactura, saldoErp)
+    : { monto: 0, facturas: 0 }
 
   const pendientes: FacturaPendiente[] = []
   const cobertura = { medido: 0, declarado: 0, estimado: 0 }
@@ -312,5 +379,6 @@ export function proyectarCobros({
     totalPendiente: pendientes.reduce((s, p) => s + p.bruto, 0),
     cobertura,
     sinRastreo,
+    pagadasSegunErp,
   }
 }

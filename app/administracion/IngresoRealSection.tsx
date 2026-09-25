@@ -760,6 +760,10 @@ function ProyeccionProximaSemana({ datos }: { datos: DatosCobros }) {
             <> Quedan fuera {fMoney(p.sinRastreo.monto)} de ventas despachadas sin número de factura, que no se
             pueden cruzar contra los pagos.</>
           )}
+          {p.pagadasSegunErp.monto > 0 && (
+            <> Se descartaron {fMoney(p.pagadasSegunErp.monto)} de facturas cuyo pago el ERP no imputó a la
+            factura, pero que el informe Deudores ya da por pagadas.</>
+          )}
         </p>
       </div>
     </div>

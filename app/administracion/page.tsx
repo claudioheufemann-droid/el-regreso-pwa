@@ -454,10 +454,22 @@ export default async function AdministracionPage() {
     })
   }
 
+  // Saldo por cliente del informe Deudores: descarta las facturas sin pago
+  // cruzado que el ERP ya da por pagadas (ver recortarContraSaldoErp).
+  const saldosErp = new Map<string, number>()
+  let cargaDeudores = ''
+  for (const d of deudoresRaw) {
+    const k = normalizarNombreCliente(d.nombre_fantasia)
+    if (k) saldosErp.set(k, (saldosErp.get(k) ?? 0) + (Number(d.saldo_total) || 0))
+    const carga = String(d.updated_at ?? '').slice(0, 10)
+    if (carga > cargaDeudores) cargaDeudores = carga
+  }
+
   const medianaCartera = medianaDe(comportamientoCredito.map(c => c.p50)) ?? 15
   const proyeccion = proyectarCobros({
     ventas: ventasRaw,
     facturasImpagas: new Set(impagasRaw.map(f => f.numero_factura)),
+    saldoErp: saldosErp.size > 0 && cargaDeudores ? { saldos: saldosErp, cargadoISO: cargaDeudores } : null,
     plazoPorCliente,
     plazoPorDefecto: medianaCartera,
     hoyISO,
