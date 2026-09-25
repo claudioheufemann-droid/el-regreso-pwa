@@ -17,6 +17,7 @@ import PanelCobranza, {
   documentosParaWA, FilaDocumento, CLARO as PALETA_DOC_CLARO, OSCURO as PALETA_DOC_OSCURO, type DatosCobranza,
 } from '@/components/deudores/PanelCobranza'
 import { diasMoraDeudor, severidadMora, type DocumentoVencido, type SeveridadMora } from '@/lib/cobranza'
+import type { BarrilesFuera } from '@/lib/barrilesFuera'
 
 interface Deudor {
   id: string
@@ -65,6 +66,9 @@ interface Props {
   clientesPorVendedor: Record<string, number>
   totalClientesPropios: number
   maquilaPorCliente: Record<string, number>
+  /** KPI "Barriles": sale del informe Barriles en Cliente, no de sumar las
+   *  filas de deudores (ver lib/barrilesFuera.ts). */
+  barrilesFuera: BarrilesFuera
 }
 
 /**
@@ -678,7 +682,7 @@ function SaldoNoVencidoModal({ deudores, isAdmin, tema, onClose }: {
   )
 }
 
-export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clientesPorVendedor, totalClientesPropios, maquilaPorCliente }: Props) {
+export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clientesPorVendedor, totalClientesPropios, maquilaPorCliente, barrilesFuera }: Props) {
   const router = useRouter()
   const isDesktop = useIsDesktop()
   const { user } = useUser()
@@ -785,7 +789,7 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clien
   }
 
   if (isDesktop) {
-    return <DeudoresTablaDesktop deudores={deudores} isAdmin={isAdmin} clientesPorVendedor={clientesPorVendedor} />
+    return <DeudoresTablaDesktop deudores={deudores} isAdmin={isAdmin} clientesPorVendedor={clientesPorVendedor} barrilesFuera={barrilesFuera} />
   }
 
   const subtitulo = !isAdmin
@@ -1073,8 +1077,8 @@ const TD = {
   purple: '#9333EA', purpleSoft: '#FAF5FF', hover: '#F8FAFC', head: '#F8FAFC',
 }
 
-function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
-  deudores: Deudor[]; isAdmin: boolean; clientesPorVendedor: Record<string, number>
+function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor, barrilesFuera }: {
+  deudores: Deudor[]; isAdmin: boolean; clientesPorVendedor: Record<string, number>; barrilesFuera: BarrilesFuera
 }) {
   const [cartera, setCartera] = useState<string>('todos')
   const [filterDeudaVencida, setFilterDeudaVencida] = useState<'todos' | 'vencida' | 'sin-vencida'>('todos')
@@ -1128,8 +1132,10 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
     deudores: filteredDeudores.length,
     saldo_total: filteredDeudores.reduce((sum, d) => sum + (d.saldo_comercial || 0), 0),
     deuda_vencida: filteredDeudores.reduce((sum, d) => sum + (d.deuda_comercial || 0), 0),
-    barriles_adeudados: filteredDeudores.reduce((sum, d) => sum + (d.barriles_adeudados || 0), 0),
   }
+  // Barriles fuera de la cartera elegida, incluidos clientes sin deuda (el
+  // informe Deudores no los trae). Mismo número que /ventas/barriles.
+  const barrilesKpi = isAdmin && cartera !== 'todos' ? (barrilesFuera.porCartera[cartera] ?? 0) : barrilesFuera.total
 
   // Mismo desglose que la vista móvil: "deudor" mezcla clientes con plata YA
   // vencida y clientes que sólo tienen saldo dentro de plazo (no vencido).
@@ -1215,7 +1221,7 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor }: {
           { label: 'Total Deudores', value: totals.deudores, format: 'n', color: TD.blue },
           { label: 'Deuda Vencida', value: totals.deuda_vencida, format: '$', color: TD.red },
           { label: 'Saldo Total', value: totals.saldo_total, format: '$', color: TD.accent },
-          { label: 'Barriles', value: totals.barriles_adeudados, format: 'n', color: TD.purple },
+          { label: 'Barriles fuera', value: barrilesKpi, format: 'n', color: TD.purple },
         ].map(({ label, value, format, color }) => {
           const esSaldo = label === 'Saldo Total'
           const esDeudores = label === 'Total Deudores'

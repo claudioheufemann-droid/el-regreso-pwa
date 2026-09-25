@@ -3,6 +3,7 @@ import { getServerUser } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { vendedorCanonico } from '@/lib/types'
 import { calcularMaquila, puedeVerDeudaGlobal } from '@/lib/deudaComercial'
+import { barrilesFueraPorCartera } from '@/lib/barrilesFuera'
 import DeudoresVendedorClient from './DeudoresVendedorClient'
 
 // Apartado de Deudores dentro de Ventas (distinto de /ventas/admin/deudores,
@@ -30,9 +31,10 @@ export default async function DeudoresVentasPage() {
   // la columna cruda y se agrupa por nombre canónico porque clientes.vendedor
   // usa nombres históricos/alias ("Los Lagos", el mail de Nicol, "Marion"…) —
   // agrupar acá evita que la misma cartera se cuente partida en dos.
-  const [{ data: deudores }, { data: clientesRows }] = await Promise.all([
+  const [{ data: deudores }, { data: clientesRows }, barrilesFuera] = await Promise.all([
     query,
     supabase.from('clientes').select('vendedor'),
+    barrilesFueraPorCartera(supabase),
   ])
 
   // Maquila (co-packing a terceros): el ERP la factura al mismo cliente, así
@@ -64,6 +66,10 @@ export default async function DeudoresVentasPage() {
       clientesPorVendedor={clientesPorVendedor}
       totalClientesPropios={clientesPorVendedor[miVendedorCanonico] ?? 0}
       maquilaPorCliente={maquilaPorCliente}
+      barrilesFuera={esAdmin ? barrilesFuera : {
+        total: barrilesFuera.porCartera[miVendedorCanonico] ?? 0,
+        porCartera: { [miVendedorCanonico]: barrilesFuera.porCartera[miVendedorCanonico] ?? 0 },
+      }}
     />
   )
 }

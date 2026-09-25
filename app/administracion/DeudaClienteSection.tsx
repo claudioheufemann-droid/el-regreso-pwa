@@ -23,6 +23,7 @@ import { VENDEDORES_CARTERA_COBRANZA, vendedorCanonico, grupoCarteraDe, nombreCo
 import { diasMoraDeudor, severidadMora, type SeveridadMora } from '@/lib/cobranza'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
 import PanelCobranza, { documentosParaWA, type DatosCobranza } from '@/components/deudores/PanelCobranza'
+import type { BarrilesFuera } from '@/lib/barrilesFuera'
 
 const C = {
   card: '#FFFFFF', bg: '#F1F5F9', text: '#0F172A', muted: '#64748B',
@@ -75,6 +76,7 @@ interface Props {
   initialDeudores: DeudorRaw[]
   clientesPorVendedor: Record<string, number>
   maquilaPorCliente: Record<string, number>
+  barrilesFuera: BarrilesFuera
 }
 
 function conDeudaComercial(filas: DeudorRaw[], maquilaPorCliente: Record<string, number>): Deudor[] {
@@ -196,7 +198,7 @@ const fCompact = (n: number) => {
   return `$${Math.round(n)}`
 }
 
-export default function DeudaClienteSection({ initialDeudores, clientesPorVendedor, maquilaPorCliente }: Props) {
+export default function DeudaClienteSection({ initialDeudores, clientesPorVendedor, maquilaPorCliente, barrilesFuera }: Props) {
   const [cartera, setCartera] = useState<string>('todos')
   const [estado, setEstado] = useState<'todos' | 'vencida' | 'sin-vencida'>('todos')
   const [searchText, setSearchText] = useState('')
@@ -255,8 +257,10 @@ export default function DeudaClienteSection({ initialDeudores, clientesPorVended
     conVencida: filtrados.filter(d => d.deuda_comercial > 0).length,
     deuda_vencida: filtrados.reduce((s, d) => s + (d.deuda_comercial || 0), 0),
     saldo_total: filtrados.reduce((s, d) => s + (d.saldo_comercial || 0), 0),
-    barriles: filtrados.reduce((s, d) => s + (d.barriles_adeudados || 0), 0),
   }), [filtrados])
+  // Barriles fuera de la cartera elegida, incluidos clientes sin deuda (el
+  // informe Deudores no los trae — ver lib/barrilesFuera.ts).
+  const barrilesKpi = cartera === 'todos' ? barrilesFuera.total : (barrilesFuera.porCartera[cartera] ?? 0)
 
   const saldoNoVencido = totals.saldo_total - totals.deuda_vencida
   const clientesUniverso = cartera === 'todos' ? total.clientes : (clientesPorVendedor[cartera] ?? 0)
@@ -332,9 +336,9 @@ export default function DeudaClienteSection({ initialDeudores, clientesPorVended
           </button>
         </Card>
         <Card>
-          <Etiqueta>Barriles adeudados</Etiqueta>
-          <p style={{ fontSize: 26, fontWeight: 900, color: C.purple, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>{totals.barriles.toLocaleString('es-CL')}</p>
-          <p style={{ fontSize: 11.5, color: C.muted, marginTop: 6 }}>sin devolver, cartera filtrada</p>
+          <Etiqueta>Barriles fuera</Etiqueta>
+          <p style={{ fontSize: 26, fontWeight: 900, color: C.purple, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>{barrilesKpi.toLocaleString('es-CL')}</p>
+          <p style={{ fontSize: 11.5, color: C.muted, marginTop: 6 }}>sin devolver, según informe Barriles en Cliente</p>
         </Card>
       </div>
 

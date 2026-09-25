@@ -17,6 +17,7 @@ import { proyectarCobros, type ProyeccionCobros, type PlazoCliente } from '@/lib
 import { esCamaraProduccion } from '@/lib/camaras'
 import { vendedorCanonico, diasPagoEfectivo, CLIENTES_FORECAST_INDIVIDUAL, NOMBRE_RESTAURANTE_FORECAST, NOMBRE_COMPRAS_TOTAL } from '@/lib/types'
 import { maquilaVencidaDe, type FilaVenta } from '@/lib/cobranza'
+import { barrilesFueraPorCartera } from '@/lib/barrilesFuera'
 import AdministracionClient from './AdministracionClient'
 
 export const dynamic = 'force-dynamic'
@@ -324,9 +325,10 @@ export default async function AdministracionPage() {
 
   // ── Deuda actual por cliente (antes /administracion/cobranza, absorbida acá
   // adentro de la pestaña Cobranza y Deuda — decisión del usuario, 15-sep-2026) ──
-  const [{ data: deudoresDetalle }, { data: clientesVendedorRaw }] = await Promise.all([
+  const [{ data: deudoresDetalle }, { data: clientesVendedorRaw }, barrilesFuera] = await Promise.all([
     admin.from('deudores').select('*').order('deuda_vencida', { ascending: false }),
     admin.from('clientes').select('vendedor'),
+    barrilesFueraPorCartera(admin),
   ])
   const maquilaPorCliente = await calcularMaquila(admin, deudoresDetalle ?? [])
   const clientesPorVendedor: Record<string, number> = {}
@@ -931,6 +933,7 @@ export default async function AdministracionPage() {
       deudoresDetalle={deudoresDetalle ?? []}
       clientesPorVendedor={clientesPorVendedor}
       maquilaPorCliente={maquilaPorCliente}
+      barrilesFuera={barrilesFuera}
       forecastClientes={forecastClientes}
       forecastCompras={forecastCompras}
       cobros={cobros}

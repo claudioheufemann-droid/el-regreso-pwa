@@ -18,6 +18,7 @@ import { NOMBRE_RESTAURANTE_FORECAST, NOMBRE_COMPRAS_TOTAL } from '@/lib/types'
 import type { ProyeccionCaja, PrecisionCobro, ClienteEnPeriodo } from '@/lib/administracion/finanzas'
 import FlujoCajaDashboard from './FlujoCajaDashboard'
 import DeudaClienteSection, { type DeudorRaw } from './DeudaClienteSection'
+import type { BarrilesFuera } from '@/lib/barrilesFuera'
 
 interface Props {
   series: SerieFinanzas[]
@@ -37,6 +38,7 @@ interface Props {
   deudoresDetalle: DeudorRaw[]
   clientesPorVendedor: Record<string, number>
   maquilaPorCliente: Record<string, number>
+  barrilesFuera: BarrilesFuera
   /** Forecast individual por cliente (Prophet, mismo ciclo mensual que
    *  Ingresos, repartido a semanas) — hoy Cliente PDV y Restaurante BaseCamp. */
   forecastClientes: ForecastCliente[]
@@ -316,7 +318,7 @@ function VistaForecastSerie({ fc, hoyISO, subtitulo }: { fc: ForecastCliente; ho
 
 export default function AdministracionClient({
   series, avance, mtd, caja, deuda, precisionCobro, flujo, ultimaCorrida, clientesSinPlazo, hoyISO,
-  deudoresDetalle, clientesPorVendedor, maquilaPorCliente, forecastClientes, forecastCompras, cobros,
+  deudoresDetalle, clientesPorVendedor, maquilaPorCliente, barrilesFuera, forecastClientes, forecastCompras, cobros,
 }: Props) {
   const router = useRouter()
   // 'flujo' primero: es la pregunta operativa del día a día ("¿cuándo entra
@@ -943,6 +945,7 @@ export default function AdministracionClient({
                 initialDeudores={deudoresDetalle}
                 clientesPorVendedor={clientesPorVendedor}
                 maquilaPorCliente={maquilaPorCliente}
+                barrilesFuera={barrilesFuera}
               />
             </div>
           </div>
