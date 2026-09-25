@@ -35,6 +35,10 @@ function fmtPeso(n: number) {
   return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(n)
 }
 
+function pctVencida(vencida: number, saldo: number) {
+  return `${saldo > 0 ? Math.round((vencida / saldo) * 100) : 0}%`
+}
+
 type ScoreRow = FrequencyStat & { nombre_fantasia: string; ultima_compra: string | null }
 
 export async function GET(req: Request) {
@@ -116,15 +120,23 @@ export async function GET(req: Request) {
   // ── Resumen a admins: deuda del área comercial + detalle por cartera ─────
   // Mismo total y mismas tarjetas que /ventas/deudores ("Todos" + una por
   // vendedor, de mayor a menor). El riesgo de stock va en una línea al final.
+  // El total de todos los vendedores va en la PRIMERA línea del cuerpo, no
+  // sólo en el título: iOS corta el título a ~25 caracteres y el monto no se
+  // alcanzaba a ver (Claudio, 2026-09-25). El % es qué parte de la cartera
+  // por cobrar (saldo) ya está vencida.
   const { total, carteras } = deudaComercial
-  const lineas = carteras
-    .filter(c => c.vencida > 0)
-    .map(c => `${nombreCorto(c.vendedor)}: ${fmtPeso(c.vencida)} (${c.deudores} deudores)`)
+  const lineas = [
+    `Total: ${fmtPeso(total.vencida)} · ${total.deudores} deudores`,
+    `${pctVencida(total.vencida, total.saldo)} de la cartera con deuda vencida`,
+    ...carteras
+      .filter(c => c.vencida > 0)
+      .map(c => `${nombreCorto(c.vendedor)}: ${fmtPeso(c.vencida)} (${c.deudores} deudores · ${pctVencida(c.vencida, c.saldo)})`),
+  ]
   if (riesgo.length > 0) lineas.push(`📦 ${riesgo.length} clientes en riesgo de quiebre de stock`)
 
   await sendPushToAllAdmins({
-    title: `💰 Deuda vencida área comercial: ${fmtPeso(total.vencida)}`,
-    body: `${total.deudores} deudores en total\n${lineas.join('\n')}`,
+    title: '💰 Deuda vencida área comercial',
+    body: lineas.join('\n'),
     url: total.vencida > 0 ? '/ventas/deudores' : '/ventas/clientes',
     tag: 'cartera-diaria',
   })

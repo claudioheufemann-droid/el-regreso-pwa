@@ -33,7 +33,7 @@ export function puedeVerDeudaGlobal(user: { isAdmin: boolean; email: string }): 
   return user.isAdmin || EMAILS_VEN_DEUDA_GLOBAL.includes(user.email.toLowerCase())
 }
 
-type DeudorRow = { nombre_fantasia: string; deuda_vencida: number | null }
+type DeudorRow = { nombre_fantasia: string; deuda_vencida: number | null; saldo_total?: number | null }
 
 export interface CalculoMaquila {
   /** { nombre_fantasia → plata vencida que es maquila }. Sólo los que tienen. */
@@ -112,10 +112,15 @@ export interface CarteraDeudaComercial {
   /** Deudores de la cartera (con o sin plata vencida) — el "19 deudores" de la tarjeta. */
   deudores: number
   vencida: number
+  /**
+   * Saldo por cobrar de la cartera (vencido + por vencer), sin maquila. Base
+   * del "% de la cartera vencida" = vencida / saldo.
+   */
+  saldo: number
 }
 
 export interface ResumenDeudaComercial {
-  total: { deudores: number; vencida: number }
+  total: { deudores: number; vencida: number; saldo: number }
   /** Siempre todas las carteras de cobranza, de mayor a menor deuda vencida. */
   carteras: CarteraDeudaComercial[]
   /** Clientes con deuda vencida comercial > 0. */
@@ -128,7 +133,7 @@ export async function resumenDeudaComercial(supabase: SupabaseClient): Promise<R
   const { maquilaPorCliente, soloMaquila } = await calcularMaquila(supabase, deudores)
 
   const acc = new Map<string, CarteraDeudaComercial>(
-    VENDEDORES_CARTERA_COBRANZA.map(v => [v, { vendedor: v, deudores: 0, vencida: 0 }]),
+    VENDEDORES_CARTERA_COBRANZA.map(v => [v, { vendedor: v, deudores: 0, vencida: 0, saldo: 0 }]),
   )
   const clientes: ClienteDeudaComercial[] = []
 
@@ -139,15 +144,19 @@ export async function resumenDeudaComercial(supabase: SupabaseClient): Promise<R
     if (!fila) continue
     const maquila = maquilaPorCliente[d.nombre_fantasia] ?? 0
     const vencida = Math.round(Math.max(0, (d.deuda_vencida || 0) - maquila))
+    // El saldo nunca queda bajo lo vencido (el ERP a veces trae saldo_total
+    // desfasado), así el % no pasa de 100.
+    const saldo = Math.max(vencida, Math.round((Number(d.saldo_total) || 0) - maquila))
     fila.deudores++
     fila.vencida += vencida
+    fila.saldo += saldo
     if (vencida > 0) clientes.push({ nombre: d.nombre_fantasia, vendedor: fila.vendedor, vencida })
   }
 
   const carteras = [...acc.values()].sort((a, b) => b.vencida - a.vencida)
   const total = carteras.reduce(
-    (t, c) => ({ deudores: t.deudores + c.deudores, vencida: t.vencida + c.vencida }),
-    { deudores: 0, vencida: 0 },
+    (t, c) => ({ deudores: t.deudores + c.deudores, vencida: t.vencida + c.vencida, saldo: t.saldo + c.saldo }),
+    { deudores: 0, vencida: 0, saldo: 0 },
   )
   return { total, carteras, clientes }
 }
