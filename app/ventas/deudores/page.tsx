@@ -2,7 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getServerUser } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { vendedorCanonico } from '@/lib/types'
-import { calcularMaquila } from '@/lib/deudaComercial'
+import { calcularMaquila, puedeVerDeudaGlobal } from '@/lib/deudaComercial'
 import DeudoresVendedorClient from './DeudoresVendedorClient'
 
 // Apartado de Deudores dentro de Ventas (distinto de /ventas/admin/deudores,
@@ -15,7 +15,8 @@ export default async function DeudoresVentasPage() {
   // Service-role a propósito — ver lib/supabase/admin.ts. El scope de
   // cartera (vendedoresScope) lo aplica esta misma página, no RLS.
   const supabase = createAdminClient()
-  const esAdmin = user.isAdmin
+  // "Admin" de este módulo = ve las carteras de todos (ver puedeVerDeudaGlobal).
+  const esAdmin = puedeVerDeudaGlobal(user)
 
   // Mismo patrón que /ventas/misiones: comparar por vendedoresErp (nombres
   // con que este usuario aparece en el ERP), nunca por el nombre de login —

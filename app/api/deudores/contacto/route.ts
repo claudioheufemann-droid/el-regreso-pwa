@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getServerUser } from '@/lib/auth'
+import { puedeVerDeudaGlobal } from '@/lib/deudaComercial'
 import { vendedorCanonico } from '@/lib/types'
 
 /**
@@ -50,7 +51,7 @@ export async function POST(req: Request) {
 
   if (!deudor) return NextResponse.json({ error: 'Cliente sin deuda registrada' }, { status: 404 })
 
-  if (!user.isAdmin) {
+  if (!puedeVerDeudaGlobal(user)) {
     const mios = user.vendedoresErp.map(vendedorCanonico)
     if (!mios.includes(vendedorCanonico(deudor.vendedor))) {
       return NextResponse.json({ error: 'Ese cliente no es de tu cartera' }, { status: 403 })

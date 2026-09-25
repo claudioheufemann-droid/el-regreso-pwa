@@ -19,6 +19,20 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { esLineaMaquila, maquilaVencidaDe, type FilaVenta } from '@/lib/cobranza'
 import { VENDEDORES_CARTERA_COBRANZA, grupoCarteraDe, vendedorCanonico } from '@/lib/types'
 
+/**
+ * Quién ve la deuda de TODAS las carteras en /ventas/deudores (y abre el
+ * detalle/contacto de cualquier cliente). Los admin siempre; además una lista
+ * puntual de gente de Administración que cobra pero no debe ser admin del
+ * resto de la app. Karla Morales entra con la cuenta genérica pagos@, pero su
+ * perfil en public.users tiene su propio email, que es lo que se compara acá
+ * (pedido de Claudio, 2026-09-25).
+ */
+const EMAILS_VEN_DEUDA_GLOBAL = ['karla.morales@elregresobeer.com']
+
+export function puedeVerDeudaGlobal(user: { isAdmin: boolean; email: string }): boolean {
+  return user.isAdmin || EMAILS_VEN_DEUDA_GLOBAL.includes(user.email.toLowerCase())
+}
+
 type DeudorRow = { nombre_fantasia: string; deuda_vencida: number | null }
 
 export interface CalculoMaquila {

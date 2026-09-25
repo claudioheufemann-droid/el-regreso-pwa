@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getServerUser } from '@/lib/auth'
+import { puedeVerDeudaGlobal } from '@/lib/deudaComercial'
 import { vendedorCanonico } from '@/lib/types'
 import { reconstruirCobranza, sumarDias, type FilaVenta } from '@/lib/cobranza'
 
@@ -43,7 +44,7 @@ export async function GET(req: Request) {
 
   // Scope de cartera — mismo criterio que /ventas/deudores/page.tsx: el
   // service-role saltea RLS, así que el permiso se chequea acá a mano.
-  if (!user.isAdmin) {
+  if (!puedeVerDeudaGlobal(user)) {
     const mios = user.vendedoresErp.map(vendedorCanonico)
     if (!mios.includes(vendedorCanonico(deudor.vendedor))) {
       return NextResponse.json({ error: 'Ese cliente no es de tu cartera' }, { status: 403 })
