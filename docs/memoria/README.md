@@ -24,6 +24,7 @@ Cada módulo del sistema cuenta con su subcarpeta dedicada conteniendo:
 | :--- | :--- | :--- | :--- |
 | **Producción** | [`docs/memoria/produccion/`](file:///c:/Users/benja/Downloads/Gas%20abastible%20-20260402T132210Z-1-001/el-regreso-web/.git/El%20Regreso%20PWA/docs/memoria/produccion/) | Activo | Forecasting Prophet, Stock de Seguridad, Gantt de Tanques, Plan Maestro, MRP Insumos. |
 | **Administración y Finanzas** | [`docs/memoria/administracion/`](file:///c:/Users/benja/Downloads/Gas%20abastible%20-20260402T132210Z-1-001/el-regreso-web/.git/El%20Regreso%20PWA/docs/memoria/administracion/) | Activo | Flujo de Caja Semanal (13s), Proyección de Cobranza, Aging de Cartera, Comportamiento de Pago ERP, Forecast Finanzas ($). |
+| **Asistente de datos (IA)** | [`docs/memoria/agente/`](agente/README.md) | Activo | Chat con Gemini gratuito sobre Supabase: catálogo de consultas de solo lectura, parámetros y reglas en `lib/agente/`. |
 
 ---
 

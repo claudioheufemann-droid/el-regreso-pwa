@@ -9,7 +9,7 @@ import {
 } from 'recharts'
 import {
   TrendingUp, Wallet, AlertTriangle, Info, CalendarClock, Truck, HelpCircle, ChevronLeft, ChevronDown,
-  ChevronRight, Target, UserX, Sparkles, Banknote,
+  ChevronRight, Target, UserX, Sparkles, Banknote, Bot,
 } from 'lucide-react'
 import type { SerieFinanzas, AvanceCiclo, ResumenDeuda, DatosFlujo, ForecastCliente, DatosCobros } from './page'
 import IngresoRealSection from './IngresoRealSection'
@@ -429,7 +429,8 @@ export default function AdministracionClient({
         </div>
 
         {/* ── Pestañas ─────────────────────────────────────────────────────── */}
-        <div style={{ display: 'flex', gap: 2, background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, padding: 4, width: 'fit-content', marginBottom: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 24 }}>
+        <div style={{ display: 'flex', gap: 2, background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, padding: 4, width: 'fit-content' }}>
           {([
             ['flujo', 'Flujo de Caja', Wallet],
             // Va pegada a Flujo de Caja a propósito: una proyecta la plata que
@@ -455,6 +456,16 @@ export default function AdministracionClient({
               {label}
             </button>
           ))}
+        </div>
+        <Link
+          href="/administracion/agente"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', borderRadius: 11,
+            border: `1px solid ${C.blue}`, color: C.blue, fontWeight: 700, fontSize: 13, textDecoration: 'none',
+          }}
+        >
+          <Bot size={14} /> Asistente de datos
+        </Link>
         </div>
 
         {/* ══════════════ PLATA QUE ENTRÓ ══════════════ */}
