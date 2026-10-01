@@ -74,6 +74,12 @@ function guardarProyeccionAbierta(v: boolean) {
 /* ── Utilidades de formato ─────────────────────────────────────────────── */
 const MESES_CORTOS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 const fNum = (n: number) => Math.round(n).toLocaleString('es-CL')
+/** Dinero neto en pesos chilenos, completo ($1.234.567) y corto para ejes y tarjetas ($1,2 M / $450 mil). */
+const fPesos = (n: number) => `${n < 0 ? '−' : ''}$${Math.abs(Math.round(n)).toLocaleString('es-CL')}`
+const fPesosCorto = (n: number) => {
+  const a = Math.abs(n), signo = n < 0 ? '−' : ''
+  return a >= 1_000_000 ? `${signo}$${(a / 1_000_000).toFixed(1).replace('.', ',')} M` : a >= 1000 ? `${signo}$${Math.round(a / 1000)} mil` : `${signo}$${Math.round(a)}`
+}
 
 /** Cantidad de insumo en su unidad base (gr/ml) → texto legible, subiendo a
  *  kg/L cuando conviene (≥1000) — la base sigue siendo gr/ml para que el
@@ -974,6 +980,26 @@ export default function ProduccionClient({
     ? (mtdLitros / avanceMes.diasHabilesTranscurridos) * avanceMes.diasHabilesEnCiclo
     : 0
 
+  /* ── Litros ⇄ dinero neto en la pestaña Forecasting ───────────────────────
+     El modelo y toda la planificación trabajan en LITROS; esto sólo cambia lo
+     que se MUESTRA (gráfico, tarjetas y tabla de detalle), multiplicando por el
+     precio neto por litro de la serie (ventas de los últimos 90 días, ver
+     SerieForecast.precioNetoLitro). Toda la serie —historial y proyección— se
+     valoriza al MISMO precio de hoy: así la comparación entre meses refleja
+     volumen y no un cambio de lista de precios. No es un forecast de ingresos
+     propio (el de Finanzas lo es); es "esos litros, a precio de hoy". La
+     calculadora de cobertura se queda en litros: es una cuenta operativa. */
+  const [monedaForecast, setMonedaForecast] = useState<'litros' | 'neto'>('litros')
+  const precioNeto = serieActual?.precioNetoLitro ?? null
+  const verNeto = monedaForecast === 'neto' && precioNeto != null
+  /** Multiplicador de litros a lo que se muestra (1 = litros). */
+  const kMoneda = verNeto ? precioNeto : 1
+  /** Formatea un valor que YA está en la unidad mostrada. */
+  const fUnidad = (n: number) => (verNeto ? fPesosCorto(n) : `${fNum(n)} L`)
+  /** Para la tabla de detalle: cada fila trae su propio precio (sin precio, se queda en litros). */
+  const valorSerie = (serie: SerieForecast, litros: number) =>
+    monedaForecast === 'neto' && serie.precioNetoLitro != null ? fPesosCorto(litros * serie.precioNetoLitro) : `${fNum(litros)} L`
+
   /* ── Calculadora de cobertura ("¿cuánto necesito de X para cubrir hasta
      tal fecha?") ──────────────────────────────────────────────────────────
      Sirve cualquier producto en cualquier formato (o "todos los formatos").
@@ -1303,15 +1329,16 @@ export default function ProduccionClient({
       return {
         month: etiquetaMes(p.mes),
         mesIso: p.mes,
-        ventaReal: p.tipo === 'historico' ? p.litros : null,
-        ventaProyectada: p.tipo === 'forecast' || esUltimoReal ? p.litros : null,
-        rango: p.litrosMin != null && p.litrosMax != null ? [p.litrosMin, p.litrosMax] : null,
-        ritmo: i === idxUltimoReal ? p.litros : null,
+        // Todo se multiplica por kMoneda: 1 en litros, el precio neto por litro en modo dinero.
+        ventaReal: p.tipo === 'historico' ? p.litros * kMoneda : null,
+        ventaProyectada: p.tipo === 'forecast' || esUltimoReal ? p.litros * kMoneda : null,
+        rango: p.litrosMin != null && p.litrosMax != null ? [p.litrosMin * kMoneda, p.litrosMax * kMoneda] : null,
+        ritmo: i === idxUltimoReal ? p.litros * kMoneda : null,
         // Descomposición del modelo. `tendencia` se dibuja como línea sobre
         // toda la serie —incluido el historial— porque ahí es donde se ve que
         // el modelo la ajustó a los datos y no la inventó para el futuro.
-        tendencia: p.tendencia,
-        estacionalidad: p.estacionalidad,
+        tendencia: p.tendencia != null ? p.tendencia * kMoneda : null,
+        estacionalidad: p.estacionalidad != null ? p.estacionalidad * kMoneda : null,
       }
     })
     // El mes en curso puede no venir en `puntos` (el modelo lo excluyó del
@@ -1327,9 +1354,9 @@ export default function ProduccionClient({
       filas.sort((a, b) => a.mesIso.localeCompare(b.mesIso))
     }
     const idxMesEnCurso = filas.findIndex(f => f.mesIso === avanceMes.mes)
-    if (idxMesEnCurso >= 0) filas[idxMesEnCurso].ritmo = ritmoProyectado
+    if (idxMesEnCurso >= 0) filas[idxMesEnCurso].ritmo = ritmoProyectado * kMoneda
     return filas
-  }, [serieActual, avanceMes.mes, ritmoProyectado])
+  }, [serieActual, avanceMes.mes, ritmoProyectado, kMoneda])
 
   /* ── Descomposición del modelo ─────────────────────────────────────────
      Sólo existe si la serie llegó a proyectarse (historial suficiente y no
@@ -3776,7 +3803,7 @@ export default function ProduccionClient({
                 <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <h3 className="text-lg font-bold text-gray-800">
-                      Proyección de Demanda (Litros) vs. Venta Real
+                      Proyección de Demanda ({verNeto ? 'Neto $' : 'Litros'}) vs. Venta Real
                     </h3>
                     <p className="mt-1 text-sm text-gray-500">
                       {serieActual?.label ?? '—'} · el área ámbar marca la temporada alta (Dic–Feb).
@@ -3786,6 +3813,19 @@ export default function ProduccionClient({
                         consolidado) — ahí sí hay un tamaño de envase único con el que
                         convertir litros a barriles/latas. Se aclara la base acá para
                         que el número de la tabla/tooltip no parezca sacado de la nada. */}
+                    {monedaForecast === 'neto' && precioNeto == null && (
+                      <p className="mt-0.5 text-xs font-semibold text-red-500">
+                        No hay ventas recientes con las que valorizar esta serie: se muestra en litros.
+                      </p>
+                    )}
+                    {verNeto && serieActual && (
+                      <p className="mt-0.5 text-xs font-semibold text-gray-500">
+                        Neto (sin IVA) a precio de hoy: <span className="text-gray-700">{fPesos(precioNeto!)} por litro</span>
+                        {' '}— promedio ponderado de las ventas de los últimos 90 días
+                        {serieActual.precioFuente === 'producto' ? ', del producto (este formato casi no vendió)' : serieActual.precioFuente === 'general' ? ', del consolidado (esta serie casi no vendió)' : serieActual.nivel === 'general' ? ' (incluye la mezcla de productos)' : ''}.
+                        {' '}El historial usa ese mismo precio, para que se compare el volumen y no cambios de precio.
+                      </p>
+                    )}
                     {unidadEnvaseSerieActual && (
                       <p className="mt-0.5 text-xs font-semibold text-gray-400">
                         pasa el mouse por el gráfico para ver también la cantidad de {unidadEnvaseSerieActual.nombre} pronosticadas
@@ -3796,6 +3836,21 @@ export default function ProduccionClient({
                     )}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
+                    {/* Litros ⇄ dinero neto: sólo cambia lo que se muestra (ver monedaForecast). */}
+                    <div className="flex gap-0.5 rounded-lg border border-gray-200 bg-gray-50 p-0.5" role="group" aria-label="Unidad del pronóstico">
+                      {([['litros', 'Litros'], ['neto', '$ Neto']] as const).map(([id, texto]) => (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => setMonedaForecast(id)}
+                          aria-pressed={monedaForecast === id}
+                          title={id === 'neto' ? 'Ver la proyección en dinero neto (sin IVA) a precio de hoy' : 'Ver la proyección en litros'}
+                          className={`rounded-md px-3 py-1 text-sm font-bold transition-colors ${monedaForecast === id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                        >
+                          {texto}
+                        </button>
+                      ))}
+                    </div>
                     {/* Interruptor de la descomposición: por defecto apagado
                         para no sobrecargar la lectura rápida, pero a un clic
                         de mostrar de qué está hecha la proyección. */}
@@ -3850,6 +3905,7 @@ export default function ProduccionClient({
                       un ajuste a mano. s(t) es una aproximación de un solo armónico a la estacionalidad de Fourier
                       real de Prophet, para que la fórmula sea legible. Sin componente de feriados (h(t)): este
                       modelo no los usa. Las constantes se recalculan solas en cada corrida del modelo.
+                      {verNeto && ' La función está en litros: el modelo trabaja en litros y el dinero es litros × precio neto por litro.'}
                     </p>
                   </div>
                 )}
@@ -3863,7 +3919,7 @@ export default function ProduccionClient({
                     <div className="min-w-[190px] flex-1">
                       <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Tendencia</p>
                       <p className="text-xl font-black tabular-nums" style={{ color: COLORS.lightGreen }}>
-                        {fNum(descomposicionProximo.tendencia)} L
+                        {fUnidad(descomposicionProximo.tendencia)}
                       </p>
                       <p className="mt-0.5 text-xs leading-snug text-gray-500">
                         Hacia dónde va el negocio, sin el efecto del mes. Se ajusta con
@@ -3874,7 +3930,7 @@ export default function ProduccionClient({
                     <div className="min-w-[190px] flex-1">
                       <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Estacionalidad de {etiquetaMes(descomposicionProximo.mesIso)}</p>
                       <p className="text-xl font-black tabular-nums" style={{ color: descomposicionProximo.estacionalidad >= 0 ? COLORS.amber : '#EF4444' }}>
-                        {descomposicionProximo.estacionalidad >= 0 ? '+' : '−'}{fNum(Math.abs(descomposicionProximo.estacionalidad))} L
+                        {descomposicionProximo.estacionalidad >= 0 ? '+' : '−'}{fUnidad(Math.abs(descomposicionProximo.estacionalidad))}
                       </p>
                       <p className="mt-0.5 text-xs leading-snug text-gray-500">
                         Cuánto se aparta ese mes del año respecto de la tendencia. Curva de Fourier
@@ -3885,7 +3941,7 @@ export default function ProduccionClient({
                     <div className="min-w-[150px] flex-1">
                       <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Proyección</p>
                       <p className="text-xl font-black tabular-nums" style={{ color: COLORS.darkGreen }}>
-                        {fNum(descomposicionProximo.tendencia + descomposicionProximo.estacionalidad)} L
+                        {fUnidad(descomposicionProximo.tendencia + descomposicionProximo.estacionalidad)}
                       </p>
                       <p className="mt-0.5 text-xs leading-snug text-gray-500">
                         El rango sombreado es el intervalo de predicción al 80%: 4 de cada 5 meses
@@ -3925,7 +3981,8 @@ export default function ProduccionClient({
                         />
                         <YAxis
                           axisLine={false} tickLine={false} tick={{ fill: '#6B7280', fontSize: 12 }} dx={-6}
-                          tickFormatter={(v: number) => (v >= 1000 ? `${Math.round(v / 1000)}k` : String(v))}
+                          width={verNeto ? 72 : undefined}
+                          tickFormatter={(v: number) => (verNeto ? fPesosCorto(v) : v >= 1000 ? `${Math.round(v / 1000)}k` : String(v))}
                         />
                         {/* Tooltip a medida: en el mes ancla (el último real,
                             donde arranca la línea de proyección) "Venta Real",
@@ -3967,8 +4024,8 @@ export default function ProduccionClient({
                                 {visibles.map(entrada => {
                                   const valor = entrada.value
                                   const texto = Array.isArray(valor)
-                                    ? `${fNum(Number(valor[0]))} – ${fNum(Number(valor[1]))} L`
-                                    : `${fNum(Number(valor))} L`
+                                    ? `${verNeto ? fPesos(Number(valor[0])) : fNum(Number(valor[0]))} – ${verNeto ? fPesos(Number(valor[1])) : fNum(Number(valor[1]))}${verNeto ? '' : ' L'}`
+                                    : verNeto ? fPesos(Number(valor)) : `${fNum(Number(valor))} L`
                                   // Además de litros, cuántos envases son — sólo tiene sentido
                                   // para las series de demanda (no para tendencia/estacionalidad,
                                   // que son componentes del modelo, no litros vendibles) y sólo
@@ -3978,8 +4035,8 @@ export default function ProduccionClient({
                                     ['ventaProyectada', 'ventaReal', 'ritmo', 'rango'].includes(String(entrada.dataKey))
                                   const unidadesTexto = mostrarUnidades
                                     ? Array.isArray(valor)
-                                      ? `${fNum(Math.round(Number(valor[0]) / unidadEnvaseSerieActual!.litrosPorUnidad))} – ${fNum(Math.round(Number(valor[1]) / unidadEnvaseSerieActual!.litrosPorUnidad))} ${unidadEnvaseSerieActual!.nombre}`
-                                      : `≈ ${fNum(Math.round(Number(valor) / unidadEnvaseSerieActual!.litrosPorUnidad))} ${unidadEnvaseSerieActual!.nombre}`
+                                      ? `${fNum(Math.round(Number(valor[0]) / kMoneda / unidadEnvaseSerieActual!.litrosPorUnidad))} – ${fNum(Math.round(Number(valor[1]) / kMoneda / unidadEnvaseSerieActual!.litrosPorUnidad))} ${unidadEnvaseSerieActual!.nombre}`
+                                      : `≈ ${fNum(Math.round(Number(valor) / kMoneda / unidadEnvaseSerieActual!.litrosPorUnidad))} ${unidadEnvaseSerieActual!.nombre}`
                                     : null
                                   return (
                                     <p key={String(entrada.dataKey)} style={{ color: entrada.color }} className="font-semibold">
@@ -4091,7 +4148,7 @@ export default function ProduccionClient({
               {/* ¿Vamos a cumplir lo proyectado? — comparación simple del mes en curso */}
               {mtdLitros > 0 && (() => {
                 const objetivo = chartData.find(f => f.mesIso === avanceMes.mes)?.ventaProyectada ?? null
-                const pct = objetivo != null && objetivo > 0 ? (ritmoProyectado / objetivo) * 100 : null
+                const pct = objetivo != null && objetivo > 0 ? ((ritmoProyectado * kMoneda) / objetivo) * 100 : null
                 const cumple = pct != null && pct >= 95
                 const avancePct = Math.min(100, (avanceMes.diaActual / avanceMes.diasEnMes) * 100)
                 return (
@@ -4105,7 +4162,7 @@ export default function ProduccionClient({
                           Vendido este mes
                           <Info size={11} className="text-gray-300" />
                         </p>
-                        <p className="mt-1 text-3xl font-black tabular-nums text-gray-900">{fNum(mtdLitros)} L</p>
+                        <p className="mt-1 text-3xl font-black tabular-nums text-gray-900">{fUnidad(mtdLitros * kMoneda)}</p>
                         <p className="text-[10px] text-gray-400">por fecha de pedido, no de entrega</p>
                         {/* Barra de avance del mes: el número solo no dice si
                             vamos temprano o tarde en el período. */}
@@ -4117,14 +4174,14 @@ export default function ProduccionClient({
 
                       <div className="bg-white p-5">
                         <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">A este ritmo cerrarías con</p>
-                        <p className="mt-1 text-3xl font-black tabular-nums" style={{ color: COLORS.amber }}>{fNum(ritmoProyectado)} L</p>
+                        <p className="mt-1 text-3xl font-black tabular-nums" style={{ color: COLORS.amber }}>{fUnidad(ritmoProyectado * kMoneda)}</p>
                         <p className="mt-[14px] text-xs text-gray-500">extrapolación lineal de lo vendido</p>
                       </div>
 
                       {objetivo != null && pct != null && (
                         <div className="bg-white p-5">
                           <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">El modelo proyectó</p>
-                          <p className="mt-1 text-3xl font-black tabular-nums" style={{ color: COLORS.darkGreen }}>{fNum(objetivo)} L</p>
+                          <p className="mt-1 text-3xl font-black tabular-nums" style={{ color: COLORS.darkGreen }}>{fUnidad(objetivo)}</p>
                           <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
                             <div
                               className="h-full rounded-full"
@@ -4466,7 +4523,7 @@ export default function ProduccionClient({
                   <div>
                     <h3 className="font-bold text-gray-800">Detalle por producto y envase</h3>
                     <p className="mt-1 text-sm text-gray-500">
-                      {filasTablaDetalle.length} combinaciones · litros vendidos en lo que va del mes y proyección del próximo mes cerrado.
+                      {filasTablaDetalle.length} combinaciones · {monedaForecast === 'neto' ? 'neto vendido (a precio de hoy) en lo que va del mes y proyección del próximo mes cerrado' : 'litros vendidos en lo que va del mes y proyección del próximo mes cerrado'}.
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -4553,10 +4610,10 @@ export default function ProduccionClient({
                               )}
                             </td>
                             <td className="px-4 py-2.5 text-right tabular-nums text-gray-700">
-                              {serie.litrosMesEnCurso > 0 ? `${fNum(serie.litrosMesEnCurso)} L` : <span className="text-gray-300">—</span>}
+                              {serie.litrosMesEnCurso > 0 ? valorSerie(serie, serie.litrosMesEnCurso) : <span className="text-gray-300">—</span>}
                             </td>
                             <td className="px-4 py-2.5 text-right font-bold tabular-nums text-gray-900">
-                              {proximo ? `${fNum(proximo.litros)} L` : <span className="text-gray-300">sin datos</span>}
+                              {proximo ? valorSerie(serie, proximo.litros) : <span className="text-gray-300">sin datos</span>}
                             </td>
                             <td className="px-6 py-2.5 text-center">
                               <ChipDesviacion mape={serie.mape} derivado={serie.metodo === 'derivado'} />

@@ -169,6 +169,7 @@ export const SERIES: SerieForecast[] = CONFIG.map((c, i) => {
     mesesHistorial: 30,
     metodo: 'propio',
     litrosMesEnCurso: Math.round(nivelBase * 0.4),
+    precioNetoLitro: c.categoria === 'cerveza' ? 3200 : 2400, precioFuente: 'propio' as const,
   }
 })
 

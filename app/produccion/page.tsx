@@ -53,6 +53,15 @@ export interface SerieForecast {
   /** Litros vendidos en lo que va del mes en curso (calculado en vivo, no
    *  viene del modelo) — para comparar ritmo real contra lo proyectado. */
   litrosMesEnCurso: number
+  /** Precio NETO por litro (CLP/L, sin IVA ni ILA) para valorizar la proyección:
+   *  neto / litros de las ventas de los últimos 90 días de esta misma serie,
+   *  ponderado por volumen (en una serie consolidada eso incluye la mezcla de
+   *  productos). Sólo cuentan filas con litros > 0. Null si no hay con qué
+   *  valorizar (ni la serie, ni su producto, ni el consolidado). */
+  precioNetoLitro: number | null
+  /** De dónde salió el precio: la propia serie, su producto (un formato que casi
+   *  no vendió en 90 días hereda el precio del producto) o el consolidado. */
+  precioFuente: 'propio' | 'producto' | 'general' | null
 }
 
 export interface CalidadItem {
@@ -569,6 +578,9 @@ export default async function ProduccionPage() {
      ventas este ciclo") sólo porque el ciclo recién empezaba. El trailing
      mira siempre la misma cantidad de días, así que no tiene ese arranque. */
   const litrosTrailingPorSerie = new Map<string, number>()
+  /** Litros y neto (CLP) de los últimos 90 días por serie, para el precio neto por litro. */
+  const litrosPrecioPorSerie = new Map<string, number>()
+  const netoPrecioPorSerie = new Map<string, number>()
   const inicioTrailing = new Date(Date.parse(`${hoyISO}T00:00:00Z`) - 27 * MS_POR_DIA).toISOString().slice(0, 10)
   const diasHabilesTrailing = contarDiasHabilesISO(inicioTrailing, hoyISO)
   {
@@ -588,21 +600,28 @@ export default async function ProduccionPage() {
     // "cómo vamos en el mes", no "cuánto entregamos". Mismo criterio en el
     // endpoint /api/produccion/datos que entrena el forecast — no cambiar
     // uno sin el otro, o las dos vistas del módulo dejarían de coincidir.
-    type VentaMesRow = { fecha_pedido: string; nombre_fantasia: string | null; producto: string | null; envase: string | null; litros: number | null }
-    const ventasMes: VentaMesRow[] = []
-    for (let offset = 0; ; offset += PAGE) {
-      const { data, error } = await admin
-        .from('ventas')
-        .select('fecha_pedido, nombre_fantasia, producto, envase, litros')
-        // La ventana arranca en la MÁS TEMPRANA de las dos: el inicio del
-        // ciclo (para el MTD) o hace 28 días (para el ritmo trailing).
-        .gte('fecha_pedido', inicioCiclo < inicioTrailing ? inicioCiclo : inicioTrailing)
-        .order('id', { ascending: true })
-        .range(offset, offset + PAGE - 1)
-      if (error || !data || data.length === 0) break
-      ventasMes.push(...(data as VentaMesRow[]))
-      if (data.length < PAGE) break
-    }
+    type VentaMesRow = { fecha_pedido: string; nombre_fantasia: string | null; producto: string | null; envase: string | null; litros: number | null; total_sin_impuesto: number | null }
+    // La ventana arranca en la MÁS TEMPRANA de tres: el inicio del ciclo (MTD),
+    // hace 28 días (ritmo trailing) o hace 90 días (precio neto por litro con
+    // que se valoriza la proyección en dinero — ver SerieForecast.precioNetoLitro).
+    // 90 días son ~14 mil filas: se piden las páginas todas a la vez (con el
+    // conteo primero) en vez de una tras otra, igual que la página de Finanzas.
+    const inicioPrecio = new Date(Date.parse(`${hoyISO}T00:00:00Z`) - 89 * MS_POR_DIA).toISOString().slice(0, 10)
+    const desdeVentasMes = [inicioCiclo, inicioTrailing, inicioPrecio].sort()[0]
+    const { count: totalVentasMes } = await admin
+      .from('ventas').select('id', { count: 'exact', head: true }).gte('fecha_pedido', desdeVentasMes)
+    const lotesVentasMes = await Promise.all(
+      Array.from({ length: Math.ceil((totalVentasMes ?? 0) / PAGE) }, (_, i) =>
+        admin
+          .from('ventas')
+          .select('fecha_pedido, nombre_fantasia, producto, envase, litros, total_sin_impuesto')
+          .gte('fecha_pedido', desdeVentasMes)
+          .order('id', { ascending: true })
+          .range(i * PAGE, i * PAGE + PAGE - 1)
+          .then(r => (r.data ?? []) as VentaMesRow[])
+      )
+    )
+    const ventasMes = lotesVentasMes.flat()
     for (const f of ventasMes) {
       if (!f.fecha_pedido || !f.producto) continue
       if (esClienteExcluidoProduccion(f.nombre_fantasia)) continue
@@ -620,9 +639,17 @@ export default async function ProduccionPage() {
       ]
       // Una venta puede caer en las dos ventanas, en una sola, o en ninguna
       // (quedó fuera por el borde del rango pedido) — se evalúan por separado.
+      // Precio neto por litro: sólo filas con litros > 0, en numerador Y denominador. Hay ventas con
+      // neto y 0 litros (otros cobros); contarlas sólo en el neto inflaría el precio.
+      const neto = Number(f.total_sin_impuesto) || 0
+      const entraEnPrecio = fecha >= inicioPrecio && litros > 0 && neto > 0
       for (const id of claves) {
         if (fecha >= inicioCiclo) litrosMtdPorSerie.set(id, (litrosMtdPorSerie.get(id) ?? 0) + litros)
         if (fecha >= inicioTrailing) litrosTrailingPorSerie.set(id, (litrosTrailingPorSerie.get(id) ?? 0) + litros)
+        if (entraEnPrecio) {
+          litrosPrecioPorSerie.set(id, (litrosPrecioPorSerie.get(id) ?? 0) + litros)
+          netoPrecioPorSerie.set(id, (netoPrecioPorSerie.get(id) ?? 0) + neto)
+        }
       }
     }
   }
@@ -653,6 +680,27 @@ export default async function ProduccionPage() {
     (validacionRaw ?? []).map(v => [`${v.nivel}::${v.clave ?? ''}`, v])
   )
 
+  /* Precio neto por litro de cada serie, para ver la proyección en dinero.
+     Con menos de UMBRAL_LITROS_PRECIO litros en 90 días el promedio es ruido
+     (un par de ventas sueltas de un formato casi sin rotación), así que ese
+     formato hereda el precio de su producto, y si tampoco alcanza, el del
+     consolidado. */
+  const UMBRAL_LITROS_PRECIO = 50
+  const precioDe = (id: string): number | null => {
+    const litros = litrosPrecioPorSerie.get(id) ?? 0
+    return litros >= UMBRAL_LITROS_PRECIO ? (netoPrecioPorSerie.get(id) ?? 0) / litros : null
+  }
+  const resolverPrecio = (id: string, nivel: SerieForecast['nivel'], producto: string | null): { precio: number | null; fuente: SerieForecast['precioFuente'] } => {
+    const propio = precioDe(id)
+    if (propio != null) return { precio: Math.round(propio * 10) / 10, fuente: 'propio' }
+    if (nivel === 'producto_envase' && producto) {
+      const delProducto = precioDe(`producto::${producto}`)
+      if (delProducto != null) return { precio: Math.round(delProducto * 10) / 10, fuente: 'producto' }
+    }
+    const general = precioDe('general::')
+    return general != null ? { precio: Math.round(general * 10) / 10, fuente: 'general' } : { precio: null, fuente: null }
+  }
+
   const seriesMap = new Map<string, SerieForecast>()
   for (const f of forecastRaw) {
     const id = `${f.nivel}::${f.clave ?? ''}`
@@ -682,8 +730,10 @@ export default async function ProduccionPage() {
         label = `${partido.producto} — ${ENVASE_LABEL[partido.bucket] ?? partido.bucket}`
       }
 
+      const { precio: precioNetoLitro, fuente: precioFuente } = resolverPrecio(id, nivel, producto)
       seriesMap.set(id, {
         id, nivel, clave: f.clave, label, producto, envaseBucket, categoria,
+        precioNetoLitro, precioFuente,
         puntos: [],
         mae: val?.mae != null ? Number(val.mae) : null,
         mape: val?.mape != null ? Number(val.mape) : null,

@@ -72,3 +72,11 @@ Para una sugerencia de cocción con fecha estimada de quiebre $F_{\text{quiebre}
   $$F_{\text{gestión}} = F_{\text{inicio}} - 10 \text{ días hábiles (2 semanas)}$$
 
 Si $F_{\text{gestión}}$ o $F_{\text{inicio}}$ son anteriores a la fecha de hoy, la sugerencia se marca como **Atrasada**, alertando de forma crítica en la UI.
+
+## Valorización del forecast en dinero neto (1-oct-2026)
+
+- **Fórmula:** neto proyectado = litros proyectados × precio neto por litro de la serie. No es un forecast de ingresos propio (el de Finanzas lo es): es "esos litros a precio de hoy".
+- **Precio neto por litro** (`SerieForecast.precioNetoLitro`, calculado en `app/produccion/page.tsx`): suma de `total_sin_impuesto` ÷ suma de `litros` de las ventas de los últimos **90 días** de la misma serie y con los mismos filtros que el forecast (catálogo de productos, clientes excluidos de Producción). Solo cuentan filas con litros > 0 y neto > 0 (hay ventas con neto y 0 litros que inflarían el precio). Ponderado por volumen: en el consolidado incluye la mezcla de productos.
+- **Respaldo:** con menos de 50 L en 90 días, un formato hereda el precio de su **producto**, y si tampoco alcanza, el del **consolidado** (`precioFuente`: propio / producto / general). Sin precio de ningún tipo, esa serie se muestra solo en litros.
+- **Todo a un mismo precio:** el historial y la proyección se valorizan al precio de hoy, para que la comparación entre meses refleje volumen y no cambios de lista de precios. Valores medidos el 1-oct-2026: consolidado ≈ $2.300/L; cerveza ≈ $2.480/L; kombucha ≈ $1.985/L; por formato entre $1.800 y $3.050/L.
+- **Costo:** esa ventana de 90 días (~14 mil filas de `ventas`) se trae con el conteo primero y las páginas en paralelo.

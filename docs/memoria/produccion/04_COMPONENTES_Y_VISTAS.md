@@ -46,3 +46,7 @@ graph TD
 3. **Previsión de Demanda (Forecasting)**: Gráficos de tendencias mensuales Prophet, bandas de confianza y métricas de error (MAPE / MAE) comparadas contra las ventas MTD.
 4. **Inventario & Stock de Seguridad**: Comparación de inventario físico disponible en cámaras vs. Puntos de Reorden y Colchones requeridos.
 5. **MRP Insumos**: Proyección de compra y disponibilidad de materias primas necesarias para cumplir la cola de cocciones.
+
+## Forecast en dinero neto (1-oct-2026)
+
+En la pestaña **Forecasting** (`ProduccionClient.tsx`) hay un botón **Litros | $ Neto** junto al gráfico principal. Solo cambia lo que se MUESTRA: gráfico (serie, rango, ritmo, eje Y y tooltip), panel "Ver el modelo", tarjetas "Vendido este mes / A este ritmo / El modelo proyectó" y la tabla "Detalle por producto y envase". El modelo, el stock de seguridad, el Gantt y la **Calculadora de Cobertura siguen en litros** (son cuentas operativas). Si una serie no tiene precio, el botón avisa y se queda en litros.
