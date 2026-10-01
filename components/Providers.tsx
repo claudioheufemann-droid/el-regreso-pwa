@@ -5,10 +5,14 @@ import { GlobalSearchProvider } from '@/lib/globalSearchContext'
 import type { AppUser } from '@/lib/auth'
 import type { ReactNode } from 'react'
 import { useEffect } from 'react'
+import dynamic from 'next/dynamic'
 import InstallPWA from '@/components/ui/InstallPWA'
 import NotifPrompt from '@/components/ui/NotifPrompt'
 import OfflineBadge from '@/components/ui/OfflineBadge'
 import GlobalSearch from '@/components/ui/GlobalSearch'
+
+// Sólo administradores y sólo en el navegador (usa sessionStorage): el código del chat no se descarga para el resto.
+const AgenteFlotante = dynamic(() => import('@/components/agente/AgenteFlotante'), { ssr: false })
 
 export default function Providers({
   children,
@@ -36,6 +40,7 @@ export default function Providers({
         {initialUser && <NotifPrompt />}
         {initialUser && <OfflineBadge />}
         {initialUser && <GlobalSearch />}
+        {initialUser?.isAdmin && <AgenteFlotante />}
       </GlobalSearchProvider>
     </UserProvider>
   )
