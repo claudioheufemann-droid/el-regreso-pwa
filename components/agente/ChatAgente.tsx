@@ -23,61 +23,81 @@ const TEMAS = {
   },
 } as const
 
-const MAX_GUARDADOS = 40
-
-function leerGuardado(clave?: string): Mensaje[] {
-  if (!clave) return []
-  try {
-    const crudo = sessionStorage.getItem(clave)
-    const datos = crudo ? JSON.parse(crudo) : []
-    return Array.isArray(datos) ? datos : []
-  } catch {
-    return []
-  }
-}
-
 /**
- * Estado de la conversación con el asistente. Con `claveStorage` la
- * conversación sobrevive a recargas de la pestaña (sessionStorage); sin ella
- * vive sólo en memoria. Sólo usar `claveStorage` en componentes que se
- * rendericen únicamente en el cliente (si no, el HTML del servidor no coincide).
+ * Estado de la conversación con el asistente. La conversación vive en la base
+ * (agente_conversaciones): al montarse se carga la más reciente del usuario, así
+ * que sobrevive a recargas y a cambiar de equipo, y al enviar sólo viaja la
+ * pregunta nueva más el id de la conversación (el servidor arma el contexto).
  */
-export function useChatAgente(claveStorage?: string) {
-  const [mensajes, setMensajes] = useState<Mensaje[]>(() => leerGuardado(claveStorage))
+export function useChatAgente() {
+  const [mensajes, setMensajes] = useState<Mensaje[]>([])
   const [cargando, setCargando] = useState(false)
+  const [conversacionId, setConversacionId] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!claveStorage) return
-    try { sessionStorage.setItem(claveStorage, JSON.stringify(mensajes.slice(-MAX_GUARDADOS))) } catch { /* modo privado o sin cuota */ }
-  }, [mensajes, claveStorage])
+    let vigente = true
+    fetch('/api/agente/conversacion')
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => {
+        if (!vigente || !d?.conversacion_id) return
+        setConversacionId(d.conversacion_id)
+        // Si el usuario ya alcanzó a escribir algo mientras cargaba, no se lo pisamos.
+        setMensajes(actuales => (actuales.length ? actuales : d.mensajes))
+      })
+      .catch(() => { /* sin historial: se parte en blanco */ })
+    return () => { vigente = false }
+  }, [])
 
   const enviar = useCallback(async (texto: string) => {
     const pregunta = texto.trim()
     if (!pregunta || cargando) return
-    const historial: Mensaje[] = [...mensajes, { rol: 'usuario', texto: pregunta }]
-    setMensajes(historial)
+    setMensajes(m => [...m, { rol: 'usuario', texto: pregunta }])
     setCargando(true)
     try {
       const res = await fetch('/api/agente', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mensajes: historial.filter(m => !m.error).map(m => ({ rol: m.rol, texto: m.texto })) }),
+        body: JSON.stringify({ mensaje: pregunta, conversacion_id: conversacionId }),
       })
       const data = await res.json().catch(() => ({}))
+      if (data.conversacion_id) setConversacionId(data.conversacion_id)
       if (!res.ok) throw new Error(data.error ?? 'No se pudo consultar al asistente.')
-      setMensajes([...historial, {
+      setMensajes(m => [...m, {
         rol: 'agente', texto: data.respuesta,
         herramientas: [...new Set<string>((data.herramientas ?? []).map((h: { nombre: string }) => h.nombre))],
       }])
     } catch (e) {
-      setMensajes([...historial, { rol: 'agente', texto: e instanceof Error ? e.message : 'Error de conexión.', error: true }])
+      setMensajes(m => [...m, { rol: 'agente', texto: e instanceof Error ? e.message : 'Error de conexión.', error: true }])
     } finally {
       setCargando(false)
     }
-  }, [mensajes, cargando])
+  }, [conversacionId, cargando])
 
-  const limpiar = useCallback(() => setMensajes([]), [])
-  return { mensajes, cargando, enviar, limpiar }
+  /** Vuelve a leer la conversación guardada (otra pestaña o equipo pudo seguirla). No pisa una respuesta en curso. */
+  const recargar = useCallback(async () => {
+    if (cargando) return
+    try {
+      const r = await fetch('/api/agente/conversacion')
+      const d = r.ok ? await r.json() : null
+      if (d) {
+        setConversacionId(d.conversacion_id ?? null)
+        setMensajes(d.mensajes ?? [])
+      }
+    } catch { /* se queda con lo que hay */ }
+  }, [cargando])
+
+  /** "Nueva conversación": archiva la actual (el historial se conserva en la base) y parte en blanco. */
+  const limpiar = useCallback(() => {
+    if (conversacionId) {
+      void fetch('/api/agente/conversacion', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: conversacionId }),
+      }).catch(() => undefined)
+    }
+    setConversacionId(null)
+    setMensajes([])
+  }, [conversacionId])
+
+  return { mensajes, cargando, enviar, limpiar, recargar }
 }
 
 /* ── Markdown mínimo (negrita, cursiva, listas) sin HTML crudo ─────────────── */

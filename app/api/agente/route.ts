@@ -1,19 +1,25 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { getServerUser } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { cicloEnCursoISO, inicioDeCiclo, finDeCiclo } from '@/lib/produccion/reglas'
-import { ErrorAgente, responderPregunta, type MensajeChat } from '@/lib/agente/gemini'
-import { PARAMETROS } from '@/lib/agente/sistema'
+import { ErrorAgente, responderPregunta } from '@/lib/agente/gemini'
+import {
+  crearConversacion, guardarMensaje, historialSinResumir, memoriasParaContexto, obtenerConversacion,
+  resumirSiHaceFalta, sumarTokensConversacion,
+} from '@/lib/agente/memoria'
+import { PARAMETROS, construirContexto } from '@/lib/agente/sistema'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 /**
- * POST /api/agente  { mensajes: [{ rol: 'usuario' | 'agente', texto }] }
+ * POST /api/agente  { mensaje: string, conversacion_id?: uuid }
  *
  * Asistente de datos (chat). Sólo administradores: las herramientas leen
- * facturación, deuda y clientes de toda la empresa con service-role, así que el
- * control de acceso se decide ACÁ y no en las consultas. Ver lib/agente/README.md.
+ * facturación, deuda y clientes de toda la empresa, así que el control de
+ * acceso se decide ACÁ y no en las consultas. El historial vive en la base
+ * (agente_conversaciones / agente_mensajes): el navegador sólo manda la
+ * pregunta nueva y el id de la conversación. Ver lib/agente/README.md.
  */
 export async function POST(req: NextRequest) {
   const user = await getServerUser()
@@ -27,41 +33,61 @@ export async function POST(req: NextRequest) {
     }, { status: 503 })
   }
 
-  const body = await req.json().catch(() => null) as { mensajes?: unknown } | null
-  const mensajes: MensajeChat[] = Array.isArray(body?.mensajes)
-    ? (body!.mensajes as unknown[]).flatMap(m => {
-        const o = m as { rol?: unknown; texto?: unknown }
-        if ((o?.rol !== 'usuario' && o?.rol !== 'agente') || typeof o.texto !== 'string' || !o.texto.trim()) return []
-        return [{ rol: o.rol, texto: o.texto.slice(0, PARAMETROS.maxLargoPregunta) } as MensajeChat]
-      })
-    : []
-  if (mensajes.length === 0 || mensajes[mensajes.length - 1].rol !== 'usuario') {
-    return NextResponse.json({ error: 'Falta la pregunta.' }, { status: 400 })
-  }
+  const body = await req.json().catch(() => null) as { mensaje?: unknown; conversacion_id?: unknown } | null
+  const pregunta = typeof body?.mensaje === 'string' ? body.mensaje.trim().slice(0, PARAMETROS.maxLargoPregunta) : ''
+  if (!pregunta) return NextResponse.json({ error: 'Falta la pregunta.' }, { status: 400 })
 
   const admin = createAdminClient()
-  const ciclo = cicloEnCursoISO()
-  const pregunta = mensajes[mensajes.length - 1].texto
+  const hoyISO = new Date().toISOString().slice(0, 10)
   const t0 = Date.now()
 
-  const registrar = (herramientas: string[], respondio: boolean, error?: string) =>
-    admin.from('agente_consultas_log').insert({
-      usuario_id: user.id, pregunta, herramientas, respondio, error: error ?? null, duracion_ms: Date.now() - t0,
-    }).then(() => undefined, () => undefined)
-
   try {
-    const r = await responderPregunta({
-      mensajes, apiKey,
-      ctx: { admin, hoyISO: new Date().toISOString().slice(0, 10) },
-      cicloActual: { inicio: inicioDeCiclo(ciclo), fin: finDeCiclo(ciclo) },
+    // Una conversación ajena, archivada o inexistente se trata como nueva: nunca se lee la de otro usuario.
+    const existente = typeof body?.conversacion_id === 'string' ? await obtenerConversacion(admin, user.id, body.conversacion_id) : null
+    const conv = existente ?? await crearConversacion(admin, user.id, pregunta)
+
+    const [historial, memorias] = await Promise.all([
+      existente ? historialSinResumir(admin, conv) : Promise.resolve([]),
+      memoriasParaContexto(admin, user.id, pregunta),
+    ])
+    const ciclo = cicloEnCursoISO()
+    const contexto = construirContexto({
+      hoyISO, ciclo: { inicio: inicioDeCiclo(ciclo), fin: finDeCiclo(ciclo) },
+      usuario: user.nombre, memorias, resumen: conv.resumen,
     })
-    await registrar(r.herramientas.map(h => h.nombre), r.herramientas.some(h => h.ok))
-    return NextResponse.json({ respuesta: r.respuesta, herramientas: r.herramientas })
+
+    await guardarMensaje(admin, conv.id, { rol: 'usuario', texto: pregunta })
+
+    const registrar = (herramientas: string[], respondio: boolean, uso?: { entrada: number; salida: number; cacheados: number; rondas: number; modelo: string | null }, error?: string) =>
+      admin.from('agente_consultas_log').insert({
+        usuario_id: user.id, pregunta, herramientas, respondio, error: error ?? null, duracion_ms: Date.now() - t0,
+        conversacion_id: conv.id, tokens_entrada: uso?.entrada ?? null, tokens_salida: uso?.salida ?? null, tokens_cacheados: uso?.cacheados ?? null,
+        modelo: uso?.modelo ?? null, rondas: uso?.rondas ?? null,
+      }).then(() => undefined, () => undefined)
+
+    try {
+      const r = await responderPregunta({ historial, pregunta, contexto, apiKey, ctx: { admin, hoyISO, usuarioId: user.id } })
+      const nombres = [...new Set(r.herramientas.map(h => h.nombre))]
+      await Promise.all([
+        guardarMensaje(admin, conv.id, { rol: 'agente', texto: r.respuesta, herramientas: nombres }),
+        sumarTokensConversacion(admin, conv, r.uso),
+        registrar(r.herramientas.map(h => h.nombre), r.herramientas.some(h => h.ok), r.uso),
+      ])
+      // Resumir lo viejo corre después de responder: no suma espera a esta pregunta.
+      after(() => resumirSiHaceFalta(admin, apiKey, conv.id))
+      return NextResponse.json({ conversacion_id: conv.id, respuesta: r.respuesta, herramientas: r.herramientas, uso: r.uso })
+    } catch (e) {
+      const status = e instanceof ErrorAgente ? e.status : 500
+      const mensaje = e instanceof ErrorAgente ? e.message : 'Error inesperado del asistente.'
+      if (!(e instanceof ErrorAgente)) console.error('[agente]', e)
+      await Promise.all([
+        guardarMensaje(admin, conv.id, { rol: 'agente', texto: mensaje, error: true }),
+        registrar([], false, undefined, mensaje),
+      ])
+      return NextResponse.json({ error: mensaje, conversacion_id: conv.id }, { status })
+    }
   } catch (e) {
-    const status = e instanceof ErrorAgente ? e.status : 500
-    const mensaje = e instanceof ErrorAgente ? e.message : 'Error inesperado del asistente.'
-    if (!(e instanceof ErrorAgente)) console.error('[agente]', e)
-    await registrar([], false, mensaje)
-    return NextResponse.json({ error: mensaje }, { status })
+    console.error('[agente] error preparando la conversación', e)
+    return NextResponse.json({ error: 'No se pudo preparar la conversación.' }, { status: 500 })
   }
 }

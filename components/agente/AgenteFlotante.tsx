@@ -21,7 +21,7 @@ export default function AgenteFlotante() {
   const { user, isAdmin } = useUser()
   const pathname = usePathname()
   const [abierto, setAbierto] = useState(false)
-  const chat = useChatAgente('agente-chat-v1')
+  const chat = useChatAgente()
 
   useEffect(() => {
     if (!abierto) return
@@ -74,7 +74,7 @@ export default function AgenteFlotante() {
       )}
 
       <button
-        className="agente-fab" onClick={() => setAbierto(a => !a)}
+        className="agente-fab" onClick={() => { if (!abierto) void chat.recargar(); setAbierto(a => !a) }}
         aria-label={abierto ? 'Cerrar asistente de datos' : 'Abrir asistente de datos'} aria-expanded={abierto}
       >
         {abierto ? <X size={24} /> : <Bot size={26} />}

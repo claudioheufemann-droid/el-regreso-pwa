@@ -13,9 +13,19 @@ export interface HerramientaUsada {
   ok: boolean
 }
 
+export interface UsoTokens {
+  entrada: number
+  salida: number
+  /** Parte de la entrada que Gemini reutilizó de su caché implícita (se factura más barato). */
+  cacheados: number
+  rondas: number
+  modelo: string | null
+}
+
 export interface RespuestaAgente {
   respuesta: string
   herramientas: HerramientaUsada[]
+  uso: UsoTokens
 }
 
 export class ErrorAgente extends Error {
@@ -32,36 +42,43 @@ interface ParteGemini {
 }
 interface ContenidoGemini { role: 'user' | 'model'; parts: ParteGemini[] }
 
-const MAX_CHARS_RESULTADO = 24_000
+interface MetaUso { promptTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number; cachedContentTokenCount?: number }
+type RespuestaGemini = {
+  candidates?: { content?: ContenidoGemini; finishReason?: string }[]
+  promptFeedback?: { blockReason?: string }
+  usageMetadata?: MetaUso
+}
 
+const MAX_CHARS_RESULTADO = 20_000
+
+/** Declaraciones de herramientas: idénticas en cada llamada (parte del prefijo que Gemini puede cachear). */
 function declaraciones() {
   return CONSULTAS.map(c => {
     const requeridos = c.parametros.filter(p => p.requerido).map(p => p.nombre)
     return {
-    name: c.nombre,
-    description: c.descripcion,
-    parameters: {
-      type: 'OBJECT',
-      properties: Object.fromEntries(c.parametros.map(p => [p.nombre, {
-        type: p.tipo === 'integer' ? 'INTEGER' : 'STRING',
-        description: p.descripcion,
-        ...(p.enum ? { enum: p.enum } : {}),
-      }])),
-      // Gemini rechaza `required: []`: se omite cuando todos son opcionales.
-      ...(requeridos.length ? { required: requeridos } : {}),
-    },
-  }})
-}
-
-type RespuestaGemini = {
-  candidates?: { content?: ContenidoGemini; finishReason?: string }[]
-  promptFeedback?: { blockReason?: string }
+      name: c.nombre,
+      description: c.descripcion,
+      parameters: {
+        type: 'OBJECT',
+        properties: Object.fromEntries(c.parametros.map(p => [p.nombre, {
+          type: p.tipo === 'integer' ? 'INTEGER' : 'STRING',
+          description: p.descripcion,
+          ...(p.enum ? { enum: p.enum } : {}),
+        }])),
+        // Gemini rechaza `required: []`: se omite cuando todos son opcionales.
+        ...(requeridos.length ? { required: requeridos } : {}),
+      },
+    }
+  })
 }
 
 /** Primer modelo que respondió bien en este proceso: evita re-probar los que fallaron en cada pregunta. */
 let modeloVigente: string | null = null
 
-async function llamarGemini(apiKey: string, system: string, contents: ContenidoGemini[]): Promise<RespuestaGemini> {
+async function llamarGemini(
+  apiKey: string, system: string, contents: ContenidoGemini[],
+  opciones: { herramientas: boolean; maxTokens: number }
+): Promise<{ data: RespuestaGemini; modelo: string }> {
   const orden = modeloVigente
     ? [modeloVigente, ...PARAMETROS.modelos.filter(m => m !== modeloVigente)]
     : [...PARAMETROS.modelos]
@@ -75,10 +92,10 @@ async function llamarGemini(apiKey: string, system: string, contents: ContenidoG
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },
         contents,
-        tools: [{ functionDeclarations: declaraciones() }],
+        ...(opciones.herramientas ? { tools: [{ functionDeclarations: declaraciones() }] } : {}),
         generationConfig: {
           temperature: PARAMETROS.temperatura,
-          maxOutputTokens: PARAMETROS.maxTokensRespuesta,
+          maxOutputTokens: opciones.maxTokens,
           // Serie 2.5: el razonamiento se apaga con thinkingBudget. Serie 3.x: no se puede apagar,
           // sólo bajar a "low" (menos latencia y menos cuota). Si Google rechaza el campo se reintenta sin él.
           ...(/gemini-2\.5/i.test(modelo) ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
@@ -99,7 +116,7 @@ async function llamarGemini(apiKey: string, system: string, contents: ContenidoG
     if (res.ok) {
       modeloVigente = modelo
       console.info(`[agente] ${modelo} respondió en ${Date.now() - t0} ms`)
-      return res.json() as Promise<RespuestaGemini>
+      return { data: await res.json() as RespuestaGemini, modelo }
     }
     ultimoEstado = res.status
     const detalle = await res.text().catch(() => '')
@@ -116,38 +133,69 @@ async function llamarGemini(apiKey: string, system: string, contents: ContenidoG
   throw new ErrorAgente('El servicio de IA no respondió. Intenta de nuevo.', 502)
 }
 
+/** Une mensajes seguidos del mismo rol y descarta un arranque de 'agente': Gemini espera turnos alternados que empiecen por el usuario. */
+function normalizar(mensajes: MensajeChat[]): ContenidoGemini[] {
+  const salida: ContenidoGemini[] = []
+  for (const m of mensajes) {
+    const role = m.rol === 'usuario' ? 'user' : 'model'
+    if (salida.length === 0 && role === 'model') continue
+    const ultimo = salida[salida.length - 1]
+    if (ultimo && ultimo.role === role) ultimo.parts[0].text = `${ultimo.parts[0].text}\n${m.texto}`
+    else salida.push({ role, parts: [{ text: m.texto }] })
+  }
+  return salida
+}
+
+function sumarUso(acc: UsoTokens, meta: MetaUso | undefined, modelo: string) {
+  acc.entrada += meta?.promptTokenCount ?? 0
+  acc.cacheados += meta?.cachedContentTokenCount ?? 0
+  // El razonamiento se factura como salida aunque no se vea en la respuesta.
+  acc.salida += (meta?.candidatesTokenCount ?? 0) + (meta?.thoughtsTokenCount ?? 0)
+  acc.modelo = modelo
+}
+
 export async function responderPregunta(opts: {
-  mensajes: MensajeChat[]
+  /** Mensajes recientes ya guardados (sin incluir la pregunta actual). */
+  historial: MensajeChat[]
+  pregunta: string
+  /** Fecha, usuario, memoria y resumen: ver construirContexto(). Va como primer mensaje, no en el system prompt. */
+  contexto: string
   apiKey: string
   ctx: ContextoConsulta
-  cicloActual: { inicio: string; fin: string }
 }): Promise<RespuestaAgente> {
-  const system = construirSystemPrompt(opts.ctx.hoyISO, opts.cicloActual)
-  const contents: ContenidoGemini[] = opts.mensajes
-    .slice(-PARAMETROS.maxTurnosHistorial)
-    .map(m => ({ role: m.rol === 'usuario' ? 'user' : 'model', parts: [{ text: m.texto }] }))
+  const system = construirSystemPrompt()
+  const contents: ContenidoGemini[] = [
+    { role: 'user', parts: [{ text: opts.contexto }] },
+    { role: 'model', parts: [{ text: 'Contexto recibido.' }] },
+    ...normalizar([...opts.historial, { rol: 'usuario', texto: opts.pregunta }]),
+  ]
 
   const herramientas: HerramientaUsada[] = []
+  const uso: UsoTokens = { entrada: 0, salida: 0, cacheados: 0, rondas: 0, modelo: null }
+  const devolver = (respuesta: string): RespuestaAgente => ({ respuesta, herramientas, uso })
 
   for (let ronda = 0; ronda <= PARAMETROS.maxRondasHerramientas; ronda++) {
-    const data = await llamarGemini(opts.apiKey, system, contents)
+    const { data, modelo } = await llamarGemini(opts.apiKey, system, contents, { herramientas: true, maxTokens: PARAMETROS.maxTokensRespuesta })
+    sumarUso(uso, data.usageMetadata, modelo)
+    uso.rondas = ronda + 1
+
     const candidato = data.candidates?.[0]
     if (!candidato?.content) {
       const motivo = data.promptFeedback?.blockReason
-      return { respuesta: motivo ? 'No puedo responder esa consulta.' : 'No obtuve respuesta del modelo. Intenta reformular la pregunta.', herramientas }
+      return devolver(motivo ? 'No puedo responder esa consulta.' : 'No obtuve respuesta del modelo. Intenta reformular la pregunta.')
     }
 
     const llamadas = candidato.content.parts.filter(p => p.functionCall)
     if (llamadas.length === 0) {
       const texto = candidato.content.parts.map(p => p.text ?? '').join('').trim()
-      return { respuesta: texto || 'No obtuve respuesta del modelo. Intenta reformular la pregunta.', herramientas }
+      return devolver(texto || 'No obtuve respuesta del modelo. Intenta reformular la pregunta.')
     }
     if (ronda === PARAMETROS.maxRondasHerramientas) {
-      return { respuesta: 'La consulta requiere demasiados pasos. Intenta una pregunta más específica.', herramientas }
+      return devolver('La consulta requiere demasiados pasos. Intenta una pregunta más específica.')
     }
 
-    // Se reenvía el turno del modelo tal cual vino (Gemini 2.5 adjunta firmas
-    // de razonamiento que hay que devolver intactas junto a la llamada).
+    // Se reenvía el turno del modelo tal cual vino (Gemini adjunta firmas de
+    // razonamiento que hay que devolver intactas junto a la llamada).
     contents.push(candidato.content)
     const respuestas: ParteGemini[] = []
     for (const parte of llamadas) {
@@ -163,5 +211,16 @@ export async function responderPregunta(opts: {
     contents.push({ role: 'user', parts: respuestas })
   }
 
-  return { respuesta: 'No pude completar la consulta.', herramientas }
+  return devolver('No pude completar la consulta.')
+}
+
+/** Genera texto sin herramientas (usado para resumir conversaciones). */
+export async function generarTexto(apiKey: string, instruccion: string, contenido: string): Promise<{ texto: string; uso: UsoTokens }> {
+  const uso: UsoTokens = { entrada: 0, salida: 0, cacheados: 0, rondas: 1, modelo: null }
+  const { data, modelo } = await llamarGemini(
+    apiKey, instruccion, [{ role: 'user', parts: [{ text: contenido }] }], { herramientas: false, maxTokens: 2048 }
+  )
+  sumarUso(uso, data.usageMetadata, modelo)
+  const texto = (data.candidates?.[0]?.content?.parts ?? []).map(p => p.text ?? '').join('').trim()
+  return { texto, uso }
 }

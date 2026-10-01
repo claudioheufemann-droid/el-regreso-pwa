@@ -13,6 +13,8 @@ export interface ContextoConsulta {
   /** service-role, SOLO lectura: el agente jamás escribe. */
   admin: SupabaseClient
   hoyISO: string
+  /** Quién pregunta: la memoria personal y las propuestas se atribuyen a este usuario. */
+  usuarioId: string
 }
 
 export interface Consulta {

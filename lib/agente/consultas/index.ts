@@ -2,7 +2,8 @@ import type { Consulta, ContextoConsulta } from './_base'
 import { comprasCliente, topClientes, ventasResumen } from './ventas'
 import { frecuenciaCompraCliente, clientesInactivos } from './habitos'
 import { buscarCliente, deudaClientes, comportamientoPagoCliente, cobrosResumen } from './cartera'
-import { describirTablas, explorarTabla } from './explorar'
+import { consultarSql, describirEsquema } from './sql'
+import { recordar } from './memoria'
 import { stockActual } from './stock'
 
 /**
@@ -10,7 +11,9 @@ import { stockActual } from './stock'
  *
  * Para enseñarle algo nuevo: crear una `Consulta` (nombre, descripción clara de
  * cuándo usarla, parámetros, y una lectura de Supabase) y agregarla a esta
- * lista. El agente nunca ejecuta SQL libre: sólo lo que está en este catálogo.
+ * lista. Las herramientas específicas aplican los criterios del negocio (ingreso
+ * real, neto, cuentas internas) y se prefieren sobre `consultar_sql`, que lee
+ * libremente pero siempre con un rol de solo lectura dentro de la base.
  * Ver lib/agente/README.md.
  */
 export const CONSULTAS: Consulta[] = [
@@ -24,9 +27,10 @@ export const CONSULTAS: Consulta[] = [
   comportamientoPagoCliente,
   cobrosResumen,
   stockActual,
-  // Exploración controlada: para lo que las consultas de arriba no cubren.
-  describirTablas,
-  explorarTabla,
+  // Lectura libre (rol de solo lectura en la base) para lo que las de arriba no cubren, y memoria de largo plazo.
+  describirEsquema,
+  consultarSql,
+  recordar,
 ]
 
 export async function ejecutarConsulta(

@@ -13,9 +13,7 @@ const diasEntre = (a: string, b: string) =>
 export const frecuenciaCompraCliente: Consulta = {
   nombre: 'frecuencia_compra_cliente',
   descripcion:
-    'Cada cuánto compra un cliente y de cuánto es cada compra: días entre compras (promedio y mediana), última compra, días desde la última, ' +
-    'fecha esperada de la próxima y montos NETOS por compra (promedio, mediana, mínimo, máximo). ' +
-    'Usar para "¿cada cuánto compra X?", "¿de cuánto suelen ser sus pedidos?", "¿ya le toca comprar?".',
+    'Cada cuánto compra un cliente y de cuánto: días entre compras (promedio/mediana), última compra, próxima esperada y montos NETOS por compra.',
   parametros: [
     { nombre: 'cliente', tipo: 'string', requerido: true, descripcion: 'Nombre (o parte del nombre) del cliente.' },
     { nombre: 'desde', tipo: 'string', descripcion: 'Fecha inicial YYYY-MM-DD. Por defecto 12 meses atrás.' },
@@ -74,8 +72,7 @@ export const frecuenciaCompraCliente: Consulta = {
 export const clientesInactivos: Consulta = {
   nombre: 'clientes_inactivos',
   descripcion:
-    'Clientes que compraban y dejaron de comprar: sin compras hace N días o más, ordenados por cuánto valían (neto histórico). Excluye cuentas internas (Cliente PDV/Feria/Marketing, BaseCamp). ' +
-    'Usar para "¿qué clientes dejaron de comprar?", "¿a quién hay que reactivar?", "¿quién no compra hace 2 meses?".',
+    'Clientes que dejaron de comprar (sin compras hace N días o más), ordenados por su valor histórico. Excluye cuentas internas.',
   parametros: [
     { nombre: 'dias_sin_comprar', tipo: 'integer', descripcion: 'Mínimo de días sin comprar (7-365). Por defecto 60.' },
     { nombre: 'ventana_dias', tipo: 'integer', descripcion: 'Cuántos días atrás mirar el historial (60-365). Por defecto 365.' },

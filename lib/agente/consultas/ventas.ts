@@ -50,9 +50,7 @@ export const litros = (f: FilaVenta) => Number(f.litros) || 0
 export const comprasCliente: Consulta = {
   nombre: 'compras_cliente',
   descripcion:
-    'Cuánto ha comprado un cliente (monto NETO en CLP, litros, cantidad de pedidos, productos favoritos, últimos pedidos y evolución mensual). ' +
-    'Usar para "¿cuánto compra X?", "¿cuándo fue su último pedido?", "¿qué productos le vendemos a X?". ' +
-    'Si el texto coincide con varios clientes devuelve cada uno por separado.',
+    'Lo que ha comprado un cliente: neto CLP, litros, pedidos, productos favoritos, últimos pedidos y evolución mensual. Si el texto coincide con varios clientes, los separa.',
   parametros: [
     { nombre: 'cliente', tipo: 'string', requerido: true, descripcion: 'Nombre (o parte del nombre) del cliente.' },
     { nombre: 'desde', tipo: 'string', descripcion: 'Fecha inicial YYYY-MM-DD. Por defecto 12 meses atrás.' },
@@ -117,8 +115,7 @@ export const comprasCliente: Consulta = {
 export const topClientes: Consulta = {
   nombre: 'top_clientes',
   descripcion:
-    'Ranking de clientes que más compran en un período, por monto NETO en CLP o por litros. ' +
-    'Usar para "¿quiénes son los mejores clientes?", "¿quién compró más en agosto?".',
+    'Ranking de clientes que más compran en un período, por neto CLP o litros; opcionalmente de un vendedor.',
   parametros: [
     { nombre: 'desde', tipo: 'string', descripcion: 'Fecha inicial YYYY-MM-DD. Por defecto 90 días atrás.' },
     { nombre: 'hasta', tipo: 'string', descripcion: 'Fecha final YYYY-MM-DD. Por defecto hoy.' },
@@ -159,9 +156,7 @@ export const topClientes: Consulta = {
 export const ventasResumen: Consulta = {
   nombre: 'ventas_resumen',
   descripcion:
-    'Resumen de ventas NETAS en CLP y litros de un período, agrupado por mes, producto, categoría (Cerveza/Kombucha/Otros), vendedor o localidad. ' +
-    'Con `vendedor` filtra las ventas de esa persona. Siempre incluye clientes_distintos y pedidos_distintos del período. ' +
-    'Usar para "¿cuánto vendimos en agosto?", "¿cuánto vendió Claudio y a cuántos clientes?", "ventas por producto", "ventas por vendedor", "evolución mensual".',
+    'Ventas NETAS CLP y litros de un período, agrupadas por mes, producto, categoría, vendedor o localidad; opcionalmente de un vendedor. Incluye clientes_distintos y pedidos_distintos.',
   parametros: [
     { nombre: 'desde', tipo: 'string', descripcion: 'Fecha inicial YYYY-MM-DD. Por defecto 90 días atrás.' },
     { nombre: 'hasta', tipo: 'string', descripcion: 'Fecha final YYYY-MM-DD. Por defecto hoy.' },

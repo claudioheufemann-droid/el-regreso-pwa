@@ -24,11 +24,7 @@ export const buscarCliente: Consulta = {
 export const deudaClientes: Consulta = {
   nombre: 'deuda_clientes',
   descripcion:
-    'Deuda por cobrar (cuenta corriente) en CLP: saldo total, deuda vencida y su antigüedad por tramos. ' +
-    'Con `cliente` devuelve ese cliente; sin él, el ranking de mayores deudores vencidos. ' +
-    'Sin `cliente` también devuelve el total adeudado de todos los deudores. Se puede filtrar por `vendedor`. ' +
-    'Usar para "¿cuánto nos debe X?", "¿quiénes son los clientes que nos deben?", "¿cuánto nos deben en total?", "¿qué deben los clientes de Claudio?". ' +
-    'Es el informe Deudores del ERP (foto actual).',
+    'Deuda por cobrar CLP (informe Deudores del ERP, foto actual): saldo, vencida y tramos de antigüedad. Con `cliente`, ese cliente; sin él, ranking de deudores con el total adeudado, filtrable por `vendedor`.',
   parametros: [
     { nombre: 'cliente', tipo: 'string', descripcion: 'Nombre (o parte) del cliente. Omitir para el ranking general.' },
     { nombre: 'vendedor', tipo: 'string', descripcion: 'Filtra el ranking por vendedor (nombre o parte). Omitir para todos.' },
@@ -118,9 +114,7 @@ export const comportamientoPagoCliente: Consulta = {
 export const cobrosResumen: Consulta = {
   nombre: 'cobros_resumen',
   descripcion:
-    'Plata que ENTRÓ de verdad (pagos recibidos, informe Movimientos Cta. Cte. del ERP) por semana y por medio de pago, en CLP. ' +
-    'Usar para "¿cuánto entró esta semana/este mes?", "¿cuánto cobramos por semana?", "¿cómo nos pagan (transferencia, tarjeta...)?". ' +
-    'No es lo vendido ni lo que se debe: es dinero ya recibido.',
+    'Plata que ENTRÓ de verdad (pagos recibidos del ERP) por semana y medio de pago, CLP. No es lo vendido ni lo que se debe.',
   parametros: [
     { nombre: 'desde', tipo: 'string', descripcion: 'Fecha inicial YYYY-MM-DD. Por defecto 8 semanas atrás.' },
     { nombre: 'hasta', tipo: 'string', descripcion: 'Fecha final YYYY-MM-DD. Por defecto hoy.' },
