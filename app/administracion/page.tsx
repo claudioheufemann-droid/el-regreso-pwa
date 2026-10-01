@@ -3,6 +3,7 @@ import { getServerUser } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { cicloEnCursoISO, inicioDeCiclo, finDeCiclo } from '@/lib/produccion/reglas'
 import { armarDatosCalendario, type DatosCalendario } from '@/lib/administracion/calendarioEntradas'
+import { resumenMensualForecast, type MesForecast } from '@/lib/administracion/forecastMensual'
 import {
   proyectarCaja, esIngresoReal, normalizarNombreCliente, brutoDeFila, lunesDe,
   categoriaNormalizada, calcularPrecisionCobro, BANCOS, type FilaVentaFinanzas, type ProyeccionCaja,
@@ -67,6 +68,10 @@ export interface ForecastCliente {
   mape: number | null
   mesesHistorial: number | null
   semanas: SemanaForecastCliente[]
+  /** 'neto' (sin IVA): clientes de `ventas` y compras. 'bruto': el restaurante, que viene de boletas con IVA incluido. */
+  unidad: 'neto' | 'bruto'
+  /** Proyección por ciclo (24→23) con su rango y el mismo ciclo del año anterior. */
+  meses: MesForecast[]
 }
 
 export interface AvanceCiclo {
@@ -840,12 +845,19 @@ export default async function AdministracionPage() {
   }
 
   // ── Forecast individual (pestaña "Forecast") ────────────────────────────────
-  // 8 semanas atrás (venta real, para ver la tendencia) + 8 adelante
+  // 8 semanas atrás (venta real, para ver la tendencia) + 16 adelante
   // (proyección repartida desde el forecast mensual de Prophet). Mismo
   // reparto de mes→semana para cualquier serie forecasteada, sea cliente de
   // `ventas` (PDV) o el restaurante (ventas_restaurante) — sólo cambia de
   // dónde sale el mapa de `reales`.
-  const semanasForecastCliente = semanasRodantes(hoyISO, 8, 8)
+  //
+  // 16 semanas adelante (antes 8, que cortaban a fines de noviembre): pedido el
+  // 2-oct-2026 poder ver al menos diciembre 2026 de Cliente PDV y BaseCamp.
+  // El modelo ya proyecta 8 meses (hasta may-2027), así que el límite era sólo
+  // esta ventana; 16 semanas desde hoy cubren todo diciembre con margen y se
+  // corren solas con el tiempo. Más allá de eso el gráfico semanal no aporta:
+  // dentro de un ciclo las semanas valen casi lo mismo (ver `meses`).
+  const semanasForecastCliente = semanasRodantes(hoyISO, 8, 16)
 
   function repartirForecastEnSemanas(puntos: PuntoFinanzas[]): Map<string, { monto: number; min: number; max: number }> {
     const proyectados = new Map<string, { monto: number; min: number; max: number }>()
@@ -872,7 +884,7 @@ export default async function AdministracionPage() {
     return proyectados
   }
 
-  function armarForecastCliente(nombre: string, serie: SerieFinanzas | undefined, reales: Map<string, number>): ForecastCliente {
+  function armarForecastCliente(nombre: string, serie: SerieFinanzas | undefined, reales: Map<string, number>, unidad: 'neto' | 'bruto' = 'neto'): ForecastCliente {
     const proyectados = repartirForecastEnSemanas(serie?.puntos ?? [])
     const semanas: SemanaForecastCliente[] = semanasForecastCliente.map(inicio => {
       const proy = proyectados.get(inicio)
@@ -884,7 +896,10 @@ export default async function AdministracionPage() {
         proyectadoMax: proy ? Math.round(proy.max) : null,
       }
     })
-    return { nombre, mape: serie?.mape ?? null, mesesHistorial: serie?.mesesHistorial ?? null, semanas }
+    return {
+      nombre, mape: serie?.mape ?? null, mesesHistorial: serie?.mesesHistorial ?? null, semanas, unidad,
+      meses: resumenMensualForecast(serie?.puntos ?? []),
+    }
   }
 
   const forecastClientes: ForecastCliente[] = CLIENTES_FORECAST_INDIVIDUAL.map(nombre => {
@@ -911,6 +926,8 @@ export default async function AdministracionPage() {
     NOMBRE_RESTAURANTE_FORECAST,
     series.find(s => s.nivel === 'restaurante' && s.clave === NOMBRE_RESTAURANTE_FORECAST),
     realesRestaurante,
+    // La boleta del Toteat ya trae IVA: el restaurante es la única serie en BRUTO.
+    'bruto',
   ))
 
   // Calendario de entradas de la semana (CalendarioSemana): facturas por día esperado, mostrador

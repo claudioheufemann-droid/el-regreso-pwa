@@ -14,6 +14,7 @@ import {
 import type { SerieFinanzas, AvanceCiclo, ResumenDeuda, DatosFlujo, ForecastCliente, DatosCobros } from './page'
 import IngresoRealSection from './IngresoRealSection'
 import { lunesDe } from '@/lib/administracion/finanzas'
+import { inicioDeCiclo, finDeCiclo } from '@/lib/produccion/reglas'
 import { NOMBRE_RESTAURANTE_FORECAST, NOMBRE_COMPRAS_TOTAL } from '@/lib/types'
 import type { ProyeccionCaja, PrecisionCobro, ClienteEnPeriodo } from '@/lib/administracion/finanzas'
 import FlujoCajaDashboard from './FlujoCajaDashboard'
@@ -277,6 +278,49 @@ function VistaForecastSerie({ fc, hoyISO, subtitulo }: { fc: ForecastCliente; ho
           </ComposedChart>
         </ResponsiveContainer>
       </Card>
+
+      {fc.meses.length > 0 && (
+        <Card>
+          <p style={{ fontSize: 14.5, fontWeight: 800, color: C.text }}>Proyección por ciclo (mes)</p>
+          <p style={{ fontSize: 12, color: C.muted, marginTop: 3, lineHeight: 1.6 }}>
+            Cada ciclo va del 24 al 23 (el de &quot;Dic&quot; corre del 24-nov al 23-dic). Se compara con el mismo ciclo del año anterior
+            para juzgar si la proyección es razonable. Montos {fc.unidad === 'bruto' ? 'brutos (con IVA)' : 'netos (sin IVA)'}.
+          </p>
+          <div style={{ overflowX: 'auto', marginTop: 10 }}>
+            <table style={{ width: '100%', minWidth: 560, borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: C.bg }}>
+                  {['Ciclo', 'Proyectado', 'Rango', 'Mismo ciclo año anterior', 'Variación'].map((t, i) => (
+                    <th key={t} style={{ textAlign: i === 0 ? 'left' : 'right', padding: '10px 14px', color: C.muted, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap' }}>{t}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {fc.meses.map((m, i) => {
+                  const variacion = m.anioAnterior != null && m.anioAnterior > 0 ? (m.proyectado / m.anioAnterior - 1) * 100 : null
+                  const esDiciembre = m.mes.slice(5, 7) === '12'
+                  return (
+                    <tr key={m.mes} style={{ borderTop: i === 0 ? 'none' : `1px solid ${C.line}`, background: esDiciembre ? C.purpleSoft : 'transparent' }}>
+                      <td style={{ padding: '10px 14px', color: C.text, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                        {fMes(m.mes)}
+                        <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 500, color: C.faint }}>{fDia(inicioDeCiclo(m.mes))} – {fDia(finDeCiclo(m.mes))}</span>
+                      </td>
+                      <td style={{ padding: '10px 14px', textAlign: 'right', color: C.purple, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>{fMoney(m.proyectado)}</td>
+                      <td style={{ padding: '10px 14px', textAlign: 'right', color: C.muted, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                        {m.min != null && m.max != null ? `${fCompact(m.min)} – ${fCompact(m.max)}` : '—'}
+                      </td>
+                      <td style={{ padding: '10px 14px', textAlign: 'right', color: C.text, fontVariantNumeric: 'tabular-nums' }}>{m.anioAnterior != null ? fMoney(m.anioAnterior) : '—'}</td>
+                      <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums', color: variacion == null ? C.faint : variacion > 25 ? C.amber : variacion < -10 ? C.red : C.green }}>
+                        {variacion != null ? `${variacion > 0 ? '+' : ''}${variacion.toFixed(0)}%` : '—'}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
 
       <Card>
         <div style={{ overflowX: 'auto' }}>
@@ -1046,7 +1090,9 @@ export default function AdministracionClient({
                 <VistaForecastSerie
                   fc={activa}
                   hoyISO={hoyISO}
-                  subtitulo="Montos netos. Cobro inmediato (venta al contado): la semana proyectada de venta es la misma semana en que entra la plata."
+                  subtitulo={activa.unidad === 'bruto'
+                    ? 'Montos BRUTOS (boleta con IVA incluido): a diferencia del resto del módulo, que va en neto. Venta al contado: la plata entra la misma semana en que se vende.'
+                    : 'Montos netos. Cobro inmediato (venta al contado): la semana proyectada de venta es la misma semana en que entra la plata.'}
                 />
               )}
             </div>
