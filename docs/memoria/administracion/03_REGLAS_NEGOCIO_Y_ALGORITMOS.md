@@ -59,3 +59,11 @@ Para evaluar la confiabilidad del modelo de cobranza sin conciliar pago por pago
 4. **Porcentaje de Cumplimiento**:
    $$\% \text{ Cumplimiento} = \frac{\text{Monto Bruto Confirmado Pagado}}{\text{Monto Bruto Total Esperado}} \times 100$$
 - **Error MAE del modelo**: $1.800.000 CLP/semana (medido mediante backtest walk-forward en 26 semanas).
+
+## Calendario de entradas por día (1-oct-2026)
+
+- **Facturas**: cada factura impaga cae en su fecha esperada de pago (`fechaEsperada` o `fechaEsperadaPactada` según escenario). Las **ya atrasadas no se calendarizan** (su fecha pasó; se informan aparte). **Los clientes con crédito pagan sólo de lunes a viernes** (medido en `cobros_erp`: 0 pagos en fin de semana), así que lo que vence sábado o domingo se muestra el **lunes**.
+- **Mostrador PDV**: promedio semanal de cobros (`cobro_mostrador_semanal`, 12 semanas) repartido con el patrón real por día de la semana de los últimos 112 días (lun 9% · mar 10% · mié 15% · jue 16% · vie 24% · sáb 25% · dom ~0%).
+- **BaseCamp**: monto semanal = forecast del modelo (ciclo 24→23 repartido parejo por día y sumado por semana completa) repartido con el patrón por día de `ventas_restaurante` (vie 27% · sáb 22%). El restaurante se carga a mano: si la última venta cargada tiene más de 3 días, los días pasados sin dato muestran lo esperado marcado con * y NO cuentan como "ya entró".
+- **Alerta de datos (1-oct-2026)**: el forecast de BaseCamp para el ciclo de octubre ($20,8 M/semana) está ~55% sobre lo que vendió de verdad en las últimas 8 semanas completas ($13,4 M/semana). La pantalla lo avisa y ofrece un interruptor "Forecast / Promedio real". Pendiente: revisar el modelo `restaurante` en `forecast_finanzas`.
+- Todo en **bruto** (lo que llega al banco), igual que el resto del flujo de caja.

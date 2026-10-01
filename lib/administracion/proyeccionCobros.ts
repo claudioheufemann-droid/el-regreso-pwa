@@ -158,6 +158,22 @@ export interface ProyeccionCobros {
    *  pagadas (el cliente no tiene saldo suficiente en el informe Deudores).
    *  Ver `recortarContraSaldoErp`. */
   pagadasSegunErp: { monto: number; facturas: number }
+  /** Todas las facturas pendientes, en formato compacto, con sus dos fechas
+   *  esperadas (comportamiento real y plazo pactado) y sus días de atraso.
+   *  Alimenta el calendario semanal día por día (CalendarioSemana): ahí se
+   *  decide a qué día cae cada una según el escenario elegido. */
+  pendientes: FacturaCalendario[]
+}
+
+/** Una factura pendiente reducida a lo que necesita el calendario. */
+export interface FacturaCalendario {
+  cliente: string
+  factura: string
+  bruto: number
+  fechaEsperada: string
+  fechaEsperadaPactada: string
+  diasAtraso: number
+  diasAtrasoPactado: number
 }
 
 function sumarDias(fechaISO: string, dias: number): string {
@@ -380,5 +396,10 @@ export function proyectarCobros({
     cobertura,
     sinRastreo,
     pagadasSegunErp,
+    pendientes: pendientes.map(p => ({
+      cliente: p.cliente, factura: p.factura, bruto: Math.round(p.bruto),
+      fechaEsperada: p.fechaEsperada, fechaEsperadaPactada: p.fechaEsperadaPactada,
+      diasAtraso: p.diasAtraso, diasAtrasoPactado: p.diasAtrasoPactado,
+    })),
   }
 }

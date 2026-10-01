@@ -12,6 +12,8 @@ import {
 import type { DatosCobros, ComportamientoPago } from './page'
 import { LABEL_METODO, type MetodoPago } from '@/lib/administracion/movimientosCtaCte'
 import { BACKTEST_MAE_SEMANAL } from '@/lib/administracion/proyeccionCobros'
+import { semanaISO } from '@/lib/administracion/calendarioEntradas'
+import CalendarioSemana from './CalendarioSemana'
 
 /**
  * "Plata que entró" — la pestaña que responde cuánto dinero llegó de verdad
@@ -52,16 +54,6 @@ function fFechaCorta(iso: string): string {
   const [, m, d] = iso.split('-')
   const meses = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
   return `${Number(d)} ${meses[Number(m) - 1]}`
-}
-
-/** Número de semana del año (ISO 8601: la semana que contiene el primer jueves
- *  de enero es la semana 1). Se usa para etiquetar la proyección porque es la
- *  forma en que Administración habla de "la semana X", no "próxima semana". */
-function semanaISO(fechaISO: string): number {
-  const d = new Date(Date.parse(`${fechaISO}T00:00:00Z`))
-  d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7))
-  const inicioAno = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
-  return Math.ceil(((d.getTime() - inicioAno.getTime()) / 86_400_000 + 1) / 7)
 }
 
 /** Tramos de comportamiento, en lenguaje de negocio y no de percentiles. */
@@ -188,6 +180,9 @@ export default function IngresoRealSection({ datos }: { datos: DatosCobros }) {
 
       {/* ── Los dos grandes items: optimista (pactado) vs. real (comportamiento) ── */}
       <PanoramaCobranza datos={datos} />
+
+      {/* ── Calendario de la semana: qué día entra cuánta plata, por concepto de venta ── */}
+      <CalendarioSemana datos={datos} />
 
       {/* ── Detalle de la proyección: atrasados y quiénes pagan próximo ─────── */}
       <ProyeccionProximaSemana datos={datos} />

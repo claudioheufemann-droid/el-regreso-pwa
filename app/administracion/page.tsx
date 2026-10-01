@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { getServerUser } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { cicloEnCursoISO, inicioDeCiclo, finDeCiclo } from '@/lib/produccion/reglas'
+import { armarDatosCalendario, type DatosCalendario } from '@/lib/administracion/calendarioEntradas'
 import {
   proyectarCaja, esIngresoReal, normalizarNombreCliente, brutoDeFila, lunesDe,
   categoriaNormalizada, calcularPrecisionCobro, BANCOS, type FilaVentaFinanzas, type ProyeccionCaja,
@@ -186,6 +187,8 @@ export interface DatosCobros {
    *  cobrado más lo que `proyeccion.semanas[0]` todavía espera para el
    *  resto de la semana. */
   confirmadoEstaSemana: number
+  /** Datos para el calendario de entradas día por día (CalendarioSemana). */
+  calendario: DatosCalendario
 }
 
 const MS_POR_DIA = 86_400_000
@@ -344,7 +347,7 @@ export default async function AdministracionPage() {
      pago no se muestra en ninguna pantalla, sólo el semanal y el resumen por
      cliente. */
   const desdeCobros = correrDias(hoyISO, -182)
-  const [cobrosSemanaRaw, comportamientoRaw, impagasRaw, mostradorRaw] = await Promise.all([
+  const [cobrosSemanaRaw, comportamientoRaw, impagasRaw, mostradorRaw, cobrosPorDiaRaw] = await Promise.all([
     admin.rpc('cobros_por_semana', { p_desde: desdeCobros })
       .then(r => (r.data ?? []) as { semana: string; metodo: string; monto: number; movimientos: number }[]),
     admin.rpc('comportamiento_pago_clientes', { p_min_muestras: 3 })
@@ -357,6 +360,11 @@ export default async function AdministracionPage() {
     admin.rpc('facturas_impagas', { p_desde: desdeVentas })
       .then(r => (r.data ?? []) as { numero_factura: string }[]),
     admin.rpc('cobro_mostrador_semanal', { p_semanas: 12 }).then(r => Number(r.data) || 0),
+    // Pagos por DÍA (16 semanas): lo que ya entró en los días pasados de la semana y el
+    // patrón por día de la semana del mostrador, para el calendario de entradas.
+    admin.rpc('cobros_por_dia', { p_desde: correrDias(hoyISO, -112) })
+      .then(r => ((r.data ?? []) as { fecha: string; tipo: string; monto: number }[])
+        .map(f => ({ fecha: String(f.fecha).slice(0, 10), tipo: f.tipo, monto: Number(f.monto) || 0 }))),
   ])
 
   const semanasCobroMap = new Map<string, SemanaCobro>()
@@ -476,7 +484,8 @@ export default async function AdministracionPage() {
     mostradorSemanal: mostradorRaw,
   })
 
-  const cobros: DatosCobros = {
+  // Sin `calendario` todavía: necesita el forecast del restaurante, que se arma más abajo.
+  const cobros: Omit<DatosCobros, 'calendario'> = {
     hayDatos: semanasCobro.length > 0,
     proyeccion,
     semanas: semanasCobro,
@@ -904,6 +913,18 @@ export default async function AdministracionPage() {
     realesRestaurante,
   ))
 
+  // Calendario de entradas de la semana (CalendarioSemana): facturas por día esperado, mostrador
+  // y BaseCamp repartidos con su patrón real por día de la semana.
+  const calendario = armarDatosCalendario({
+    hoyISO,
+    cobrosPorDia: cobrosPorDiaRaw,
+    ventasRestaurante: ventasRestauranteRaw.map(r => ({ fecha: String(r.fecha).slice(0, 10), monto: Number(r.monto) || 0 })),
+    mostradorSemanal: mostradorRaw,
+    forecastRestaurante: series.find(s => s.nivel === 'restaurante' && s.clave === NOMBRE_RESTAURANTE_FORECAST)?.puntos ?? [],
+    inicioCiclo: inicioDeCiclo,
+    finCiclo: finDeCiclo,
+  })
+
   // Compras por proveedor — plata que SALE, no que entra. [0] = "Total
   // compras" (agregado real de TODOS los proveedores, no sólo los que
   // tienen modelo propio); el resto son las series con nivel='compra' que
@@ -948,7 +969,7 @@ export default async function AdministracionPage() {
       barrilesFuera={barrilesFuera}
       forecastClientes={forecastClientes}
       forecastCompras={forecastCompras}
-      cobros={cobros}
+      cobros={{ ...cobros, calendario }}
     />
   )
 }

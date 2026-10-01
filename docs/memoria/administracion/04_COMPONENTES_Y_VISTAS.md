@@ -38,3 +38,7 @@ graph TD
 ### 4. Rutas y Vistas Complementarias
 - **`/administracion/cargar-cobros`**: Interfaz de carga e importación del informe "Movimientos Cta. Cte." del ERP.
 - **`/administracion/forecast`**: Vista ampliada del modelo de proyección financiera.
+
+### 5. Calendario de entradas de la semana (1-oct-2026)
+- **`CalendarioSemana.tsx`** (dentro de la pestaña Ingreso Real, bajo las dos cifras principales): grilla lunes→domingo con lo que entra cada día por concepto de venta — Cobranza de facturas, Mostrador PDV y BaseCamp —, selector de semana ISO (la pasada, la actual y 5 más), escenario "según comportamiento real" / "si pagan como pactaron" y detalle de qué clientes deberían pagar cada día. Los días ya pasados muestran lo que **entró de verdad** (`cobros_erp` por día, RPC `cobros_por_dia`), no lo esperado.
+- **Lógica pura** en `lib/administracion/calendarioEntradas.ts` (`armarDatosCalendario` en el servidor, `armarSemana` en el navegador). Verificada contra datos reales: las facturas calendarizadas cuadran con `proyeccion.semanas` (diferencia $0-2 en ambos escenarios).
