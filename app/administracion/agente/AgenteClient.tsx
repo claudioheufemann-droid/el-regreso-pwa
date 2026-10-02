@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ChevronLeft, Bot, SlidersHorizontal, TriangleAlert, Brain, Check, X, Trash2 } from 'lucide-react'
 import { VistaChat, useChatAgente } from '@/components/agente/ChatAgente'
-import type { AreaMapa } from '@/lib/agente/mapa'
+import type { AreaMapa, ModuloApp } from '@/lib/agente/mapa'
 
 export interface ConfigAgente {
   configurado: boolean
@@ -13,7 +13,7 @@ export interface ConfigAgente {
   glosario: string[]
   ejemplos: string[]
   consultas: { nombre: string; descripcion: string; parametros: string[] }[]
-  mapa: { llaves: string[]; areas: AreaMapa[] }
+  mapa: { llaves: string[]; areas: AreaMapa[]; modulos: ModuloApp[] }
 }
 
 const C = {
@@ -231,6 +231,25 @@ function PanelSistema({ config }: { config: ConfigAgente }) {
         glosario), <code>mapa.ts</code> (cómo navegar la base) y <code>consultas/</code> (lo que puede leer de Supabase). Para
         enseñarle algo nuevo se agrega una consulta al catálogo — ver <code>lib/agente/README.md</code>.
       </div>
+
+      <Seccion titulo={`Mapa de la app (${config.mapa.modulos.length} módulos)`}>
+        <p style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.6, marginBottom: 10 }}>
+          Pestañas y secciones con el nombre que se ve en pantalla: el agente las usa para responder &quot;¿qué sale en…?&quot; o &quot;¿dónde veo…?&quot;.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {config.mapa.modulos.map(m => (
+            <details key={m.id} style={{ border: `1px solid ${C.line}`, borderRadius: 9, padding: '8px 12px' }}>
+              <summary style={{ cursor: 'pointer', fontSize: 13, fontWeight: 700, color: C.text }}>
+                {m.nombre}
+                <span style={{ fontWeight: 500, color: C.faint, marginLeft: 8, fontSize: 11.5 }}>{m.ruta} · {m.quienVe}</span>
+              </summary>
+              <ul style={{ paddingLeft: 18, marginTop: 8, fontSize: 12.5, color: C.text, lineHeight: 1.6 }}>
+                {m.secciones.map(s => <li key={s}>{s}</li>)}
+              </ul>
+            </details>
+          ))}
+        </div>
+      </Seccion>
 
       <Seccion titulo={`Mapa de la base (${config.mapa.areas.length} áreas)`}>
         <p style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.6, marginBottom: 10 }}>

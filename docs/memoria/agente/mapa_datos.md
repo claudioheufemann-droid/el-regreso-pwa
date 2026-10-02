@@ -16,6 +16,27 @@ Antes, una pregunta fuera de las tablas sembradas (ej. "¿cuánto proyectamos pa
 ~80 tablas, adivinar y reintentar. De hecho, el agente terminó guardando una memoria personal para no volver a perderse
 con `forecast_finanzas`. Ahora el índice lo manda directo al área y `mapa_datos` le da las columnas exactas.
 
+## Mapa de la app (pantallas), agregado el 2-oct-2026
+
+Primera versión sólo tenía la base: a "¿qué sección sale en Producción?" el agente contestó con nombres de tablas.
+Ahora `MODULOS` en `mapa.ts` describe cada módulo como lo ve la persona (menú y pestañas con su nombre en pantalla,
+qué muestra cada una y qué área de datos la alimenta). El índice del prompt lleva el menú de cada módulo (así sabe que
+"barriles" está en Ventas y en Control Comercial sin abrirlos todos) y `mapa_datos({modulo})` entrega el detalle. Regla
+nueva: preguntas sobre la app se responden con nombres de pantalla, nunca con tablas.
+
+| Módulo | Menú / pestañas |
+|---|---|
+| Ventas `/ventas` | Hoy, Cotizaciones, Rentabilidad, Comisiones, Deudores, Barriles, Stock, Clientes (+ Misiones, Metas, Leads, Mapa, Ranking, Histórico, Admin) |
+| Control Comercial | Resumen Ejecutivo, Ventas, Clientes, Cobranza, Barriles, Equipo, Reunión Comercial, Reportes, Metas |
+| Administración y Finanzas | Flujo de Caja, Plata que entró, Ingresos, Cobranza y Deuda, Forecast (+ Asistente, cargas manuales) |
+| Producción | Resumen, 1·Cuánto vamos a vender, 2·Cuánto producir, 3·Cuándo y dónde, Plan Maestro, Qué comprar, Presupuesto |
+| Venta en terreno | Visitas, Nueva visita, Planificación, Jornada, Historial; admin: Resumen, Visitas, Clientes, Rutas, Revisión, Reportes |
+| Logística (flota) | Vehículos, Nueva Salida, Despachos, Historial, KPIs, Control |
+| Producción Logística | Declarar lote, Recepción, Alertas, Historial |
+| Gestión | Tareas por área |
+
+**Si se agrega o renombra una pestaña, actualizar `MODULOS` en `mapa.ts`** (si no, el agente describirá la app vieja).
+
 ## Diagrama: cómo se relaciona la información
 
 ```mermaid

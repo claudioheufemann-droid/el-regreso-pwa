@@ -227,12 +227,116 @@ export const AREAS: AreaMapa[] = [
 
 export const IDS_AREAS = AREAS.map(a => a.id)
 
+/**
+ * LA APP COMO LA VE LA PERSONA: módulos, sus pestañas/secciones con el nombre
+ * que aparece en pantalla, y qué muestra cada una. Para preguntas del tipo
+ * "¿qué sale en Producción?" o "¿dónde veo X?": se responde con estos nombres,
+ * no con tablas. Revisado contra los menús reales (MenuLateral, Sidebar,
+ * pestañas de AdministracionClient, HubClient) el 2-oct-2026.
+ */
+export interface ModuloApp {
+  id: string
+  nombre: string
+  ruta: string
+  quienVe: string
+  /** Nombres del menú/pestañas, para el índice del prompt. */
+  menu: string
+  /** "Nombre en pantalla (ruta si es otra página): qué muestra [área de datos]". */
+  secciones: string[]
+}
+
+export const MODULOS: ModuloApp[] = [
+  {
+    id: 'ventas', nombre: 'Ventas', ruta: '/ventas', quienVe: 'Todos (cada vendedor ve su cartera; admins ven todo)', menu: 'Hoy, Cotizaciones, Rentabilidad, Comisiones, Deudores, Barriles, Stock, Clientes, Misiones, Metas, Leads, Mapa, Ranking, Histórico, Admin de Ventas',
+    secciones: [
+      'Hoy (/ventas): litros vendidos, pedidos, venta por entregar y ventas por cliente del período [ventas]',
+      'Cotizaciones (/ventas/cotizaciones): cotizaciones a clientes y crear una nueva',
+      'Rentabilidad y Comisiones: márgenes y comisiones (sólo quien tiene permiso de márgenes; el asistente no ve costos)',
+      'Deudores (/ventas/deudores): deuda por cliente, filtro todos/vencida, orden por deuda, nombre o antigüedad [cobranza]',
+      'Barriles (/ventas/barriles): barriles en poder de clientes, los más antiguos primero [barriles]',
+      'Stock (/ventas/stock): stock de producto en la bodega de despacho, por barril o lata (lo que se puede prometer hoy) [produccion]',
+      'Clientes (/ventas/clientes): lista con score y riesgo (alto/medio/bajo/nuevo), orden por recientes/score/nombre/deuda, botones Llamar/WhatsApp y Campaña WhatsApp; ficha de cada cliente en /ventas/clientes/[id] [clientes]',
+      'Otras páginas: Misiones (/ventas/misiones, a quién contactar esta semana), Metas (/ventas/metas), Leads (/ventas/leads, prospectos), Mapa (/ventas/mapa), Ranking (/ventas/ranking), Histórico (/ventas/historico) [comercial, ventas]',
+      'Admin de Ventas (/ventas/admin, sólo admins): Cargar Ventas, Importar Clientes, Deudores, Metas; además stock, insumos, barriles, vendedores y reportes',
+    ],
+  },
+  {
+    id: 'control-comercial', nombre: 'Control Comercial', ruta: '/control-comercial', quienVe: 'Gerencia y control de gestión (permiso Control Comercial)', menu: 'Resumen Ejecutivo, Ventas, Clientes, Cobranza, Barriles, Equipo, Reunión Comercial, Reportes, Metas',
+    secciones: [
+      'Resumen Ejecutivo: clientes activos, deuda vencida, cobranza recuperada, barriles críticos (+90 días), evolución de ventas e insights clave',
+      'Ventas, Clientes, Cobranza, Barriles: análisis gerencial de cada tema [ventas, clientes, cobranza, barriles]',
+      'Equipo: desempeño por vendedor',
+      'Reunión Comercial: pauta de la reunión y compromisos',
+      'Reportes: informes generados',
+      'Metas: metas comerciales por compañía/territorio/vendedor [comercial]',
+      'Configuración',
+    ],
+  },
+  {
+    id: 'administracion', nombre: 'Administración y Finanzas', ruta: '/administracion', quienVe: 'Sólo administradores', menu: 'Flujo de Caja, Plata que entró, Ingresos, Cobranza y Deuda, Forecast, Asistente de datos, cargas manuales',
+    secciones: [
+      'Pestaña Flujo de Caja: saldo bancario (cargado a mano), ingresos esperados vs. compras comprometidas por semana, antigüedad de saldos por cobrar, ciclo de caja y detalle semanal [finanzas, cobranza]',
+      'Pestaña Plata que entró: lo que entró las últimas 4 semanas, promedio por semana, cuánto se demoran en pagarnos (cliente por cliente, pactado vs. real), cuánto entra semana a semana, calendario lun-dom de la semana (Cobranza de facturas, Mostrador PDV, BaseCamp) y lo que debería entrar [cobranza, finanzas]',
+      'Pestaña Ingresos: facturación del ciclo en curso por categoría, proyección lineal y la del modelo, con su error [ventas, finanzas]',
+      'Pestaña Cobranza y Deuda: cobros proyectados y vencidos, deuda vencida por antigüedad, saldo no vencido por cliente [cobranza]',
+      'Pestaña Forecast: proyección en $ por serie (Cerveza, Kombucha, Otros, Cliente PDV, Restaurante BaseCamp y compras por proveedor), gráfico semanal y tabla por ciclo con comparación al año anterior [finanzas]',
+      'Asistente de datos (/administracion/agente): este chat, su memoria y su configuración',
+      'Cargas manuales: Cargar cobros, Cargar ventas del restaurante (Toteat), Cargar compras',
+    ],
+  },
+  {
+    id: 'produccion', nombre: 'Producción', ruta: '/produccion', quienVe: 'Administradores y equipo de Producción', menu: 'Resumen, 1·Cuánto vamos a vender, 2·Cuánto producir, 3·Cuándo y dónde, Plan Maestro, Qué comprar, Presupuesto',
+    secciones: [
+      'Resumen ("Cómo venimos"): productos en riesgo (forecast poco confiable), demanda del próximo mes, ocupación de fermentadores y alertas del modelo',
+      '1 · Cuánto vamos a vender (forecast por producto): proyección de litros a 8 meses por producto y envase, botón Litros | $ Neto, estacionalidad aprendida, Calculadora de Cobertura y detalle por producto y envase [produccion]',
+      '2 · Cuánto producir (litros por producto y mes): necesidad de producción anticipada, stock de seguridad y punto de reorden, inventario actual [produccion]',
+      '3 · Cuándo y dónde (carta Gantt de fermentadores): qué ocupa cada fermentador y proyección de carga a varios meses [produccion]',
+      'Plan Maestro (cocciones confirmadas): split de envasado, alarmas de quiebre de stock y la lista de cocciones con prioridad y estado [produccion]',
+      'Qué comprar (insumos, cuánto y cuándo): presupuesto de insumos del calendario, stock de insumos, MRP con compra sugerida y necesidad de insumos del plan [produccion]',
+      'Presupuesto (gasto proyectado): gasto proyectado en insumos productivos',
+    ],
+  },
+  {
+    id: 'terreno', nombre: 'Venta en terreno', ruta: '/terreno', quienVe: 'Vendedores (su ruta) y admins (/terreno/admin)', menu: 'Visitas, Nueva visita, Planificación, Jornada, Historial; admin: Resumen, Visitas, Clientes, Rutas, Revisión, Reportes',
+    secciones: [
+      'Vendedor: Visitas, Nueva visita (check-in GPS con fotos), Planificación semanal, Cercanos, Ruta, Jornada (km y reembolso), Historial [terreno]',
+      'Admin (/terreno/admin): Resumen, Planificación, Visitas, Clientes, Rutas, Revisión (visitas o jornadas observadas), Reportes [terreno]',
+    ],
+  },
+  {
+    id: 'flota', nombre: 'Logística (flota)', ruta: '/flota', quienVe: 'Todos', menu: 'Vehículos, Nueva Salida, Despachos, Historial, KPIs, Control',
+    secciones: ['Vehículos, Nueva Salida, Despachos (entregas con comprobante), Historial, KPIs (OTIF y efectividad), Control [flota]'],
+  },
+  {
+    id: 'logistica', nombre: 'Producción Logística', ruta: '/logistica', quienVe: 'Todos', menu: 'Declarar lote, Recepción, Alertas, Historial',
+    secciones: ['Declarar lote, Recepción en bodega, Alertas, Historial: trazabilidad de lotes entre Producción y bodega [flota]'],
+  },
+  {
+    id: 'gestion', nombre: 'Gestión de tareas', ruta: '/gestion', quienVe: 'Todos', menu: 'tareas por área',
+    secciones: ['Hub y áreas Comercial, Administración, Producción, Logística: tareas con responsable, plazo y estado [comercial]'],
+  },
+]
+
+export const IDS_MODULOS = MODULOS.map(m => m.id)
+
+export function textoModulo(id: string): string | null {
+  const m = MODULOS.find(x => x.id === id)
+  if (!m) return null
+  return [
+    `MÓDULO ${m.nombre} (${m.ruta}). Lo ven: ${m.quienVe}.`,
+    'SECCIONES (nombre en pantalla: qué muestra [área de datos para mapa_datos]):',
+    ...m.secciones.map(s => `- ${s}`),
+  ].join('\n')
+}
+
 /** Una línea por área, para el system prompt fijo. */
 export function indiceMapa(): string {
   return [
     ...AREAS.map(a => `- ${a.id}: ${a.preguntas}${a.herramientas.length ? ` → ${a.herramientas.join(', ')}` : ' → consultar_sql'}`),
     'LLAVES QUE UNEN LAS TABLAS:',
     ...LLAVES.map(l => `- ${l}`),
+    'MÓDULOS DE LA APP (menú; qué muestra cada pestaña: mapa_datos con modulo; un mismo tema puede estar en varios módulos, nómbralos todos):',
+    ...MODULOS.map(m => `- ${m.id} ${m.ruta}: ${m.menu}`),
   ].join('\n')
 }
 
