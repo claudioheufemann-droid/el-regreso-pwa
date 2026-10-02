@@ -40,7 +40,17 @@ export interface AtrasadoCliente {
 }
 
 /** Cobrado por mes calendario separado en venta mayorista y enlatado móvil (EWU + Bundor). */
-export interface MesPorGrupo { mes: string; mayoristas: number; enlatado: number }
+export interface MesPorGrupo {
+  mes: string
+  mayoristas: number
+  enlatado: number
+  /** Ya cobrado en el mes en curso (0 en meses futuros). */
+  real: number
+  /** Facturas emitidas e impagas que, según cómo paga cada cliente, se cobran ese mes. */
+  facturas: number
+  /** Venta que todavía no se factura (forecast o ritmo actual + pedidos sin despachar). */
+  venta: number
+}
 
 export interface DatosCajaCobrada {
   caja: CajaCobrada
@@ -248,7 +258,7 @@ export function construirCajaCobrada(e: Entrada, opciones: { venta?: 'forecast' 
     const real = enCurso ? cobradoMes : 0
     const proyectado = m.cobrado - real - (confMes.get(m.mes) ?? 0)
     const enlatado = (enCurso ? realEnlMes : 0) + (enlConfMes.get(m.mes) ?? 0) + proyectado * participacionEnlatado
-    return { mes: m.mes, mayoristas: m.cobrado - enlatado, enlatado }
+    return { mes: m.mes, mayoristas: m.cobrado - enlatado, enlatado, real, facturas: confMes.get(m.mes) ?? 0, venta: proyectado }
   })
 
   // ── Atrasado agrupado por cliente (pestaña Cobranza) ──
@@ -277,7 +287,20 @@ export function construirCajaCobrada(e: Entrada, opciones: { venta?: 'forecast' 
 
 /* ═══════════════ Escenarios mensuales (mayoristas + enlatado móvil) ═══════════════ */
 
-export interface EscenarioMes { mes: string; mayoristas: number; enlatado: number; total: number }
+export interface EscenarioMes {
+  mes: string
+  mayoristas: number
+  enlatado: number
+  total: number
+  /** Composición (suma = total). */
+  real: number
+  facturas: number
+  /** Recupero de facturas atrasadas. */
+  atrasadas: number
+  venta: number
+  /** EWU con su ritmo de pago (no está en el informe de ventas). */
+  ewu: number
+}
 
 export interface EscenarioCaja {
   id: 'conservador' | 'base' | 'optimista'
@@ -293,13 +316,22 @@ export interface EscenariosCaja {
   supuestos: {
     ritmoCicloCredito: number
     ewu: { min: number; promedio: number; max: number; meses: number }
-    recuperoOptimista: number
+    recupero: Record<EscenarioCaja['id'], number>
+    /** Facturas por pagar hoy: al día (todavía no vencen según el cliente) y atrasadas. */
+    facturasAlDia: number
     atrasado: number
+    /** De las facturas por pagar de hoy, lo que según cada escenario sigue sin cobrar al cierre del horizonte. */
+    quedanAlCierre: Record<EscenarioCaja['id'], number>
   }
 }
 
-/** Mejor ritmo mensual de recuperación de lo atrasado medido en el backtest (sep-2026: 13%). */
-export const RECUPERO_OPTIMISTA = 0.13
+/**
+ * Ritmo mensual de recuperación de facturas atrasadas, medido en el backtest
+ * (scripts/analisis/backtest-caja-cobrada.ts, abr-sep 2026: 9%, 4%, 0%, 6%, 4%, 13% de lo
+ * atrasado al 1.º de cada mes se cobró dentro del mes). Conservador = 4% (lo típico de un mes
+ * flojo), base = 6% (promedio), optimista = 13% (el mejor mes).
+ */
+export const RECUPERO_ATRASADO: Record<'conservador' | 'base' | 'optimista', number> = { conservador: 0.04, base: 0.06, optimista: 0.13 }
 
 /**
  * Tres escenarios de cobro de mayoristas + enlatado, por mes calendario hasta el horizonte.
@@ -331,11 +363,12 @@ export function construirEscenarios(
   const armar = (datos: DatosCajaCobrada, ritmoEwu: number, recupero: number): EscenarioMes[] => {
     let pendiente = datos.caja.atrasado.monto
     return datos.mesesPorGrupo.map(g => {
-      const recuperado = pendiente * recupero
-      pendiente -= recuperado
-      const mayoristas = g.mayoristas + recuperado
-      const enlatado = g.enlatado + ewuDelMes(g.mes, ritmoEwu)
-      return { mes: g.mes, mayoristas, enlatado, total: mayoristas + enlatado }
+      const atrasadas = pendiente * recupero
+      pendiente -= atrasadas
+      const ewuMes = ewuDelMes(g.mes, ritmoEwu)
+      const mayoristas = g.mayoristas + atrasadas
+      const enlatado = g.enlatado + ewuMes
+      return { mes: g.mes, mayoristas, enlatado, total: mayoristas + enlatado, real: g.real, facturas: g.facturas, atrasadas, venta: g.venta, ewu: ewuMes }
     })
   }
 
@@ -349,16 +382,29 @@ export function construirEscenarios(
       if (esEnlatado(c.cliente)) enlatado += c.monto
       else mayoristas += c.monto
     }
-    return { mes: g.mes, mayoristas, enlatado, total: mayoristas + enlatado }
+    return { mes: g.mes, mayoristas, enlatado, total: mayoristas + enlatado, real: mayoristas + enlatado, facturas: 0, atrasadas: 0, venta: 0, ewu: 0 }
   })
+
+  const mesesCons = armar(conservador, ewu.min, RECUPERO_ATRASADO.conservador)
+  const mesesBase = armar(base, ewu.promedio, RECUPERO_ATRASADO.base)
+  const mesesOpt = armar(base, ewu.max, RECUPERO_ATRASADO.optimista)
+  // De las facturas por pagar HOY: lo que no se cobra dentro del horizonte (atrasado no recuperado +
+  // facturas al día cuyo cobro esperado cae después del 31-dic).
+  const facturasAlDia = base.caja.cuadratura.carteraInicial - base.caja.atrasado.monto
+  const cobradoDeFacturas = (ms: EscenarioMes[]) => ms.reduce((s, m) => s + m.facturas + m.atrasadas, 0)
+  const quedan = (ms: EscenarioMes[]) => base.caja.cuadratura.carteraInicial - cobradoDeFacturas(ms)
 
   return {
     escenarios: [
-      { id: 'conservador', nombre: 'Conservador', descripcion: 'Las ventas siguen al ritmo de los últimos 3 ciclos (sin el repunte del forecast), no se recupera nada de lo atrasado y EWU paga su mínimo reciente.', meses: armar(conservador, ewu.min, 0) },
-      { id: 'base', nombre: 'Base', descripcion: 'El modelo validado: forecast de ventas y el comportamiento de pago de cada cliente. EWU a su promedio reciente.', meses: armar(base, ewu.promedio, 0) },
-      { id: 'optimista', nombre: 'Optimista', descripcion: `Forecast de ventas + se recupera lo atrasado al mejor ritmo medido (${Math.round(RECUPERO_OPTIMISTA * 100)}% al mes). EWU a su máximo reciente.`, meses: armar(base, ewu.max, RECUPERO_OPTIMISTA) },
+      { id: 'conservador', nombre: 'Conservador', descripcion: `Ventas al ritmo de los últimos 3 ciclos (sin el repunte del forecast). Facturas atrasadas: se recupera ${Math.round(RECUPERO_ATRASADO.conservador * 100)}% al mes. EWU a su mínimo reciente.`, meses: mesesCons },
+      { id: 'base', nombre: 'Base', descripcion: `Forecast de ventas y cómo paga cada cliente. Facturas atrasadas: ${Math.round(RECUPERO_ATRASADO.base * 100)}% al mes (promedio medido). EWU a su promedio.`, meses: mesesBase },
+      { id: 'optimista', nombre: 'Optimista', descripcion: `Forecast de ventas. Facturas atrasadas: ${Math.round(RECUPERO_ATRASADO.optimista * 100)}% al mes (el mejor mes medido). EWU a su máximo reciente.`, meses: mesesOpt },
     ],
     anioAnterior,
-    supuestos: { ritmoCicloCredito: conservador.ritmoCicloCredito, ewu, recuperoOptimista: RECUPERO_OPTIMISTA, atrasado: base.caja.atrasado.monto },
+    supuestos: {
+      ritmoCicloCredito: conservador.ritmoCicloCredito, ewu, recupero: RECUPERO_ATRASADO,
+      facturasAlDia, atrasado: base.caja.atrasado.monto,
+      quedanAlCierre: { conservador: quedan(mesesCons), base: quedan(mesesBase), optimista: quedan(mesesOpt) },
+    },
   }
 }

@@ -3,7 +3,7 @@ import { construirEscenarios, type DatosCajaCobrada } from '../cajaCobradaDatos'
 
 /** Sólo los campos que usa construirEscenarios. */
 const datos = (meses: { mes: string; mayoristas: number; enlatado: number }[], atrasado: number) =>
-  ({ mesesPorGrupo: meses, ritmoCicloCredito: 900, caja: { atrasado: { monto: atrasado, facturas: 1, detalle: [] } } }) as unknown as DatosCajaCobrada
+  ({ mesesPorGrupo: meses.map(m => ({ ...m, real: 0, facturas: 0, venta: m.mayoristas + m.enlatado })), ritmoCicloCredito: 900, caja: { atrasado: { monto: atrasado, facturas: 1, detalle: [] }, cuadratura: { carteraInicial: atrasado + 50 } } }) as unknown as DatosCajaCobrada
 
 describe('construirEscenarios', () => {
   const base = datos([{ mes: '2026-10', mayoristas: 100, enlatado: 10 }, { mes: '2026-11', mayoristas: 200, enlatado: 20 }], 1000)
@@ -27,11 +27,18 @@ describe('construirEscenarios', () => {
     expect(o.meses[1].enlatado).toBe(20 + 90)
   })
 
-  it('conservador usa la venta al ritmo actual; optimista suma recupero de lo atrasado', () => {
-    expect(c.meses[1].mayoristas).toBe(90)
-    expect(b.meses[1].mayoristas).toBe(200)
-    expect(o.meses[0].mayoristas).toBeCloseTo(100 + 130, 6) // 13% de 1000
+  it('conservador usa la venta al ritmo actual; cada escenario recupera lo atrasado a su ritmo medido', () => {
+    expect(c.meses[0].atrasadas).toBeCloseTo(40, 6) // 4% de 1000
+    expect(c.meses[1].mayoristas).toBeCloseTo(90 + 960 * 0.04, 6)
+    expect(b.meses[0].atrasadas).toBeCloseTo(60, 6) // 6%
+    expect(o.meses[0].mayoristas).toBeCloseTo(100 + 130, 6) // 13%
     expect(o.meses[1].mayoristas).toBeCloseTo(200 + 870 * 0.13, 6)
+  })
+
+  it('la composición suma el total y se informa lo que queda sin cobrar al cierre', () => {
+    for (const m of b.meses) expect(m.real + m.facturas + m.atrasadas + m.venta + m.ewu).toBeCloseTo(m.total, 6)
+    // cartera 1050 = 1000 atrasado + 50 al día (sin cobro en el horizonte en este caso de prueba)
+    expect(r.supuestos.quedanAlCierre.base).toBeCloseTo(1050 - (60 + 940 * 0.06), 6)
   })
 
   it('año anterior: sólo crédito, separado mayoristas / enlatado', () => {
