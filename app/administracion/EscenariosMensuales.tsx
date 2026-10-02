@@ -22,17 +22,17 @@ const fMoney = (n: number) => '$' + Math.round(n).toLocaleString('es-CL')
 const fM = (n: number) => `$${(n / 1e6).toFixed(1).replace('.', ',')} M`
 
 const ESTILO: Record<EscenarioCaja['id'], { color: string; fondo: string }> = {
-  conservador: { color: C.amber, fondo: C.amberSoft },
+  bajo: { color: C.amber, fondo: C.amberSoft },
   base: { color: C.blue, fondo: C.blueSoft },
-  optimista: { color: C.green, fondo: C.greenSoft },
+  alto: { color: C.green, fondo: C.greenSoft },
 }
 
 /** Columnas de la composición, en el orden en que la plata es más segura. */
 const PARTES: { key: 'real' | 'facturas' | 'atrasadas' | 'venta' | 'ewu'; label: string; color: string; ayuda: string }[] = [
   { key: 'real', label: 'Ya cobrado', color: C.text, ayuda: 'Lo que ya entró en el mes en curso.' },
-  { key: 'facturas', label: 'Facturas por pagar', color: C.blue, ayuda: 'Facturas ya emitidas, todavía al día, que según cómo paga cada cliente se cobran ese mes.' },
-  { key: 'atrasadas', label: 'Atrasadas recuperadas', color: C.red, ayuda: 'Parte de las facturas que ya debieron pagarse y no se han pagado, al ritmo de recuperación medido del escenario.' },
-  { key: 'venta', label: 'Venta proyectada', color: C.violet, ayuda: 'Venta que todavía no se factura (forecast o ritmo actual, más pedidos sin despachar), cobrada con el patrón real de plazos.' },
+  { key: 'facturas', label: 'Facturas por pagar', color: C.blue, ayuda: 'Facturas ya emitidas, todavía al día, que según cómo paga cada cliente se cobran ese mes, corregidas con lo que de verdad entra según el backtest.' },
+  { key: 'atrasadas', label: 'Atrasadas recuperadas', color: C.red, ayuda: 'Parte de las facturas que ya debieron pagarse y no se han pagado, al ritmo medido: 6% el primer mes, 1,4% el segundo y 0,6% el tercero.' },
+  { key: 'venta', label: 'Venta proyectada', color: C.violet, ayuda: 'Venta que todavía no se factura: litros que proyecta Producción × precio real por litro (más pedidos sin despachar), cobrada con el patrón real de plazos y corregida con el backtest.' },
   { key: 'ewu', label: 'EWU (ritmo)', color: C.teal, ayuda: 'EWU no aparece en el informe de ventas: se proyecta con lo que viene pagando cada mes.' },
 ]
 
@@ -57,12 +57,13 @@ function CeldaTotal({ m, color, fuerte }: { m: EscenarioMes; color: string; fuer
 export default function EscenariosMensuales({ datos, hoyISO }: { datos: EscenariosCaja; hoyISO: string }) {
   const { escenarios, anioAnterior, supuestos } = datos
   const [activo, setActivo] = useState<EscenarioCaja['id']>('base')
+  const fv = supuestos.fuenteVenta
+  const fPeso = (n: number) => '$' + Math.round(n).toLocaleString('es-CL')
   const esc = escenarios.find(e => e.id === activo) ?? escenarios[0]
   const meses = escenarios[0]?.meses.map(m => m.mes) ?? []
   const anio = Number(hoyISO.slice(0, 4))
   const totalEsc = sumar(esc.meses)
   const carteraHoy = supuestos.facturasAlDia + supuestos.atrasado
-  const cobradoDeFacturas = totalEsc.facturas + totalEsc.atrasadas
 
   function csv() {
     const filas: (string | number)[][] = [['Mes', 'Escenario', 'Ya cobrado', 'Facturas por pagar', 'Atrasadas recuperadas', 'Venta proyectada', 'EWU', 'Mayoristas', 'Enlatado móvil', 'Total']]
@@ -159,8 +160,9 @@ export default function EscenariosMensuales({ datos, hoyISO }: { datos: Escenari
       {/* ── Las facturas que quedan por pagar hoy ── */}
       <div style={{ margin: '14px 18px 0', padding: '12px 14px', borderRadius: 11, background: C.bg, fontSize: 12.5, color: C.text, lineHeight: 1.65 }}>
         <strong>Facturas que quedan por pagar hoy: {fMoney(carteraHoy)}</strong> = {fMoney(supuestos.facturasAlDia)} al día + <span style={{ color: C.red, fontWeight: 700 }}>{fMoney(supuestos.atrasado)} atrasadas</span>.
-        {' '}En el escenario {esc.nombre.toLowerCase()} se cobran {fMoney(cobradoDeFacturas)} de aquí a fin de año y <strong>quedan {fMoney(supuestos.quedanAlCierre[esc.id])} por cobrar al 31-dic</strong> (casi todo, atrasadas que no se recuperan al ritmo medido).
-        {' '}El resto del total ({fMoney(totalEsc.venta + totalEsc.ewu)}) depende de ventas que todavía no ocurren.
+        {' '}Al ritmo de recupero medido, de las atrasadas entran sólo {fMoney(supuestos.atrasadoRecuperado)} de aquí a fin de año:
+        {' '}<strong>quedan {fMoney(supuestos.atrasado - supuestos.atrasadoRecuperado)} sin cobrar al 31-dic si no se gestionan</strong> (pestaña Cobranza).
+        {' '}En el escenario {esc.nombre.toLowerCase()}, {fMoney(totalEsc.venta + totalEsc.ewu)} del total dependen de ventas que todavía no ocurren.
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10, padding: '14px 18px 4px' }}>
@@ -172,8 +174,12 @@ export default function EscenariosMensuales({ datos, hoyISO }: { datos: Escenari
         ))}
       </div>
       <p style={{ padding: '10px 18px 16px', fontSize: 11.5, color: C.muted, lineHeight: 1.6 }}>
-        Supuestos: venta a crédito al ritmo actual {fM(supuestos.ritmoCicloCredito)} por ciclo · EWU pagó entre {fM(supuestos.ewu.min)} y {fM(supuestos.ewu.max)} al mes en los últimos {supuestos.ewu.meses} meses ·
-        recuperación de atrasadas medida entre 0% y 13% al mes (abr-sep 2026). Error del modelo mes a mes: ±16% promedio.
+        <strong>Venta futura:</strong> {fv.modo === 'litros'
+          ? <>litros proyectados por Producción × {fPeso(fv.precioLitro)} neto por litro (real de los últimos {fv.ciclosPrecio} ciclos).
+            {fv.diferenciaFinanzas != null && <> El forecast en pesos de Finanzas proyecta {Math.abs(fv.diferenciaFinanzas * 100).toFixed(0)}% {fv.diferenciaFinanzas > 0 ? 'más' : 'menos'} para el mismo período (implica {fPeso(fv.precioImplicitoFinanzas ?? 0)} por litro, sin alza de precios que lo respalde).</>}</>
+          : 'forecast en pesos de Finanzas (no hay forecast de litros cargado).'}
+        {' '}<strong>Corrección del backtest</strong> (ene-sep 2026): por cada $1 proyectado de facturas y venta entran {supuestos.calibracion.k.map(k => k.toFixed(2).replace('.', ',')).join(' / ')} según el mes; atrasadas {supuestos.calibracion.recupero.map(r => `${(r * 100).toFixed(1).replace('.', ',')}%`).join(' / ')}.
+        {' '}EWU: {fM(supuestos.ewu.promedio)} al mes (promedio de los últimos {supuestos.ewu.meses} meses; no aparece en el informe de ventas).
       </p>
     </div>
   )

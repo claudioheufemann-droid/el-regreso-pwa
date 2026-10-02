@@ -214,7 +214,7 @@ export default async function AdministracionPage() {
   const desdeVentas = desdeVentana < inicioCiclo ? desdeVentana : inicioCiclo
 
   const [
-    forecastRaw, validacionRaw, ventasRaw, clientesRaw, deudoresRaw, ultimaCorridaRaw,
+    forecastRaw, validacionRaw, forecastLitrosRaw, ventasRaw, clientesRaw, deudoresRaw, ultimaCorridaRaw,
     saldosRaw, comprasRaw, ventasRestauranteRaw, comprasHistoricoRaw,
   ] = await Promise.all([
     (async () => {
@@ -230,6 +230,10 @@ export default async function AdministracionPage() {
       return filas
     })(),
     admin.from('forecast_finanzas_validacion').select('nivel, clave, mape, meses_historial').then(r => r.data ?? []),
+    // Forecast general de Producción en litros: la Caja valoriza la venta futura con él.
+    admin.from('forecast_produccion').select('mes, tipo, litros').eq('nivel', 'general')
+      .then(r => ((r.data ?? []) as { mes: string; tipo: string; litros: number }[])
+        .map(f => ({ mes: String(f.mes).slice(0, 10), tipo: String(f.tipo), litros: Number(f.litros) || 0 }))),
     // La ventana de 120 días son ~17k filas y PostgREST corta en 1000: en
     // serie eso son 17 viajes encadenados (varios segundos de carga). Con el
     // count primero, las páginas se piden todas a la vez y el costo pasa a ser
@@ -753,6 +757,8 @@ export default async function AdministracionPage() {
     clientes: clientesRaw,
     deudores: deudoresRaw,
     pactadoPorDefecto: medianaPactadaCartera,
+    // Un solo pronóstico de demanda: litros de Producción × precio real por litro (2-oct-2026).
+    forecastLitros: forecastLitrosRaw,
     forecastGeneral: forecastRaw.filter(f => f.nivel === 'general')
       .map(f => ({ mes: String(f.mes).slice(0, 10), tipo: String(f.tipo), monto: Number(f.monto) || 0 })),
     inicioDeCiclo,
@@ -767,8 +773,8 @@ export default async function AdministracionPage() {
     cobradoMesPorCliente: cobradoMesRaw,
   }
   const cajaCobrada = construirCajaCobrada(entradaCaja)
-  // Escenarios mensuales: el conservador repite el cálculo con la venta al ritmo de los últimos 3 ciclos.
-  const escenariosCaja = construirEscenarios(cajaCobrada, construirCajaCobrada(entradaCaja, { venta: 'ritmo' }), cobrosMensualesRaw, hoyISO)
+  // Escenarios mensuales: base calibrado ± error medido del backtest.
+  const escenariosCaja = construirEscenarios(cajaCobrada, cobrosMensualesRaw, hoyISO)
 
   // ── Datos al día (pestaña Caja): de qué fecha es cada fuente. Lo que se carga a
   // mano envejece sin aviso; acá se ve y se enlaza a donde se carga. ──

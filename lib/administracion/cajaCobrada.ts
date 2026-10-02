@@ -311,10 +311,14 @@ export interface SemanaCajaCompleta {
   confirmado: number
   /** Venta futura a crédito (forecast + pedidos sin despachar) que se cobraría esa semana. */
   proyectado: number
+  /** Facturas atrasadas que se recuperan esa semana, al ritmo medido en el backtest. */
+  atrasadas: number
   /** Venta al contado (mostrador PDV + restaurante BaseCamp): promedio real reciente. */
   contado: number
-  /** confirmado + proyectado + contado. */
+  /** confirmado + proyectado + atrasadas + contado. */
   entradas: number
+  /** Cuánto bajó confirmado + proyectado al aplicar la calibración del backtest (≤ 0). */
+  ajusteBacktest: number
   /** Pagos a proveedores: comprometidos cargados + compras proyectadas. */
   salidas: number
   /** entradas − salidas. */
@@ -328,8 +332,15 @@ export interface MesCaja {
   mes: string
   /** Venta a crédito facturada (real del mes en curso + proyectada), bruto. */
   facturado: number
-  /** Caja cobrada a crédito (real del mes en curso + esperada), bruto. */
+  /** Caja cobrada a crédito (real del mes en curso + esperada, ya calibrada), bruto. */
   cobrado: number
+  /** Componentes de `cobrado` (suman `cobrado`). facturas y venta ya vienen calibradas. */
+  real: number
+  facturas: number
+  venta: number
+  atrasadas: number
+  /** Lo que daba el modelo antes de calibrar (sin recupero de atrasadas). */
+  cobradoModelo: number
   /** Saldo por cobrar a crédito al cierre del mes. */
   saldoCierre: number
 }
@@ -352,6 +363,32 @@ export interface CajaCobrada {
   saldoInicialBanco: number | null
 }
 
+/**
+ * Calibración medida con el backtest walk-forward de los escenarios
+ * (scripts/analisis/backtest-escenarios-caja.ts, ene-sep 2026, 24 casos). Índice 0 = el mes en
+ * curso, 1 = el siguiente, 2 = el subsiguiente (los meses más lejanos usan el último).
+ *   · k: real ÷ proyectado de facturas al día + venta nueva. Los clientes pagan más lento de lo
+ *     que el perfil supone y ~19% de lo cobrado llega sin factura imputada; sin esto el modelo
+ *     sobreestimaba +13% a 1 mes y +25% a 2-3 meses.
+ *   · recupero: % de lo atrasado TODAVÍA pendiente que se cobra ese mes (decae: lo más viejo
+ *     cuesta más). Antes se suponía 6% fijo.
+ *   · error: error medio FUERA DE MUESTRA tras calibrar (ancho del rango bajo/alto).
+ * Recalcular corriendo el script cada mes y actualizar estos valores.
+ */
+export const CALIBRACION_BACKTEST = {
+  k: [0.905, 0.873, 0.850],
+  recupero: [0.060, 0.014, 0.006],
+  error: [0.24, 0.23, 0.22],
+  fecha: '2026-10-02',
+} as const
+
+/** Horizonte 0-2 de una fecha respecto de hoy (meses calendario). */
+export function horizonte(fechaISO: string, hoyISO: string): number {
+  const [y1, m1] = hoyISO.split('-').map(Number)
+  const [y2, m2] = fechaISO.split('-').map(Number)
+  return Math.min(2, Math.max(0, (y2 - y1) * 12 + (m2 - m1)))
+}
+
 const mesDe = (iso: string) => iso.slice(0, 7)
 const sumaMap = (m: Map<string, number>) => [...m.values()].reduce((a, b) => a + b, 0)
 
@@ -369,38 +406,69 @@ export function armarCajaCobrada({
   /** Lo ya facturado y cobrado a crédito en el mes calendario en curso (hasta ayer). */
   realMesEnCurso: { facturado: number; cobrado: number }
 }): CajaCobrada {
+  const K = CALIBRACION_BACKTEST
+  // Mes al que pertenece cada semana (la en curso, al mes de hoy aunque empiece el mes anterior).
+  const mesSemana = (lunes: string) => mesDe(lunes < hoyISO ? hoyISO : lunes)
+  // Recupero de atrasadas por mes: % del pendiente al inicio de cada mes, decreciente.
+  const recuperoMes = new Map<string, number>()
+  let pendienteAtrasado = confirmados.atrasado.monto
+  for (let m = mesDe(hoyISO); m <= mesDe(hastaISO); m = sumarDias(`${m}-01`, 32).slice(0, 7)) {
+    const r = pendienteAtrasado * K.recupero[horizonte(`${m}-01`, hoyISO)]
+    recuperoMes.set(m, r)
+    pendienteAtrasado -= r
+  }
+  const semanasDelMes = new Map<string, number>()
+  for (const s of confirmados.semanas) semanasDelMes.set(mesSemana(s.lunes), (semanasDelMes.get(mesSemana(s.lunes)) ?? 0) + 1)
+
   let acumulado = saldoInicialBanco ?? 0
   const semanas: SemanaCajaCompleta[] = confirmados.semanas.map(s => {
-    const proyectado = proyectados.porSemana.get(s.lunes) ?? 0
+    const k = K.k[horizonte(mesSemana(s.lunes) + '-01', hoyISO)]
+    const proyectadoModelo = proyectados.porSemana.get(s.lunes) ?? 0
+    const confirmado = s.confirmado * k
+    const proyectado = proyectadoModelo * k
+    const atrasadas = (recuperoMes.get(mesSemana(s.lunes)) ?? 0) / (semanasDelMes.get(mesSemana(s.lunes)) || 1)
     // La semana en curso ya tiene días pasados: el contado se prorratea a los días que quedan.
     const pasados = s.lunes < hoyISO ? Math.round((Date.parse(`${hoyISO}T00:00:00Z`) - Date.parse(`${s.lunes}T00:00:00Z`)) / DIA) : 0
     const contado = contadoSemanal * (Math.max(0, 7 - pasados) / 7)
-    const entradas = s.confirmado + proyectado + contado
+    const entradas = confirmado + proyectado + atrasadas + contado
     const salidas = salidasPorSemana.get(s.lunes) ?? 0
     const neto = entradas - salidas
     acumulado += neto
-    return { lunes: s.lunes, semanaIso: s.semanaIso, confirmado: s.confirmado, proyectado, contado, entradas, salidas, neto, acumulado }
+    return {
+      lunes: s.lunes, semanaIso: s.semanaIso, confirmado, proyectado, atrasadas, contado, entradas, salidas, neto, acumulado,
+      ajusteBacktest: (confirmado + proyectado) - (s.confirmado + proyectadoModelo),
+    }
   })
 
   // ── Meses calendario, del en curso al del horizonte ──
   const facturadoFuturo = new Map<string, number>()
   for (const e of emisiones) if (e.fecha <= hastaISO) facturadoFuturo.set(mesDe(e.fecha), (facturadoFuturo.get(mesDe(e.fecha)) ?? 0) + e.bruto)
   const cobradoFuturo = new Map<string, number>()
-  const sumarCobro = (fecha: string, monto: number) => cobradoFuturo.set(mesDe(fecha), (cobradoFuturo.get(mesDe(fecha)) ?? 0) + monto)
-  for (const f of confirmados.detalle) if (f.cobroEsperado >= hoyISO && f.cobroEsperado <= hastaISO) sumarCobro(f.cobroEsperado, f.bruto)
-  for (const c of proyectados.cobros) sumarCobro(c.fecha, c.monto)
+  const facturasMes = new Map<string, number>()
+  const ventaMes = new Map<string, number>()
+  const sumar = (mapa: Map<string, number>, fecha: string, monto: number) => mapa.set(mesDe(fecha), (mapa.get(mesDe(fecha)) ?? 0) + monto)
+  for (const f of confirmados.detalle) if (f.cobroEsperado >= hoyISO && f.cobroEsperado <= hastaISO) { sumar(cobradoFuturo, f.cobroEsperado, f.bruto); sumar(facturasMes, f.cobroEsperado, f.bruto) }
+  for (const c of proyectados.cobros) { sumar(cobradoFuturo, c.fecha, c.monto); sumar(ventaMes, c.fecha, c.monto) }
 
   const meses: MesCaja[] = []
   let saldo = confirmados.total
   for (let m = mesDe(hoyISO); m <= mesDe(hastaISO); m = sumarDias(`${m}-01`, 32).slice(0, 7)) {
     const fFut = facturadoFuturo.get(m) ?? 0
     const cFut = cobradoFuturo.get(m) ?? 0
-    saldo += fFut - cFut
     const enCurso = m === mesDe(hoyISO)
+    const k = K.k[horizonte(`${m}-01`, hoyISO)]
+    const real = enCurso ? realMesEnCurso.cobrado : 0
+    const facturas = (facturasMes.get(m) ?? 0) * k
+    const venta = (ventaMes.get(m) ?? 0) * k
+    const atrasadas = recuperoMes.get(m) ?? 0
+    const cobrado = real + facturas + venta + atrasadas
+    // El saldo por cobrar baja con lo que se cobra DE VERDAD (calibrado), no con lo del modelo.
+    saldo += fFut - (facturas + venta + atrasadas)
     meses.push({
       mes: m,
       facturado: fFut + (enCurso ? realMesEnCurso.facturado : 0),
-      cobrado: cFut + (enCurso ? realMesEnCurso.cobrado : 0),
+      cobrado, real, facturas, venta, atrasadas,
+      cobradoModelo: cFut + real,
       saldoCierre: saldo,
     })
   }
@@ -410,7 +478,9 @@ export function armarCajaCobrada({
      El saldo final se calcula POR SEPARADO (lo atrasado + lo que se cobra después del
      horizonte), no despejado de la fórmula: si algún monto se perdiera o se contara dos
      veces en el reparto a semanas/meses, la diferencia lo delata. `emisiones` debe venir
-     ya recortada al horizonte (lo mismo que se pasó a cobrosProyectados). */
+     ya recortada al horizonte (lo mismo que se pasó a cobrosProyectados). Se verifica el
+     modelo ANTES de la calibración: la calibración es un ajuste explícito y visible
+     (ajusteBacktest), no plata que se pierde. */
   const carteraInicial = confirmados.total
   const factFut = sumaMap(facturadoFuturo)
   const cobFut = sumaMap(cobradoFuturo)

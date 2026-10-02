@@ -52,6 +52,10 @@ export default function CobranzaSection({ caja, deuda, cobros, deudoresDetalle, 
   const filtrada = vendedor === 'todos' ? lista : lista.filter(a => (a.vendedor ?? 'Sin vendedor') === vendedor)
   const total = filtrada.reduce((s, a) => s + a.monto, 0)
   const mas30 = filtrada.filter(a => a.diasAtraso > 30)
+  // Backtest: de lo atrasado, solo se recupera ~6% el primer mes, 1,4% el segundo y 0,6% el
+  // tercero sin gestión extra. Lo que no entra a ese ritmo depende de cobrar activamente.
+  const recuperoSolo = caja.caja.meses.reduce((s, m) => s + m.atrasadas, 0)
+  const atrasadoTotal = caja.caja.atrasado.monto
 
   function csv() {
     const filas = [['Cliente', 'Vendedor', 'Facturas', 'Monto atrasado', 'Días de atraso', 'Vencido según ERP'],
@@ -71,6 +75,12 @@ export default function CobranzaSection({ caja, deuda, cobros, deudoresDetalle, 
           </Etiqueta>
           <p style={{ fontSize: 30, fontWeight: 900, color: C.red, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>{fMoney(total)}</p>
           <p style={{ fontSize: 11.5, color: C.muted }}>{filtrada.length} clientes · {filtrada.reduce((s, a) => s + a.facturas, 0)} facturas</p>
+          {vendedor === 'todos' && atrasadoTotal > 0 && (
+            <p style={{ fontSize: 11.5, color: C.text, marginTop: 6, lineHeight: 1.5 }}>
+              A su ritmo histórico, solas entrarían {fMoney(recuperoSolo)} ({Math.round((recuperoSolo / atrasadoTotal) * 100)}%) de aquí a fin de año.
+              {' '}<strong>{fMoney(atrasadoTotal - recuperoSolo)} dependen de la gestión de cobranza.</strong>
+            </p>
+          )}
         </Card>
         <Card>
           <Etiqueta title="Del informe Deudores del ERP, sólo la cartera de venta (4 carteras + Claudio): sin cuentas internas, incobrables ni muestras.">

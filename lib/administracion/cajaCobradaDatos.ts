@@ -20,7 +20,7 @@ import { brutoDeFila, esIngresoReal, normalizarNombreCliente, type FilaVentaFina
 import { siguienteHabil } from './calendarioEntradas'
 import { armarFacturasPendientes } from './proyeccionCobros'
 import {
-  armarCajaCobrada, cobrosConfirmados, cobrosProyectados, esClienteCredito, mixDePlazos, perfilesPago, repartirEnDias, sumarDias,
+  armarCajaCobrada, CALIBRACION_BACKTEST, horizonte, cobrosConfirmados, cobrosProyectados, esClienteCredito, mixDePlazos, perfilesPago, repartirEnDias, sumarDias,
   type CajaCobrada, type EmisionProyectada, type PagosCliente, type PerfilesPago, type TramoPlazo,
 } from './cajaCobrada'
 import { lunesDe } from './finanzas'
@@ -46,18 +46,31 @@ export interface MesPorGrupo {
   enlatado: number
   /** Ya cobrado en el mes en curso (0 en meses futuros). */
   real: number
-  /** Facturas emitidas e impagas que, según cómo paga cada cliente, se cobran ese mes. */
+  /** Facturas emitidas e impagas que, según cómo paga cada cliente, se cobran ese mes (calibrado). */
   facturas: number
-  /** Venta que todavía no se factura (forecast o ritmo actual + pedidos sin despachar). */
+  /** Venta que todavía no se factura (litros proyectados × precio + pedidos sin despachar), calibrada. */
   venta: number
+  /** Recupero de facturas atrasadas (ritmo medido, decreciente). */
+  atrasadas: number
+}
+
+/** De dónde sale la venta futura y cómo se compara con el forecast en pesos de Finanzas. */
+export interface FuenteVenta {
+  modo: 'litros' | 'pesos'
+  /** Neto por litro real de los últimos ciclos cerrados (venta $ ÷ litros del mismo universo). */
+  precioLitro: number
+  ciclosPrecio: number
+  /** Neto por litro que implica el forecast en $ de Finanzas sobre los litros de Producción (ciclos futuros del horizonte). */
+  precioImplicitoFinanzas: number | null
+  /** Cuánto más (o menos) proyecta el forecast de Finanzas que litros × precio real, en el horizonte. */
+  diferenciaFinanzas: number | null
 }
 
 export interface DatosCajaCobrada {
   caja: CajaCobrada
   /** Lo mismo que caja.meses[].cobrado, separado mayoristas / enlatado (Bundor; EWU se suma en los escenarios). */
   mesesPorGrupo: MesPorGrupo[]
-  /** Venta a crédito bruta promedio de los últimos 3 ciclos cerrados (escenario "ritmo actual"). */
-  ritmoCicloCredito: number
+  fuenteVenta: FuenteVenta
   hastaISO: string
   mix: TramoPlazo[]
   segmentos: PerfilesPago['segmentos']
@@ -89,8 +102,12 @@ interface Entrada {
   clientes: { nombre_fantasia: string | null; dias_pago: number | null }[]
   deudores: { nombre_fantasia: string | null; vendedor?: string | null; deuda_vencida: number | null; saldo_total: number | null }[]
   pactadoPorDefecto: number
-  /** Puntos del forecast general (nivel='general'). */
+  /** Puntos del forecast general en $ de Finanzas (nivel='general'): historia en $ y respaldo. */
   forecastGeneral: { mes: string; tipo: string; monto: number }[]
+  /** Puntos del forecast general en LITROS de Producción (nivel='general'). Si vienen, la venta
+   *  futura se valoriza como litros × precio real por litro: un solo pronóstico de demanda para
+   *  Producción y Finanzas (decisión del usuario, 2-oct-2026). */
+  forecastLitros?: { mes: string; tipo: string; litros: number }[]
   inicioDeCiclo: (mes: string) => string
   finDeCiclo: (mes: string) => string
   /** Compras de insumos proyectadas por semana (lunes → neto). */
@@ -107,21 +124,14 @@ interface Entrada {
 /** Enlatado móvil (servicio a otras cerveceras): EWU Ginger Beer y Cervecera Bundor. */
 export const esEnlatado = (nombre: string | null | undefined) => /ewu ginger beer|bundor/i.test(nombre ?? '')
 
-/** Ciclo 24→23 de una fecha, como yyyy-mm-01 del mes en que termina. */
-function cicloDe(fecha: string): string {
-  const [y, m, d] = fecha.slice(0, 10).split('-').map(Number)
-  return new Date(Date.UTC(y, d > 23 ? m : m - 1, 1)).toISOString().slice(0, 10)
-}
-
 /**
- * `venta` elige de dónde sale la venta a crédito futura:
- *   · 'forecast' (base): el forecast general del modelo × participación del crédito.
- *   · 'ritmo': la venta a crédito promedio de los últimos 3 ciclos cerrados, sin el repunte
- *     estacional que proyecta el forecast (escenario conservador).
+ * Venta a crédito futura por ciclo = litros proyectados por Producción × neto por litro real
+ * (últimos 3 ciclos cerrados) × participación del crédito × factor bruto. Sin forecast de
+ * litros, cae al forecast en $ de Finanzas. El escenario "ritmo de los últimos 3 meses" se
+ * retiró: el backtest mostró que arrastra la estacionalidad con retraso (+50% desde abril).
  */
-export function construirCajaCobrada(e: Entrada, opciones: { venta?: 'forecast' | 'ritmo' } = {}): DatosCajaCobrada {
+export function construirCajaCobrada(e: Entrada): DatosCajaCobrada {
   const { hoyISO, hastaISO } = e
-  const modoVenta = opciones.venta ?? 'forecast'
 
   // ── Perfiles de pago ──
   const pactado = new Map<string, number>()
@@ -151,8 +161,6 @@ export function construirCajaCobrada(e: Entrada, opciones: { venta?: 'forecast' 
   const mesActual = e.forecastGeneral.find(p => e.inicioDeCiclo(p.mes) <= hoyISO && e.finDeCiclo(p.mes) >= hoyISO)?.mes ?? null
   const inicioCicloActual = mesActual ? e.inicioDeCiclo(mesActual) : hoyISO
   let netoTotal = 0, netoCredito = 0, brutoCredito = 0, mtdCreditoBruto = 0, brutoEnlatado = 0
-  const brutoPorCiclo = new Map<string, number>()
-  const primerPedido = e.ventas.reduce((m, v) => (v.fecha_pedido && v.fecha_pedido < m ? v.fecha_pedido : m), hoyISO)
   const ventasPorCliente = new Map<string, number>()
   const patron = [0, 0, 0, 0, 0, 0, 0]
   const sinPlazo = new Set<string>()
@@ -170,7 +178,6 @@ export function construirCajaCobrada(e: Entrada, opciones: { venta?: 'forecast' 
     if (!credito) continue
     netoCredito += neto
     brutoCredito += bruto
-    if (v.fecha_pedido) brutoPorCiclo.set(cicloDe(v.fecha_pedido), (brutoPorCiclo.get(cicloDe(v.fecha_pedido)) ?? 0) + bruto)
     if (esEnlatado(v.nombre_fantasia)) brutoEnlatado += bruto
     ventasPorCliente.set(v.nombre_fantasia!, (ventasPorCliente.get(v.nombre_fantasia!) ?? 0) + bruto)
     if (v.fecha_pedido) patron[(new Date(`${v.fecha_pedido}T00:00:00Z`).getUTCDay() + 6) % 7] += neto
@@ -178,9 +185,17 @@ export function construirCajaCobrada(e: Entrada, opciones: { venta?: 'forecast' 
   }
   const participacionCredito = netoTotal > 0 ? netoCredito / netoTotal : 0
   const factorBruto = netoCredito > 0 ? brutoCredito / netoCredito : 1 + IVA
-  // Sólo ciclos COMPLETOS dentro de la ventana de ventas (el primero suele venir cortado).
-  const ciclosCerrados = [...brutoPorCiclo.entries()].filter(([c]) => e.inicioDeCiclo(c) >= primerPedido).sort((a, b) => a[0].localeCompare(b[0])).slice(-3)
-  const ritmoCicloCredito = ciclosCerrados.length ? ciclosCerrados.reduce((s, [, b]) => s + b, 0) / ciclosCerrados.length : 0
+  // ── Precio neto por litro real y fuente de la venta futura ──
+  const litrosHist = new Map<string, number>()
+  const litrosFut = new Map<string, number>()
+  for (const p of e.forecastLitros ?? []) (p.tipo === 'forecast' ? litrosFut : litrosHist).set(p.mes.slice(0, 10), p.litros)
+  const cerradosPrecio = e.forecastGeneral
+    .filter(p => p.tipo === 'historico' && litrosHist.get(p.mes.slice(0, 10)) && p.mes.slice(0, 10) < (mesActual ?? hoyISO))
+    .sort((a, b) => a.mes.localeCompare(b.mes)).slice(-3)
+  const litrosPrecio = cerradosPrecio.reduce((s, p) => s + (litrosHist.get(p.mes.slice(0, 10)) ?? 0), 0)
+  const precioLitro = litrosPrecio > 0 ? cerradosPrecio.reduce((s, p) => s + p.monto, 0) / litrosPrecio : 0
+  const usarLitros = precioLitro > 0 && litrosFut.size > 0
+  let netoFinanzasHorizonte = 0, netoLitrosHorizonte = 0
   const participacionEnlatado = brutoCredito > 0 ? brutoEnlatado / brutoCredito : 0
   const mix = mixDePlazos([...ventasPorCliente.entries()].map(([cliente, bruto]) => ({ cliente, bruto })), perfiles)
 
@@ -191,7 +206,10 @@ export function construirCajaCobrada(e: Entrada, opciones: { venta?: 'forecast' 
     if (p.tipo !== 'forecast') continue
     const ini = e.inicioDeCiclo(p.mes), fin = e.finDeCiclo(p.mes)
     if (fin < desde || ini > hastaISO) continue
-    let monto = modoVenta === 'ritmo' ? ritmoCicloCredito : p.monto * participacionCredito * factorBruto
+    const litros = litrosFut.get(p.mes.slice(0, 10))
+    const netoCiclo = usarLitros && litros != null ? litros * precioLitro : p.monto
+    if (litros != null) { netoFinanzasHorizonte += p.monto; netoLitrosHorizonte += litros * precioLitro }
+    let monto = netoCiclo * participacionCredito * factorBruto
     if (p.mes === mesActual) monto = Math.max(0, monto - mtdCreditoBruto)
     for (const d of repartirEnDias(ini, fin, monto, patron, desde)) {
       if (d.fecha <= hastaISO) emisiones.push({ fecha: d.fecha, bruto: d.monto, origen: 'forecast' })
@@ -255,10 +273,9 @@ export function construirCajaCobrada(e: Entrada, opciones: { venta?: 'forecast' 
   const realEnlMes = e.cobradoMesPorCliente.filter(c => esEnlatado(c.cliente)).reduce((s, c) => s + c.monto, 0)
   const mesesPorGrupo: MesPorGrupo[] = caja.meses.map(m => {
     const enCurso = m.mes === hoyISO.slice(0, 7)
-    const real = enCurso ? cobradoMes : 0
-    const proyectado = m.cobrado - real - (confMes.get(m.mes) ?? 0)
-    const enlatado = (enCurso ? realEnlMes : 0) + (enlConfMes.get(m.mes) ?? 0) + proyectado * participacionEnlatado
-    return { mes: m.mes, mayoristas: m.cobrado - enlatado, enlatado, real, facturas: confMes.get(m.mes) ?? 0, venta: proyectado }
+    const k = m.facturas > 0 && confMes.get(m.mes) ? m.facturas / confMes.get(m.mes)! : CALIBRACION_BACKTEST.k[horizonte(`${m.mes}-01`, hoyISO)]
+    const enlatado = (enCurso ? realEnlMes : 0) + (enlConfMes.get(m.mes) ?? 0) * k + m.venta * participacionEnlatado
+    return { mes: m.mes, mayoristas: m.cobrado - enlatado, enlatado, real: m.real, facturas: m.facturas, venta: m.venta, atrasadas: m.atrasadas }
   })
 
   // ── Atrasado agrupado por cliente (pestaña Cobranza) ──
@@ -274,7 +291,12 @@ export function construirCajaCobrada(e: Entrada, opciones: { venta?: 'forecast' 
   }
 
   return {
-    caja, mesesPorGrupo, ritmoCicloCredito, hastaISO, mix, segmentos: perfiles.segmentos, cobertura: confirmados.cobertura,
+    caja, mesesPorGrupo, hastaISO, mix, segmentos: perfiles.segmentos, cobertura: confirmados.cobertura,
+    fuenteVenta: {
+      modo: usarLitros ? 'litros' : 'pesos', precioLitro, ciclosPrecio: cerradosPrecio.length,
+      precioImplicitoFinanzas: netoLitrosHorizonte > 0 && precioLitro > 0 ? netoFinanzasHorizonte / (netoLitrosHorizonte / precioLitro) : null,
+      diferenciaFinanzas: netoLitrosHorizonte > 0 ? netoFinanzasHorizonte / netoLitrosHorizonte - 1 : null,
+    },
     carteraReconstruida: confirmados.total, carteraErp,
     supuestos: {
       participacionCredito, factorBruto, contadoSemanal, mostradorSemanal: e.mostradorSemanal, basecampSemanal,
@@ -292,7 +314,7 @@ export interface EscenarioMes {
   mayoristas: number
   enlatado: number
   total: number
-  /** Composición (suma = total). */
+  /** Composición (suma = total). facturas y venta ya calibradas con el backtest. */
   real: number
   facturas: number
   /** Recupero de facturas atrasadas. */
@@ -303,7 +325,7 @@ export interface EscenarioMes {
 }
 
 export interface EscenarioCaja {
-  id: 'conservador' | 'base' | 'optimista'
+  id: 'bajo' | 'base' | 'alto'
   nombre: string
   descripcion: string
   meses: EscenarioMes[]
@@ -314,34 +336,35 @@ export interface EscenariosCaja {
   /** Lo que de verdad se cobró el mismo mes del año anterior (etiquetado con el mes de este año). */
   anioAnterior: EscenarioMes[]
   supuestos: {
-    ritmoCicloCredito: number
     ewu: { min: number; promedio: number; max: number; meses: number }
-    recupero: Record<EscenarioCaja['id'], number>
+    calibracion: typeof CALIBRACION_BACKTEST
     /** Facturas por pagar hoy: al día (todavía no vencen según el cliente) y atrasadas. */
     facturasAlDia: number
     atrasado: number
-    /** De las facturas por pagar de hoy, lo que según cada escenario sigue sin cobrar al cierre del horizonte. */
-    quedanAlCierre: Record<EscenarioCaja['id'], number>
+    /** De lo atrasado hoy, cuánto se recupera hasta el horizonte al ritmo medido (sin gestión extra). */
+    atrasadoRecuperado: number
+    fuenteVenta: FuenteVenta
   }
 }
 
 /**
- * Ritmo mensual de recuperación de facturas atrasadas, medido en el backtest
- * (scripts/analisis/backtest-caja-cobrada.ts, abr-sep 2026: 9%, 4%, 0%, 6%, 4%, 13% de lo
- * atrasado al 1.º de cada mes se cobró dentro del mes). Conservador = 4% (lo típico de un mes
- * flojo), base = 6% (promedio), optimista = 13% (el mejor mes).
+ * Ritmos de recupero por escenario del modelo ANTERIOR (constante en el tiempo). Se conservan
+ * sólo porque el backtest los compara (scripts/analisis/backtest-escenarios-caja.ts); el modelo
+ * vigente usa CALIBRACION_BACKTEST.recupero, decreciente por horizonte.
  */
 export const RECUPERO_ATRASADO: Record<'conservador' | 'base' | 'optimista', number> = { conservador: 0.04, base: 0.06, optimista: 0.13 }
 
 /**
  * Tres escenarios de cobro de mayoristas + enlatado, por mes calendario hasta el horizonte.
- * EWU no aparece en el informe de ventas desde mar-2026 (se factura por otra vía), así que el
- * modelo por factura no lo ve: se suma con su ritmo real de pago de los últimos 3 meses cerrados
- * (mínimo / promedio / máximo según el escenario), descontando lo que ya pagó en el mes en curso.
+ *   · Base: el modelo calibrado con el backtest (venta = litros de Producción × precio real).
+ *   · Bajo / alto: base ± el error medio fuera de muestra del backtest para ese horizonte
+ *     (24% / 23% / 22%). Lo ya cobrado no se mueve. Reemplaza a los escenarios anteriores
+ *     (ritmo de 3 meses y recupero al 13%), que el backtest mostró sesgados al alza.
+ * EWU no aparece en el informe de ventas desde mar-2026: se suma con el promedio de sus pagos
+ * de los últimos 3 meses cerrados, descontando lo que ya pagó en el mes en curso.
  */
 export function construirEscenarios(
   base: DatosCajaCobrada,
-  conservador: DatosCajaCobrada,
   cobrosMensuales: { mes: string; cliente: string; monto: number }[],
   hoyISO: string,
 ): EscenariosCaja {
@@ -358,19 +381,23 @@ export function construirEscenarios(
     meses: ewuMeses.length,
   }
   const ewuYaPagado = ewuPorMes.get(mesActual) ?? 0
-  const ewuDelMes = (mes: string, ritmo: number) => (mes === mesActual ? Math.max(0, ritmo - ewuYaPagado) : ritmo)
 
-  const armar = (datos: DatosCajaCobrada, ritmoEwu: number, recupero: number): EscenarioMes[] => {
-    let pendiente = datos.caja.atrasado.monto
-    return datos.mesesPorGrupo.map(g => {
-      const atrasadas = pendiente * recupero
-      pendiente -= atrasadas
-      const ewuMes = ewuDelMes(g.mes, ritmoEwu)
-      const mayoristas = g.mayoristas + atrasadas
-      const enlatado = g.enlatado + ewuMes
-      return { mes: g.mes, mayoristas, enlatado, total: mayoristas + enlatado, real: g.real, facturas: g.facturas, atrasadas, venta: g.venta, ewu: ewuMes }
-    })
-  }
+  const mesesBase: EscenarioMes[] = base.mesesPorGrupo.map(g => {
+    const ewuMes = g.mes === mesActual ? Math.max(0, ewu.promedio - ewuYaPagado) : ewu.promedio
+    const enlatado = g.enlatado + ewuMes
+    return { mes: g.mes, mayoristas: g.mayoristas, enlatado, total: g.mayoristas + enlatado, real: g.real, facturas: g.facturas, atrasadas: g.atrasadas, venta: g.venta, ewu: ewuMes }
+  })
+  // Bajo / alto: se escala todo lo que no es "ya cobrado" por (1 ∓ error del horizonte).
+  const banda = (signo: 1 | -1): EscenarioMes[] => mesesBase.map(m => {
+    const f = 1 + signo * CALIBRACION_BACKTEST.error[horizonte(`${m.mes}-01`, hoyISO)]
+    const x = (v: number) => v * f
+    const realMay = m.real * (m.mayoristas / (m.total || 1))
+    return {
+      mes: m.mes, real: m.real, facturas: x(m.facturas), atrasadas: x(m.atrasadas), venta: x(m.venta), ewu: x(m.ewu),
+      mayoristas: realMay + x(m.mayoristas - realMay), enlatado: (m.real - realMay) + x(m.enlatado - (m.real - realMay)),
+      total: m.real + x(m.total - m.real),
+    }
+  })
 
   // Mismo mes del año anterior: real cobrado de clientes a crédito.
   const anioAnterior: EscenarioMes[] = base.mesesPorGrupo.map(g => {
@@ -385,26 +412,20 @@ export function construirEscenarios(
     return { mes: g.mes, mayoristas, enlatado, total: mayoristas + enlatado, real: mayoristas + enlatado, facturas: 0, atrasadas: 0, venta: 0, ewu: 0 }
   })
 
-  const mesesCons = armar(conservador, ewu.min, RECUPERO_ATRASADO.conservador)
-  const mesesBase = armar(base, ewu.promedio, RECUPERO_ATRASADO.base)
-  const mesesOpt = armar(base, ewu.max, RECUPERO_ATRASADO.optimista)
-  // De las facturas por pagar HOY: lo que no se cobra dentro del horizonte (atrasado no recuperado +
-  // facturas al día cuyo cobro esperado cae después del 31-dic).
-  const facturasAlDia = base.caja.cuadratura.carteraInicial - base.caja.atrasado.monto
-  const cobradoDeFacturas = (ms: EscenarioMes[]) => ms.reduce((s, m) => s + m.facturas + m.atrasadas, 0)
-  const quedan = (ms: EscenarioMes[]) => base.caja.cuadratura.carteraInicial - cobradoDeFacturas(ms)
-
+  const err = CALIBRACION_BACKTEST.error.map(e => `${Math.round(e * 100)}%`).join(' / ')
   return {
     escenarios: [
-      { id: 'conservador', nombre: 'Conservador', descripcion: `Ventas al ritmo de los últimos 3 ciclos (sin el repunte del forecast). Facturas atrasadas: se recupera ${Math.round(RECUPERO_ATRASADO.conservador * 100)}% al mes. EWU a su mínimo reciente.`, meses: mesesCons },
-      { id: 'base', nombre: 'Base', descripcion: `Forecast de ventas y cómo paga cada cliente. Facturas atrasadas: ${Math.round(RECUPERO_ATRASADO.base * 100)}% al mes (promedio medido). EWU a su promedio.`, meses: mesesBase },
-      { id: 'optimista', nombre: 'Optimista', descripcion: `Forecast de ventas. Facturas atrasadas: ${Math.round(RECUPERO_ATRASADO.optimista * 100)}% al mes (el mejor mes medido). EWU a su máximo reciente.`, meses: mesesOpt },
+      { id: 'bajo', nombre: 'Bajo', descripcion: `Base menos el error medio del backtest (${err} según el mes). Así de mal le fue al modelo en un mes típico.`, meses: banda(-1) },
+      { id: 'base', nombre: 'Base', descripcion: 'Facturas por pagar y venta proyectada (litros de Producción × precio real), corregidas con lo medido en el backtest; atrasadas al ritmo de recupero medido; EWU a su promedio.', meses: mesesBase },
+      { id: 'alto', nombre: 'Alto', descripcion: `Base más el error medio del backtest (${err}).`, meses: banda(1) },
     ],
     anioAnterior,
     supuestos: {
-      ritmoCicloCredito: conservador.ritmoCicloCredito, ewu, recupero: RECUPERO_ATRASADO,
-      facturasAlDia, atrasado: base.caja.atrasado.monto,
-      quedanAlCierre: { conservador: quedan(mesesCons), base: quedan(mesesBase), optimista: quedan(mesesOpt) },
+      ewu, calibracion: CALIBRACION_BACKTEST,
+      facturasAlDia: base.caja.cuadratura.carteraInicial - base.caja.atrasado.monto,
+      atrasado: base.caja.atrasado.monto,
+      atrasadoRecuperado: mesesBase.reduce((s, m) => s + m.atrasadas, 0),
+      fuenteVenta: base.fuenteVenta,
     },
   }
 }

@@ -185,17 +185,36 @@ describe('armarCajaCobrada', () => {
     saldoInicialBanco: 5000, hoyISO: HOY, hastaISO: HASTA, realMesEnCurso: { facturado: 10, cobrado: 20 },
   })
 
-  it('separa confirmado, proyectado y contado, y acumula desde el saldo de bancos', () => {
+  // Calibración del backtest para el mes en curso: k = 0,905; recupero de atrasadas 6%,
+  // repartido en las 4 semanas de octubre (lunes 5, 12, 19 y 26).
+  it('separa confirmado (calibrado), proyectado, atrasadas y contado, y acumula desde el saldo de bancos', () => {
     const s = caja.semanas.find(x => x.lunes === '2026-10-12')!
-    expect(s).toMatchObject({ confirmado: 700, proyectado: 0, contado: 70, salidas: 100, neto: 670 })
-    expect(caja.semanas[0].acumulado).toBe(5000 + 70) // semana del 5-oct: sólo contado
+    expect(s.confirmado).toBeCloseTo(700 * 0.905, 6)
+    expect(s.atrasadas).toBeCloseTo((50 * 0.06) / 4, 6)
+    expect(s.ajusteBacktest).toBeCloseTo(700 * 0.905 - 700, 6)
+    expect(s).toMatchObject({ proyectado: 0, contado: 70, salidas: 100 })
+    expect(s.neto).toBeCloseTo(700 * 0.905 + 0.75 + 70 - 100, 6)
+    expect(caja.semanas[0].acumulado).toBeCloseTo(5000 + 70 + 0.75, 6) // semana del 5-oct: contado + atrasadas
   })
 
-  it('tabla mensual: facturado vs cobrado y saldo por cobrar al cierre', () => {
+  it('tabla mensual: facturado vs cobrado calibrado, componentes y saldo por cobrar al cierre', () => {
     const oct = caja.meses.find(m => m.mes === '2026-10')!
-    expect(oct).toMatchObject({ facturado: 1010, cobrado: 1720 }) // 1000 + real 10 | 700 + 1000 + real 20
-    expect(oct.saldoCierre).toBe(1050 + 1000 - 1700) // cartera inicial + facturado − cobrado futuros
+    expect(oct.facturado).toBe(1010) // 1000 proyectado + 10 real
+    expect(oct.real).toBe(20)
+    expect(oct.facturas).toBeCloseTo(700 * 0.905, 6)
+    expect(oct.venta).toBeCloseTo(1000 * 0.905, 6)
+    expect(oct.atrasadas).toBeCloseTo(3, 6)
+    expect(oct.cobrado).toBeCloseTo(20 + 1700 * 0.905 + 3, 6)
+    expect(oct.cobradoModelo).toBe(1720)
+    expect(oct.saldoCierre).toBeCloseTo(1050 + 1000 - (1700 * 0.905 + 3), 6)
     expect(caja.meses.map(m => m.mes)).toEqual(['2026-10', '2026-11', '2026-12'])
+  })
+
+  it('el recupero de atrasadas decae por horizonte (6% / 1,4% / 0,6% del pendiente)', () => {
+    const [oct, nov, dic] = caja.meses
+    expect(oct.atrasadas).toBeCloseTo(50 * 0.06, 6)
+    expect(nov.atrasadas).toBeCloseTo(47 * 0.014, 6)
+    expect(dic.atrasadas).toBeCloseTo((47 - 47 * 0.014) * 0.006, 6)
   })
 
   it('cuadra: cartera inicial + facturado = cobrado + saldo por cobrar', () => {

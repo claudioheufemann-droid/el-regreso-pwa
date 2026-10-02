@@ -17,7 +17,7 @@ import {
 } from 'recharts'
 import { Wallet, ArrowDownToLine, CalendarRange, FileDown, CheckCircle2, TriangleAlert, Info, ChevronDown, ChevronRight, Database } from 'lucide-react'
 import type { DatosCajaCobrada, EscenariosCaja } from '@/lib/administracion/cajaCobradaDatos'
-import { BACKTEST_CAJA } from '@/lib/administracion/cajaCobrada'
+import { CALIBRACION_BACKTEST } from '@/lib/administracion/cajaCobrada'
 import type { DatosCobros, SaldoBanco } from './page'
 import IngresoRealSection from './IngresoRealSection'
 import CargaDatosCaja from './CargaDatosCaja'
@@ -100,6 +100,7 @@ export default function CajaSection({ datos, escenarios, cobros, saldoActual, ha
   const conf4 = prox4.reduce((s, x) => s + x.confirmado, 0)
   const proy4 = prox4.reduce((s, x) => s + x.proyectado, 0)
   const cont4 = prox4.reduce((s, x) => s + x.contado, 0)
+  const atr4 = prox4.reduce((s, x) => s + x.atrasadas, 0)
   const ultima = caja.semanas[caja.semanas.length - 1]
   const peor = caja.semanas.reduce((m, s) => (s.acumulado < m.acumulado ? s : m), caja.semanas[0])
 
@@ -110,13 +111,13 @@ export default function CajaSection({ datos, escenarios, cobros, saldoActual, ha
     semana: `S${s.semanaIso}`,
     Confirmado: Math.round(s.confirmado),
     Proyectado: Math.round(s.proyectado),
+    Atrasadas: Math.round(s.atrasadas),
     Contado: Math.round(s.contado),
     Salidas: -Math.round(s.salidas),
     Acumulado: Math.round(s.acumulado),
   })), [caja.semanas])
 
-  const backtestMape = BACKTEST_CAJA.slice(-3).reduce((s, b) => s + Math.abs(b.modelo - b.real) / b.real, 0) / 3
-  const difErp = datos.carteraErp - datos.carteraReconstruida
+    const difErp = datos.carteraErp - datos.carteraReconstruida
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -161,7 +162,7 @@ export default function CajaSection({ datos, escenarios, cobros, saldoActual, ha
             <ArrowDownToLine size={12} /> Entra en las próximas 4 semanas
           </Etiqueta>
           <p style={{ fontSize: 30, fontWeight: 900, color: C.blue, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>{fMoney(entra4)}</p>
-          <p style={{ fontSize: 11.5, color: C.muted }}>{fM(conf4)} confirmado · {fM(proy4)} proyectado · {fM(cont4)} contado</p>
+          <p style={{ fontSize: 11.5, color: C.muted }}>{fM(conf4)} confirmado · {fM(proy4)} proyectado · {fM(atr4)} atrasadas · {fM(cont4)} contado</p>
         </Card>
         <Card acento={hayBanco && ultima && ultima.acumulado < 0 ? C.redBorder : undefined}>
           <Etiqueta title={hayBanco ? 'Saldo de bancos + todo lo que entra − todo lo que sale hasta la última semana del año.' : 'Sin saldo de bancos: es lo que entra menos lo que sale de aquí al 31-dic, partiendo de cero.'}>
@@ -191,6 +192,7 @@ export default function CajaSection({ datos, escenarios, cobros, saldoActual, ha
             <ReferenceLine y={0} stroke={C.faint} />
             <Bar dataKey="Confirmado" stackId="e" fill={C.blue} />
             <Bar dataKey="Proyectado" stackId="e" fill={C.sky} />
+            <Bar dataKey="Atrasadas" stackId="e" fill={C.red} />
             <Bar dataKey="Contado" stackId="e" fill={C.teal} />
             <Bar dataKey="Salidas" stackId="e" fill={C.stone} />
             <Line dataKey="Acumulado" stroke={C.text} strokeWidth={2} dot={false} />
@@ -206,8 +208,8 @@ export default function CajaSection({ datos, escenarios, cobros, saldoActual, ha
             <p style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>CLP brutos. Semáforo: rojo = el saldo queda negativo · amarillo = esa semana sale más de lo que entra.</p>
           </div>
           <BotonCsv onClick={() => descargarCsv(`caja-semanal-${hoyISO}.csv`, [
-            ['Semana ISO', 'Desde', 'Confirmado', 'Proyectado', 'Contado', 'Total entradas', 'Salidas', 'Neto', 'Acumulado'],
-            ...caja.semanas.map(s => [s.semanaIso, s.lunes, s.confirmado, s.proyectado, s.contado, s.entradas, s.salidas, s.neto, s.acumulado]),
+            ['Semana ISO', 'Desde', 'Confirmado', 'Proyectado', 'Atrasadas recuperadas', 'Contado', 'Total entradas', 'Salidas', 'Neto', 'Acumulado', 'Ajuste backtest (ya aplicado)'],
+            ...caja.semanas.map(s => [s.semanaIso, s.lunes, s.confirmado, s.proyectado, s.atrasadas, s.contado, s.entradas, s.salidas, s.neto, s.acumulado, s.ajusteBacktest]),
           ])} />
         </div>
         <div style={{ overflowX: 'auto' }}>
@@ -215,8 +217,9 @@ export default function CajaSection({ datos, escenarios, cobros, saldoActual, ha
             <thead>
               <tr>
                 <th style={{ ...th, textAlign: 'left' }}>Semana</th>
-                <th style={th} title="Facturas ya emitidas e impagas que, según cómo paga cada cliente, deberían entrar esa semana.">Confirmado</th>
-                <th style={th} title="Venta a crédito que todavía no se factura (forecast + pedidos sin despachar), cobrada con el patrón real de pago.">Proyectado</th>
+                <th style={th} title="Facturas ya emitidas e impagas que, según cómo paga cada cliente, deberían entrar esa semana, corregidas con el backtest (los clientes pagan más lento de lo que su perfil supone).">Confirmado</th>
+                <th style={th} title="Venta a crédito que todavía no se factura (litros de Producción × precio real + pedidos sin despachar), cobrada con el patrón real de pago y corregida con el backtest.">Proyectado</th>
+                <th style={th} title="Facturas atrasadas que se recuperan, al ritmo medido (6% / 1,4% / 0,6% del pendiente por mes).">Atrasadas</th>
                 <th style={th} title="Mostrador PDV + restaurante BaseCamp: promedio real reciente.">Contado</th>
                 <th style={th}>Total entradas</th>
                 <th style={th} title="Pagos a proveedores cargados + compras de insumos proyectadas. No incluye sueldos, arriendos ni impuestos.">Salidas</th>
@@ -235,6 +238,7 @@ export default function CajaSection({ datos, escenarios, cobros, saldoActual, ha
                     </td>
                     <td style={{ ...td, color: C.blue }}>{fMoney(s.confirmado)}</td>
                     <td style={{ ...td, color: C.muted }}>{fMoney(s.proyectado)}</td>
+                    <td style={{ ...td, color: C.red }}>{s.atrasadas ? fMoney(s.atrasadas) : '—'}</td>
                     <td style={{ ...td, color: C.teal }}>{fMoney(s.contado)}</td>
                     <td style={{ ...td, fontWeight: 800 }}>{fMoney(s.entradas)}</td>
                     <td style={{ ...td, color: C.muted }}>{s.salidas ? `−${fMoney(s.salidas)}` : '—'}</td>
@@ -245,7 +249,7 @@ export default function CajaSection({ datos, escenarios, cobros, saldoActual, ha
               })}
               <tr>
                 <td style={{ ...td, textAlign: 'left', fontWeight: 800, background: C.bg }}>Total</td>
-                {(['confirmado', 'proyectado', 'contado', 'entradas', 'salidas', 'neto'] as const).map(k => (
+                {(['confirmado', 'proyectado', 'atrasadas', 'contado', 'entradas', 'salidas', 'neto'] as const).map(k => (
                   <td key={k} style={{ ...td, fontWeight: 800, background: C.bg }}>{fMoney(caja.semanas.reduce((a, s) => a + s[k], 0) * (k === 'salidas' ? -1 : 1))}</td>
                 ))}
                 <td style={{ ...td, background: C.bg }} />
@@ -254,8 +258,9 @@ export default function CajaSection({ datos, escenarios, cobros, saldoActual, ha
           </table>
         </div>
         <p style={{ padding: '10px 18px 14px', fontSize: 12, color: C.muted, lineHeight: 1.55 }}>
-          Fuera de la planilla: <strong style={{ color: C.red }}>{fMoney(caja.atrasado.monto)}</strong> en {caja.atrasado.facturas} facturas que ya debieron pagarse y no han entrado
-          (se gestionan en la pestaña Cobranza; no se reparten en semanas futuras porque proyectarlas empeoró el modelo).
+          Hay <strong style={{ color: C.red }}>{fMoney(caja.atrasado.monto)}</strong> en {caja.atrasado.facturas} facturas que ya debieron pagarse: la columna Atrasadas sólo
+          cuenta lo que se recupera solo al ritmo medido ({fMoney(caja.semanas.reduce((a, s) => a + s.atrasadas, 0))} a fin de año). El resto depende de la gestión de cobranza.
+          {' '}Confirmado y proyectado ya vienen corregidos con el backtest: {fMoney(-caja.semanas.reduce((a, s) => a + s.ajusteBacktest, 0))} menos que lo que daba el modelo sin corregir.
         </p>
       </Card>
 
@@ -315,30 +320,28 @@ export default function CajaSection({ datos, escenarios, cobros, saldoActual, ha
           </p>
         </Card>
         <Card>
-          <Etiqueta title="Parado el 1.º de cada mes, con lo que se sabía ese día, ¿cuánto dijo el modelo que se cobraría a crédito y cuánto entró de verdad?">Backtest: modelo vs. lo que entró</Etiqueta>
+          <Etiqueta title="Parado el 1.º de cada mes de ene a sep 2026, con lo que se sabía ese día, se proyectaron los 3 meses siguientes y se comparó con lo que entró (scripts/analisis/backtest-escenarios-caja.ts).">Backtest: qué tan bien proyecta</Etiqueta>
           <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 8 }}>
             <thead><tr>
-              <th style={{ ...th, textAlign: 'left', padding: '6px 8px' }}>Mes</th>
-              <th style={{ ...th, padding: '6px 8px' }}>Entró</th>
-              <th style={{ ...th, padding: '6px 8px' }}>Modelo</th>
-              <th style={{ ...th, padding: '6px 8px' }}>Error</th>
+              <th style={{ ...th, textAlign: 'left', padding: '6px 8px' }}>Proyectando a</th>
+              <th style={{ ...th, padding: '6px 8px' }}>Sin corregir</th>
+              <th style={{ ...th, padding: '6px 8px' }}>Corregido</th>
+              <th style={{ ...th, padding: '6px 8px' }}>Factor</th>
             </tr></thead>
             <tbody>
-              {BACKTEST_CAJA.slice(-3).map(b => {
-                const e = (b.modelo - b.real) / b.real
-                return (
-                  <tr key={b.mes}>
-                    <td style={{ ...td, textAlign: 'left', padding: '6px 8px', textTransform: 'capitalize' }}>{fMes(b.mes)}</td>
-                    <td style={{ ...td, padding: '6px 8px' }}>{fM(b.real)}</td>
-                    <td style={{ ...td, padding: '6px 8px' }}>{fM(b.modelo)}</td>
-                    <td style={{ ...td, padding: '6px 8px', fontWeight: 700, color: Math.abs(e) <= 0.15 ? C.green : C.amber }}>{e > 0 ? '+' : ''}{(e * 100).toFixed(0)}%</td>
-                  </tr>
-                )
-              })}
+              {[['1 mes', '25%, sesgo +13%'], ['2 meses', '33%, sesgo +25%'], ['3 meses', '26%, sesgo +27%']].map(([h, sin], i) => (
+                <tr key={h}>
+                  <td style={{ ...td, textAlign: 'left', padding: '6px 8px' }}>{h}</td>
+                  <td style={{ ...td, padding: '6px 8px', color: C.amber }}>{sin}</td>
+                  <td style={{ ...td, padding: '6px 8px', fontWeight: 700, color: C.green }}>{Math.round(CALIBRACION_BACKTEST.error[i] * 100)}%</td>
+                  <td style={{ ...td, padding: '6px 8px' }}>{CALIBRACION_BACKTEST.k[i].toFixed(2).replace('.', ',')}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
           <p style={{ fontSize: 11.5, color: C.muted, marginTop: 8, lineHeight: 1.5 }}>
-            Error medio {(backtestMape * 100).toFixed(0)}% por mes. Tómalo como rango: una semana puede moverse más que un mes.
+            Error medio por mes, medido fuera de muestra. El modelo sin corregir era optimista: los clientes pagan más lento de lo que su perfil supone y ~19% de lo que
+            entra llega sin factura imputada. Factor = lo que de verdad entra por cada $1 proyectado. Recalibrar cada mes corriendo el script.
           </p>
         </Card>
       </div>

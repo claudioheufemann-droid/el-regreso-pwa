@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { construirEscenarios, type DatosCajaCobrada } from '../cajaCobradaDatos'
 
 /** Sólo los campos que usa construirEscenarios. */
-const datos = (meses: { mes: string; mayoristas: number; enlatado: number }[], atrasado: number) =>
-  ({ mesesPorGrupo: meses.map(m => ({ ...m, real: 0, facturas: 0, venta: m.mayoristas + m.enlatado })), ritmoCicloCredito: 900, caja: { atrasado: { monto: atrasado, facturas: 1, detalle: [] }, cuadratura: { carteraInicial: atrasado + 50 } } }) as unknown as DatosCajaCobrada
+const datos = (meses: { mes: string; mayoristas: number; enlatado: number; real?: number }[], atrasado: number) =>
+  ({
+    mesesPorGrupo: meses.map(m => ({ ...m, real: m.real ?? 0, facturas: m.mayoristas / 2, venta: m.mayoristas / 2 + m.enlatado - (m.real ?? 0), atrasadas: 0 })),
+    caja: { atrasado: { monto: atrasado, facturas: 1, detalle: [] }, cuadratura: { carteraInicial: atrasado + 50 } },
+    fuenteVenta: { modo: 'litros', precioLitro: 3800, ciclosPrecio: 3, precioImplicitoFinanzas: 4150, diferenciaFinanzas: 0.09 },
+  }) as unknown as DatosCajaCobrada
 
 describe('construirEscenarios', () => {
-  const base = datos([{ mes: '2026-10', mayoristas: 100, enlatado: 10 }, { mes: '2026-11', mayoristas: 200, enlatado: 20 }], 1000)
-  const cons = datos([{ mes: '2026-10', mayoristas: 80, enlatado: 10 }, { mes: '2026-11', mayoristas: 90, enlatado: 20 }], 1000)
+  const base = datos([{ mes: '2026-10', mayoristas: 100, enlatado: 10, real: 20 }, { mes: '2026-11', mayoristas: 200, enlatado: 20 }], 1000)
   const cobros = [
     { mes: '2026-07-01', cliente: 'EWU Ginger Beer', monto: 30 },
     { mes: '2026-08-01', cliente: 'EWU Ginger Beer', monto: 60 },
@@ -17,28 +20,27 @@ describe('construirEscenarios', () => {
     { mes: '2025-10-01', cliente: 'Cervecera Bundor SPA', monto: 40 },
     { mes: '2025-10-01', cliente: 'Cliente PDV', monto: 999 }, // contado: no cuenta
   ]
-  const r = construirEscenarios(base, cons, cobros, '2026-10-02')
-  const [c, b, o] = r.escenarios
+  const r = construirEscenarios(base, cobros, '2026-10-02')
+  const [bajo, b, alto] = r.escenarios
 
-  it('EWU con su mínimo / promedio / máximo de los 3 meses cerrados, descontando lo ya pagado en el mes', () => {
+  it('base: EWU a su promedio de los 3 meses cerrados, descontando lo ya pagado en el mes', () => {
     expect(r.supuestos.ewu).toMatchObject({ min: 30, promedio: 60, max: 90, meses: 3 })
-    expect(c.meses[0].enlatado).toBe(10 + 5) // 30 − 25 ya pagado
-    expect(b.meses[0].enlatado).toBe(10 + 35)
-    expect(o.meses[1].enlatado).toBe(20 + 90)
+    expect(b.meses[0].ewu).toBe(35) // 60 − 25
+    expect(b.meses[1].ewu).toBe(60)
+    expect(b.meses[0].total).toBe(100 + 10 + 35)
   })
 
-  it('conservador usa la venta al ritmo actual; cada escenario recupera lo atrasado a su ritmo medido', () => {
-    expect(c.meses[0].atrasadas).toBeCloseTo(40, 6) // 4% de 1000
-    expect(c.meses[1].mayoristas).toBeCloseTo(90 + 960 * 0.04, 6)
-    expect(b.meses[0].atrasadas).toBeCloseTo(60, 6) // 6%
-    expect(o.meses[0].mayoristas).toBeCloseTo(100 + 130, 6) // 13%
-    expect(o.meses[1].mayoristas).toBeCloseTo(200 + 870 * 0.13, 6)
+  it('bajo y alto = base ± error del backtest de cada horizonte, sin tocar lo ya cobrado', () => {
+    const t0 = b.meses[0].total, t1 = b.meses[1].total
+    expect(bajo.meses[0].total).toBeCloseTo(20 + (t0 - 20) * (1 - 0.24), 6)
+    expect(alto.meses[0].total).toBeCloseTo(20 + (t0 - 20) * (1 + 0.24), 6)
+    expect(alto.meses[1].total).toBeCloseTo(t1 * (1 + 0.23), 6)
+    expect(bajo.meses[0].real).toBe(20)
+    for (const e of [bajo, alto]) for (const m of e.meses) expect(m.mayoristas + m.enlatado).toBeCloseTo(m.total, 6)
   })
 
-  it('la composición suma el total y se informa lo que queda sin cobrar al cierre', () => {
-    for (const m of b.meses) expect(m.real + m.facturas + m.atrasadas + m.venta + m.ewu).toBeCloseTo(m.total, 6)
-    // cartera 1050 = 1000 atrasado + 50 al día (sin cobro en el horizonte en este caso de prueba)
-    expect(r.supuestos.quedanAlCierre.base).toBeCloseTo(1050 - (60 + 940 * 0.06), 6)
+  it('la composición suma el total', () => {
+    for (const e of r.escenarios) for (const m of e.meses) expect(m.real + m.facturas + m.atrasadas + m.venta + m.ewu).toBeCloseTo(m.total, 6)
   })
 
   it('año anterior: sólo crédito, separado mayoristas / enlatado', () => {
