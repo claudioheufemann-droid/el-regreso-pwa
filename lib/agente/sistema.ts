@@ -74,6 +74,7 @@ export const GLOSARIO = [
   'Ciclo: el "mes" interno de la empresa va del día 24 al 23. Si el usuario dice "este mes" sin más, asume mes calendario y acláralo; si dice "ciclo", usa 24→23.',
   'Plazo pactado: los días de pago que dice la ficha del cliente. Comportamiento real: los días que de verdad se demora, medidos sobre sus pagos.',
   'Barril: envase retornable (30 L y 50 L). Lata y botella no son retornables.',
+  'Un producto vendido se compone de ítems: la línea del producto (ej. Aguas Blancas en lata, con litros) + la línea "Empaque y Distribución Lata CERVEZA LOCAL" del mismo pedido (0 L, con $). El precio real del producto es la suma: ~1/3 del neto viene de esos ítems. ventas_resumen y compras_cliente ya los reparten entre los productos (campo de_eso_empaque): nunca presentes "Empaque y Distribución" como un producto más.',
 ] as const
 
 export const EJEMPLOS = [

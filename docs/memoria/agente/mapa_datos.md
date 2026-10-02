@@ -145,3 +145,19 @@ flowchart LR
 
 - Tabla nueva que el agente deba leer: `select agente_refrescar_permisos();` + agregarla al área que corresponda en `mapa.ts`.
 - Columna renombrada: corregir `mapa.ts` (si no, el agente va a pedir una columna que no existe y gastará una ronda).
+
+## Productos compuestos por ítems (2-oct-2026)
+
+Pedido del usuario: "los productos están compuestos por ítems, ej. lata Aguas Blancas + Empaque y Distribución lata
+cerveza". En el ERP cada pedido trae la línea del producto (con litros) y aparte líneas "Empaque y Distribución …"
+(0 L, con $; a veces negativas = descuento; categoría a veces S/C). Pesan ~1/3 del neto: sep-2026 $18,0 M de $55,1 M.
+
+- `lib/agente/consultas/empaque.ts` (`repartirEmpaque`): reparte cada línea de empaque entre los productos del MISMO
+  pedido que calzan con su nombre (Lata/Barril; KOMBUCHA/CERVEZA), por litros. Totales intactos.
+- `traerVentas` lo aplica siempre: `ventas_resumen` (por producto, producto_envase o categoría) y `compras_cliente`
+  devuelven el neto con empaque + `de_eso_empaque` + `precio_litro`. "Empaque y Distribución" ya no sale como producto.
+- Glosario y mapa (área ventas) explican la regla y cómo hacerlo en SQL libre.
+- Verificado: sep-2026 total igual ($55.149.372), empaque repartido $9,38 M cerveza + $8,67 M kombucha;
+  Aguas Blancas lata 473 ml (jun-oct) $4.763/L con empaque.
+- **Ojo, fuera del agente:** el botón "$ Neto" del forecast de Producción valoriza con el precio por litro de las líneas
+  con litros>0, o sea SIN el empaque: subestima ~30-45%. Pendiente de decisión del usuario.

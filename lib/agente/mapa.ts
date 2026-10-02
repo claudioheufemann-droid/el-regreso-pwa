@@ -61,6 +61,8 @@ export const AREAS: AreaMapa[] = [
       '"BaseCamp El Regreso" en ventas = cerveza que la fábrica le vende al restaurante; ventas_restaurante = lo que el restaurante le vende al público. No sumarlas.',
       'Cliente PDV, Cliente Debito/Transferencia PDV = mostrador propio (no son clientes externos).',
       'categoria_negocio NO es categoría de producto; para cerveza/kombucha usar categoria_producto ilike.',
+      'PRODUCTO = VARIOS ÍTEMS: las líneas "Empaque y Distribución …" (Lata CERVEZA LOCAL, Lata KOMBUCHA, Barril 30L LOCAL, … ZONA CENTRAL; litros 0, a veces negativas = descuento, categoria a veces S/C) son parte del precio de las latas/barriles del MISMO pedido (~1/3 del neto). Para $ por producto o categoría usar ventas_resumen / compras_cliente (ya las reparten por litros). En SQL: excluirlas del ranking de productos (producto not ilike \'Empaque y Distribuci%\') y decir aparte cuánto suman; el total del período sí las incluye. Precio por litro real = (producto + empaque) ÷ litros.',
+      'Maquila (co-packing a otras cervecerías): productos "Litros Maquila" y "Latas Finales". No es venta comercial: avisar si aparece en un ranking.',
     ],
   },
   {

@@ -3,6 +3,7 @@ import { PARAMETROS } from '../sistema'
 import {
   type Consulta, type ContextoConsulta, enLotes, entero, rango, redondear, terminoSeguro, texto,
 } from './_base'
+import { repartirEmpaque, type LineaConEmpaque } from './empaque'
 
 export interface FilaVenta {
   id: number
@@ -11,16 +12,20 @@ export interface FilaVenta {
   vendedor_actual: string | null
   localidad: string | null
   producto: string | null
+  envase: string | null
   categoria_producto: string | null
   litros: number | null
   total_sin_impuesto: number | null
   pedido: string | null
 }
 
-const COLUMNAS = 'id, fecha_pedido, nombre_fantasia, vendedor_actual, localidad, producto, categoria_producto, litros, total_sin_impuesto, pedido'
+const COLUMNAS = 'id, fecha_pedido, nombre_fantasia, vendedor_actual, localidad, producto, envase, categoria_producto, litros, total_sin_impuesto, pedido'
 
 /** Ventas del rango, ya filtradas con el mismo criterio de ingreso real que
- *  usa Administración (sin mermas/muestras/tours/clientes internos). */
+ *  usa Administración (sin mermas/muestras/tours/clientes internos), y con el
+ *  "Empaque y Distribución" de cada pedido repartido entre sus productos (ver
+ *  empaque.ts): el neto de cada línea es lo que de verdad paga el cliente por ese
+ *  producto y `empaque` dice cuánto de eso vino del ítem de empaque. Totales iguales. */
 export async function traerVentas(ctx: ContextoConsulta, desde: string, hasta: string, filtro: { cliente?: string; vendedor?: string } = {}) {
   const base = (columnas: string, opciones?: { count: 'exact'; head: true }) => {
     let q = ctx.admin.from('ventas').select(columnas, opciones)
@@ -40,7 +45,7 @@ export async function traerVentas(ctx: ContextoConsulta, desde: string, hasta: s
     if (error) throw new Error(error.message)
     return (data ?? []) as unknown as FilaVenta[]
   })
-  const filas = lotes.flat().filter(esIngresoReal)
+  const filas: LineaConEmpaque<FilaVenta>[] = repartirEmpaque(lotes.flat().filter(esIngresoReal))
   return { filas, truncado: total > PARAMETROS.maxFilasEscaneadas }
 }
 
@@ -62,7 +67,7 @@ export const comprasCliente: Consulta = {
     const { desde, hasta } = rango(args, ctx.hoyISO, 365)
     const { filas, truncado } = await traerVentas(ctx, desde, hasta, { cliente })
 
-    const porCliente = new Map<string, FilaVenta[]>()
+    const porCliente = new Map<string, LineaConEmpaque<FilaVenta>[]>()
     for (const f of filas) {
       const k = f.nombre_fantasia ?? '(sin nombre)'
       if (!porCliente.has(k)) porCliente.set(k, [])
@@ -71,15 +76,15 @@ export const comprasCliente: Consulta = {
 
     const clientes = [...porCliente.entries()].map(([nombre, fs]) => {
       const pedidos = new Map<string, { fecha: string; neto: number; litros: number }>()
-      const productos = new Map<string, { neto: number; litros: number }>()
+      const productos = new Map<string, { neto: number; litros: number; empaque: number }>()
       const meses = new Map<string, number>()
       for (const f of fs) {
         const pk = f.pedido ?? `${f.fecha_pedido}#${f.id}`
         const p = pedidos.get(pk) ?? { fecha: f.fecha_pedido, neto: 0, litros: 0 }
         p.neto += neto(f); p.litros += litros(f)
         pedidos.set(pk, p)
-        const prod = productos.get(f.producto ?? '(sin producto)') ?? { neto: 0, litros: 0 }
-        prod.neto += neto(f); prod.litros += litros(f)
+        const prod = productos.get(f.producto ?? '(sin producto)') ?? { neto: 0, litros: 0, empaque: 0 }
+        prod.neto += neto(f); prod.litros += litros(f); prod.empaque += f.empaque
         productos.set(f.producto ?? '(sin producto)', prod)
         const mes = f.fecha_pedido.slice(0, 7)
         meses.set(mes, (meses.get(mes) ?? 0) + neto(f))
@@ -95,7 +100,7 @@ export const comprasCliente: Consulta = {
         ticket_promedio_neto: pedidos.size ? redondear(fs.reduce((s, f) => s + neto(f), 0) / pedidos.size) : 0,
         top_productos: [...productos.entries()]
           .sort((a, b) => b[1].neto - a[1].neto).slice(0, 5)
-          .map(([producto, v]) => ({ producto, neto: redondear(v.neto), litros: redondear(v.litros) })),
+          .map(([producto, v]) => ({ producto, neto: redondear(v.neto), litros: redondear(v.litros), de_eso_empaque: redondear(v.empaque) })),
         ultimos_pedidos: ultimos.slice(0, 5).map(p => ({ fecha: p.fecha, neto: redondear(p.neto), litros: redondear(p.litros) })),
         neto_por_mes: [...meses.entries()].sort((a, b) => a[0].localeCompare(b[0]))
           .map(([mes, v]) => ({ mes, neto: redondear(v) })),
@@ -106,6 +111,7 @@ export const comprasCliente: Consulta = {
       rango: { desde, hasta },
       clientes_encontrados: clientes.length,
       clientes,
+      nota_productos: 'El neto de cada producto incluye su parte del Empaque y Distribución del pedido (de_eso_empaque).',
       ...(clientes.length === 0 ? { nota: 'Sin ventas de ese cliente en el rango (o el nombre no coincide).' } : {}),
       ...(truncado ? { advertencia: 'Se alcanzó el tope de filas: el resultado es parcial.' } : {}),
     }
@@ -156,41 +162,44 @@ export const topClientes: Consulta = {
 export const ventasResumen: Consulta = {
   nombre: 'ventas_resumen',
   descripcion:
-    'Ventas NETAS CLP y litros de un período, agrupadas por mes, producto, categoría, vendedor o localidad; opcionalmente de un vendedor. Incluye clientes_distintos y pedidos_distintos.',
+    'Ventas NETAS CLP y litros de un período, agrupadas por mes, producto, producto_envase (ej. Aguas Blancas · Lata 473 ml), categoría, vendedor o localidad; opcionalmente de un vendedor. ' +
+    'Por producto trae precio_litro (neto con empaque ÷ litros) y de_eso_empaque. Incluye clientes_distintos y pedidos_distintos.',
   parametros: [
     { nombre: 'desde', tipo: 'string', descripcion: 'Fecha inicial YYYY-MM-DD. Por defecto 90 días atrás.' },
     { nombre: 'hasta', tipo: 'string', descripcion: 'Fecha final YYYY-MM-DD. Por defecto hoy.' },
     {
-      nombre: 'agrupar_por', tipo: 'string', enum: ['mes', 'producto', 'categoria', 'vendedor', 'localidad'],
+      nombre: 'agrupar_por', tipo: 'string', enum: ['mes', 'producto', 'producto_envase', 'categoria', 'vendedor', 'localidad'],
       descripcion: 'Dimensión de agrupación. Por defecto mes.',
     },
     { nombre: 'vendedor', tipo: 'string', descripcion: 'Limita el resumen a las ventas de un vendedor (nombre o parte). Omitir para todos.' },
   ],
   async ejecutar(args, ctx) {
     const { desde, hasta } = rango(args, ctx.hoyISO, 90)
-    const dim = ['mes', 'producto', 'categoria', 'vendedor', 'localidad'].includes(String(args.agrupar_por))
+    const dim = ['mes', 'producto', 'producto_envase', 'categoria', 'vendedor', 'localidad'].includes(String(args.agrupar_por))
       ? String(args.agrupar_por) : 'mes'
     const vendedor = texto(args.vendedor) ? terminoSeguro(texto(args.vendedor)!) : undefined
     const { filas, truncado } = await traerVentas(ctx, desde, hasta, { vendedor })
 
+    const porProducto = dim === 'producto' || dim === 'producto_envase' || dim === 'categoria'
     const clave = (f: FilaVenta): string => {
       if (dim === 'mes') return f.fecha_pedido.slice(0, 7)
       if (dim === 'producto') return f.producto ?? '(sin producto)'
+      if (dim === 'producto_envase') return `${f.producto ?? '(sin producto)'} · ${f.envase ?? 'sin envase'}`
       if (dim === 'categoria') return categoriaNormalizada(f.producto, f.categoria_producto)
       if (dim === 'vendedor') return f.vendedor_actual ?? '(sin vendedor)'
       return f.localidad ?? '(sin localidad)'
     }
-    const acc = new Map<string, { neto: number; litros: number }>()
+    const acc = new Map<string, { neto: number; litros: number; empaque: number }>()
     for (const f of filas) {
       const k = clave(f)
-      const a = acc.get(k) ?? { neto: 0, litros: 0 }
-      a.neto += neto(f); a.litros += litros(f)
+      const a = acc.get(k) ?? { neto: 0, litros: 0, empaque: 0 }
+      a.neto += neto(f); a.litros += litros(f); a.empaque += f.empaque
       acc.set(k, a)
     }
     const filasOut = [...acc.entries()]
       .sort((a, b) => dim === 'mes' ? a[0].localeCompare(b[0]) : b[1].neto - a[1].neto)
       .slice(0, 40)
-      .map(([k, v]) => ({ [dim]: k, neto: redondear(v.neto), litros: redondear(v.litros) }))
+      .map(([k, v]) => ({ [dim]: k, neto: redondear(v.neto), litros: redondear(v.litros), ...(porProducto ? { de_eso_empaque: redondear(v.empaque), precio_litro: v.litros > 0 ? redondear(v.neto / v.litros) : null } : {}) }))
     return {
       rango: { desde, hasta }, agrupado_por: dim, ...(vendedor ? { vendedor_filtrado: vendedor } : {}),
       clientes_distintos: new Set(filas.map(f => f.nombre_fantasia)).size,
@@ -198,6 +207,7 @@ export const ventasResumen: Consulta = {
       neto_total: redondear(filas.reduce((s, f) => s + neto(f), 0)),
       litros_total: redondear(filas.reduce((s, f) => s + litros(f), 0)),
       filas: filasOut,
+      ...(porProducto ? { nota_empaque: 'El neto de cada fila incluye su parte del Empaque y Distribución de los pedidos (de_eso_empaque); ya no aparece como producto aparte.' } : {}),
       ...(acc.size > 40 ? { nota: `Se muestran las 40 primeras de ${acc.size} filas.` } : {}),
       ...(truncado ? { advertencia: 'Se alcanzó el tope de filas: el resultado es parcial.' } : {}),
     }
