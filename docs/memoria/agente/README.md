@@ -31,6 +31,14 @@ Migraciones: `agente_memoria_y_conversaciones.sql`, `agente_lector_solo_lectura.
 - **PostgREST corta en 1000 filas:** las herramientas de ventas cuentan primero y piden las páginas en paralelo (en lotes de 8).
 - Los errores de consulta se sanean antes de llegar al modelo (el WAF/Cloudflare devuelve HTML entero).
 
+## Mapa de la base (2-oct-2026)
+
+Pedido del usuario: "un diagrama completo de cómo navegar la aplicación para que encuentre la información sin dar tantas
+vueltas, y cómo está relacionada la información". El log mostraba 6-7 rondas y 35-60 mil tokens por preguntas de
+forecast y stock (el agente listaba las ~80 tablas y tanteaba). Ver **`mapa_datos.md`** (diagrama + decisiones);
+fuente de verdad `lib/agente/mapa.ts`. En la misma pasada, `stock_actual` pasó a usar el criterio de Producción
+(nombres normalizados, litros de latas, tanque aparte, cobertura): con SQL libre el agente daba quiebres falsos.
+
 ## Tokens (medido el 1-oct-2026)
 
 Misma pregunta de SQL: 33.875 tokens / 7 rondas → 7.843 / 2, gracias a sembrar las columnas de las tablas principales en la

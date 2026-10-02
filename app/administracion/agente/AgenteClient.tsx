@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ChevronLeft, Bot, SlidersHorizontal, TriangleAlert, Brain, Check, X, Trash2 } from 'lucide-react'
 import { VistaChat, useChatAgente } from '@/components/agente/ChatAgente'
+import type { AreaMapa } from '@/lib/agente/mapa'
 
 export interface ConfigAgente {
   configurado: boolean
@@ -12,6 +13,7 @@ export interface ConfigAgente {
   glosario: string[]
   ejemplos: string[]
   consultas: { nombre: string; descripcion: string; parametros: string[] }[]
+  mapa: { llaves: string[]; areas: AreaMapa[] }
 }
 
 const C = {
@@ -226,9 +228,39 @@ function PanelSistema({ config }: { config: ConfigAgente }) {
     <>
       <div style={{ background: C.blueSoft, border: '1px solid #BFDBFE', borderRadius: 11, padding: '12px 14px', fontSize: 12.5, color: C.text, lineHeight: 1.7 }}>
         Todo esto vive en la carpeta <code>lib/agente/</code> del proyecto: <code>sistema.ts</code> (parámetros, reglas y
-        glosario) y <code>consultas/</code> (lo que puede leer de Supabase). Para enseñarle algo nuevo se agrega una consulta
-        al catálogo — ver <code>lib/agente/README.md</code>.
+        glosario), <code>mapa.ts</code> (cómo navegar la base) y <code>consultas/</code> (lo que puede leer de Supabase). Para
+        enseñarle algo nuevo se agrega una consulta al catálogo — ver <code>lib/agente/README.md</code>.
       </div>
+
+      <Seccion titulo={`Mapa de la base (${config.mapa.areas.length} áreas)`}>
+        <p style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.6, marginBottom: 10 }}>
+          El agente tiene siempre a mano el índice (una línea por área y las llaves que unen las tablas). Cuando necesita el detalle de
+          un área lo pide con <code>mapa_datos</code>, sin consultar la base.
+        </p>
+        <p style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 4 }}>Llaves que unen las tablas</p>
+        <ul style={{ paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12.5, color: C.text, lineHeight: 1.6, marginBottom: 12 }}>
+          {config.mapa.llaves.map(l => <li key={l}>{l}</li>)}
+        </ul>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {config.mapa.areas.map(a => (
+            <details key={a.id} style={{ border: `1px solid ${C.line}`, borderRadius: 9, padding: '8px 12px' }}>
+              <summary style={{ cursor: 'pointer', fontSize: 13, fontWeight: 700, color: C.text }}>
+                {a.nombre}
+                <span style={{ fontWeight: 500, color: C.faint, marginLeft: 8, fontSize: 11.5 }}>{a.preguntas}</span>
+              </summary>
+              <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.6, marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <p style={{ color: C.muted }}>En la app: {a.pantallas}{a.herramientas.length ? ` · Herramientas: ${a.herramientas.join(', ')}` : ''}</p>
+                {([['Tablas', a.tablas], ['Cómo se cruzan', a.cruces], ['Ojo', a.trampas]] as const).filter(([, xs]) => xs.length).map(([t, xs]) => (
+                  <div key={t}>
+                    <p style={{ fontWeight: 700, fontSize: 12 }}>{t}</p>
+                    <ul style={{ paddingLeft: 18 }}>{xs.map(x => <li key={x}>{x}</li>)}</ul>
+                  </div>
+                ))}
+              </div>
+            </details>
+          ))}
+        </div>
+      </Seccion>
 
       <Seccion titulo="Parámetros">
         {config.parametros.map(([k, v]) => (

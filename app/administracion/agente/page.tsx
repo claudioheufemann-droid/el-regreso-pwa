@@ -2,6 +2,7 @@ import AgenteClient, { type ConfigAgente } from './AgenteClient'
 import { PARAMETROS, REGLAS, GLOSARIO } from '@/lib/agente/sistema'
 import { SUGERENCIAS } from '@/lib/agente/sugerencias'
 import { CONSULTAS } from '@/lib/agente/consultas'
+import { AREAS, LLAVES } from '@/lib/agente/mapa'
 
 export const dynamic = 'force-dynamic'
 
@@ -31,6 +32,7 @@ export default function AgentePage() {
       descripcion: c.descripcion,
       parametros: c.parametros.map(p => `${p.nombre}${p.requerido ? '*' : ''} (${p.tipo})`),
     })),
+    mapa: { llaves: [...LLAVES], areas: AREAS },
   }
   return <AgenteClient config={config} />
 }

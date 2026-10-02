@@ -55,6 +55,10 @@ pantalla completa en `/administracion/agente` (con pestañas Chat · Memoria · 
 - Prefijo fijo (instrucciones + herramientas) de ~3.900 a ~3.040 tokens por llamada.
 - Caché implícita de Gemini: el prefijo es estable para aprovecharla, pero **no se observaron tokens cacheados**
   con `gemini-3.5-flash-lite` en plan gratuito. La pestaña Memoria muestra el % reutilizado.
+- **Mapa de la base (2-oct-2026):** el índice va en el prompt fijo y el detalle de un área se pide con `mapa_datos`
+  (sin tocar la base). Con las mismas preguntas reales del log: proyección PDV 49.571 tokens / 7 rondas → 13.172 / 3;
+  proyección BaseCamp 34.167 / 6 → 14.653 / 3; quiebre de kombucha 60.347 / 7 → 9.264 / 2 (vía `stock_actual`);
+  pedidos pendientes 20.216 / 3 → 16.479 / 3. El prompt fijo creció ~700 tokens.
 - Ver el uso en la pestaña Memoria (últimos 7 días) o en `agente_consultas_log`.
 
 ## Archivos
@@ -62,6 +66,7 @@ pantalla completa en `/administracion/agente` (con pestañas Chat · Memoria · 
 | Archivo | Qué es |
 |---|---|
 | `sistema.ts` | **Parámetros**, reglas, glosario, ejemplos, system prompt fijo y `construirContexto()`. |
+| `mapa.ts` | **Mapa de la base**: 10 áreas (tablas, columnas clave, cruces, trampas, pantallas) + las 4 llaves que unen todo. Índice en el prompt; detalle vía `mapa_datos`. Diagrama en `docs/memoria/agente/mapa_datos.md`. |
 | `gemini.ts` | Bucle modelo ⇄ herramientas, cascada de modelos, conteo de tokens, `generarTexto()` (resúmenes). |
 | `memoria.ts` | Conversaciones, memoria relevante, resumen automático. |
 | `sugerencias.ts` | Preguntas de ejemplo (archivo aparte: viaja al navegador). |
@@ -79,7 +84,9 @@ pantalla completa en `/administracion/agente` (con pestañas Chat · Memoria · 
 3. **Herramienta nueva** (criterio de negocio que no conviene dejar al SQL libre): crear una `Consulta` en
    `consultas/` y sumarla a `CONSULTAS`. La `descripcion` es lo que el modelo lee: cuanto más corta y precisa, mejor.
 4. **Tabla nueva en la base:** correr `select agente_refrescar_permisos();` o el agente no la verá (a propósito).
-   Si tiene datos privados, agregarla a la lista `denegadas` de esa función antes.
+   Si tiene datos privados, agregarla a la lista `denegadas` de esa función antes. Y sumarla a su área en `mapa.ts`.
+5. **Se pierde buscando algo** (muchas rondas o `describir_esquema` en el log): agregar la tabla, el cruce o la trampa
+   al área que corresponda en `mapa.ts`. Si es un cálculo con reglas del negocio (como el stock), mejor una herramienta.
 
 ## Reglas de seguridad (no relajar)
 

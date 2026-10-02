@@ -14,7 +14,7 @@ function pista(mensaje: string): string {
   if (/permission denied for (table|schema)/i.test(mensaje))
     return 'Esa tabla/columna está bloqueada por privacidad, o usaste SELECT *: lista columnas explícitas (describir_esquema con la tabla muestra las permitidas).'
   if (/statement timeout/i.test(mensaje)) return 'Demasiado pesada: filtra por fecha o agrega para devolver menos filas.'
-  if (/does not exist/i.test(mensaje)) return 'Revisa los nombres con describir_esquema.'
+  if (/does not exist/i.test(mensaje)) return 'Revisa los nombres con mapa_datos (área) o describir_esquema (tabla).'
   return ''
 }
 
@@ -24,7 +24,7 @@ export const consultarSql: Consulta = {
     'Ejecuta UNA consulta SELECT (o WITH...SELECT) de PostgreSQL, solo lectura, sobre cualquier tabla permitida de la base: úsala cuando ninguna herramienta específica cubre la pregunta ' +
     '(cruces entre tablas, rankings por localidad/producto/vendedor, comparaciones, historiales). Máx. 200 filas y 10 s: agrega y filtra en SQL. ' +
     'Columnas siempre explícitas (no SELECT *). Para ventas reales usa "not _excluir_cliente_finanzas(nombre_fantasia) and not _excluir_producto(producto)". ' +
-    'Datos personales (rut, correo, teléfono, dirección) y costos/márgenes están bloqueados. Si dudas de las columnas, llama antes a describir_esquema.',
+    'Datos personales (rut, correo, teléfono, dirección) y costos/márgenes están bloqueados. Si dudas de las columnas, llama antes a mapa_datos con el área.',
   parametros: [
     { nombre: 'consulta', tipo: 'string', requerido: true, descripcion: 'Una sola sentencia SELECT o WITH...SELECT. Sin comentarios ni punto y coma intermedio.' },
     { nombre: 'max_filas', tipo: 'integer', descripcion: 'Filas máximas a devolver (1-200). Por defecto 100.' },
@@ -47,7 +47,7 @@ export const describirEsquema: Consulta = {
   nombre: 'describir_esquema',
   descripcion:
     'Muestra qué hay en la base. Sin `tabla`: lista las tablas legibles con filas aproximadas y su descripción. Con `tabla`: sus columnas (solo las permitidas) y tipos. ' +
-    'Llamarla antes de consultar_sql cuando no conoces el nombre exacto de una tabla o columna.',
+    'Usarla sólo si mapa_datos no trae la tabla o columna que necesitas (tablas raras o casi vacías).',
   parametros: [
     { nombre: 'tabla', tipo: 'string', descripcion: 'Nombre exacto de la tabla. Omitir para listar todas.' },
   ],

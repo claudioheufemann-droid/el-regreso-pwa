@@ -5,6 +5,7 @@ import { buscarCliente, deudaClientes, comportamientoPagoCliente, cobrosResumen 
 import { consultarSql, describirEsquema } from './sql'
 import { recordar } from './memoria'
 import { stockActual } from './stock'
+import { mapaDatos } from './mapa'
 
 /**
  * CATÁLOGO DE CONSULTAS DEL AGENTE — acá se "entrena".
@@ -28,6 +29,8 @@ export const CONSULTAS: Consulta[] = [
   cobrosResumen,
   stockActual,
   // Lectura libre (rol de solo lectura en la base) para lo que las de arriba no cubren, y memoria de largo plazo.
+  // mapa_datos primero: orienta sin tocar la base (lib/agente/mapa.ts).
+  mapaDatos,
   describirEsquema,
   consultarSql,
   recordar,
