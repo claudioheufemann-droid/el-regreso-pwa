@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cobrosConfirmados, fechaCobroEsperada, perfilesPago, semanasHasta } from '../cajaCobrada'
+import { armarCajaCobrada, cobrosConfirmados, cobrosProyectados, fechaCobroEsperada, mixDePlazos, perfilesPago, repartirEnDias, semanasHasta } from '../cajaCobrada'
 import type { FacturaImpaga } from '../proyeccionCobros'
 
 // 2026-10-05 es lunes. Emisión común para comparar plazos.
@@ -115,5 +115,101 @@ describe('cobrosConfirmados', () => {
     const s = semanasHasta(HOY, HASTA)
     expect(s[0].lunes).toBe('2026-10-05')
     expect(s[s.length - 1].lunes).toBe('2026-12-28')
+  })
+})
+
+describe('mixDePlazos', () => {
+  it('reparte la venta por plazo y mide los días reales de cada tramo', () => {
+    const mix = mixDePlazos([
+      { cliente: 'plazo7', bruto: 300 },
+      { cliente: 'plazo30', bruto: 600 },
+      { cliente: 'adelantado', bruto: 100 }, // pactado 30, paga a 22
+      { cliente: 'Cliente PDV', bruto: 5000 }, // contado: no entra
+    ], perfiles)
+    expect(mix.map(t => t.pactado)).toEqual([7, 30])
+    expect(mix[0]).toMatchObject({ participacion: 0.3, diasMedios: 7 })
+    expect(mix[1].participacion).toBeCloseTo(0.7, 10)
+    expect(mix[1].diasMedios).toBeCloseTo((600 * 30 + 100 * 22) / 700, 10)
+  })
+})
+
+describe('repartirEnDias', () => {
+  it('respeta el patrón semanal y no reparte antes de `desde`', () => {
+    const patron = [1, 1, 1, 1, 1, 0, 0] // sólo lun-vie
+    const r = repartirEnDias('2026-10-05', '2026-10-11', 500, patron, '2026-10-07')
+    expect(r.map(x => x.fecha)).toEqual(['2026-10-07', '2026-10-08', '2026-10-09'])
+    expect(r.reduce((s, x) => s + x.monto, 0)).toBeCloseTo(500, 10)
+  })
+
+  it('sin patrón útil reparte parejo lun-vie', () => {
+    const r = repartirEnDias('2026-10-10', '2026-10-12', 90, [0, 0, 0, 0, 0, 1, 1], '2026-10-01')
+    expect(r).toEqual([{ fecha: '2026-10-10', monto: 45 }, { fecha: '2026-10-11', monto: 45 }])
+  })
+})
+
+describe('cobrosProyectados', () => {
+  const mix = [{ pactado: 7, participacion: 0.5, diasMedios: 7 }, { pactado: 30, participacion: 0.5, diasMedios: 30 }]
+  it('aplica el mix a la venta del forecast y el perfil del cliente a los pedidos', () => {
+    const r = cobrosProyectados({
+      emisiones: [
+        { fecha: '2026-10-05', bruto: 1000, origen: 'forecast' },
+        { fecha: '2026-10-05', bruto: 200, origen: 'pedido', cliente: 'moroso' },
+      ],
+      mix, perfiles, hastaISO: HASTA,
+    })
+    expect(r.porSemana.get('2026-10-12')).toBe(500) // +7 días
+    expect(r.porSemana.get('2026-11-02')).toBe(500) // +30 días, miércoles 4-nov
+    expect(r.porSemana.get('2026-11-16')).toBe(200) // moroso: 45 días
+    expect(r.total).toBe(1200)
+  })
+
+  it('lo que se cobraría después del horizonte queda aparte', () => {
+    const r = cobrosProyectados({ emisiones: [{ fecha: '2026-12-20', bruto: 100, origen: 'forecast' }], mix, perfiles, hastaISO: HASTA })
+    expect(r.despuesDelHorizonte).toBe(50)
+    expect(r.cobros.reduce((s, c) => s + c.monto, 0)).toBe(50)
+  })
+})
+
+describe('armarCajaCobrada', () => {
+  const facturas = new Map<string, FacturaImpaga>([
+    ['A', { cliente: 'plazo7', fechaEntrega: '2026-10-05', bruto: 700 }],
+    ['B', { cliente: 'plazo30', fechaEntrega: '2026-12-15', bruto: 300 }], // cobra el 14-ene
+    ['C', { cliente: 'plazo7', fechaEntrega: '2026-09-01', bruto: 50 }], // atrasada
+  ])
+  const confirmados = cobrosConfirmados({ facturas, perfiles, hoyISO: HOY, hastaISO: HASTA })
+  const mix = [{ pactado: 7, participacion: 1, diasMedios: 7 }]
+  const emisiones = [{ fecha: '2026-10-20', bruto: 1000, origen: 'forecast' as const }, { fecha: '2026-12-28', bruto: 400, origen: 'forecast' as const }]
+  const proyectados = cobrosProyectados({ emisiones, mix, perfiles, hastaISO: HASTA })
+  const caja = armarCajaCobrada({
+    confirmados, proyectados, emisiones, contadoSemanal: 70, salidasPorSemana: new Map([['2026-10-12', 100]]),
+    saldoInicialBanco: 5000, hoyISO: HOY, hastaISO: HASTA, realMesEnCurso: { facturado: 10, cobrado: 20 },
+  })
+
+  it('separa confirmado, proyectado y contado, y acumula desde el saldo de bancos', () => {
+    const s = caja.semanas.find(x => x.lunes === '2026-10-12')!
+    expect(s).toMatchObject({ confirmado: 700, proyectado: 0, contado: 70, salidas: 100, neto: 670 })
+    expect(caja.semanas[0].acumulado).toBe(5000 + 70) // semana del 5-oct: sólo contado
+  })
+
+  it('tabla mensual: facturado vs cobrado y saldo por cobrar al cierre', () => {
+    const oct = caja.meses.find(m => m.mes === '2026-10')!
+    expect(oct).toMatchObject({ facturado: 1010, cobrado: 1720 }) // 1000 + real 10 | 700 + 1000 + real 20
+    expect(oct.saldoCierre).toBe(1050 + 1000 - 1700) // cartera inicial + facturado − cobrado futuros
+    expect(caja.meses.map(m => m.mes)).toEqual(['2026-10', '2026-11', '2026-12'])
+  })
+
+  it('cuadra: cartera inicial + facturado = cobrado + saldo por cobrar', () => {
+    expect(caja.cuadratura.ok).toBe(true)
+    // saldo final = atrasada C (50) + B en enero (300) + lo del 28-dic que se cobra en enero (400)
+    expect(caja.cuadratura.saldoFinal).toBe(750)
+  })
+
+  it('falla con mensaje claro si se pierde plata en el reparto', () => {
+    const roto = armarCajaCobrada({
+      confirmados, proyectados: { ...proyectados, cobros: proyectados.cobros.slice(1) }, emisiones, contadoSemanal: 0,
+      salidasPorSemana: new Map(), saldoInicialBanco: null, hoyISO: HOY, hastaISO: HASTA, realMesEnCurso: { facturado: 0, cobrado: 0 },
+    })
+    expect(roto.cuadratura.ok).toBe(false)
+    expect(roto.cuadratura.mensaje).toMatch(/No cuadra por \$1\.000/)
   })
 })

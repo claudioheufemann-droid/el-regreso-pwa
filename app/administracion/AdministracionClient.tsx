@@ -8,29 +8,29 @@ import {
   ResponsiveContainer, ReferenceLine,
 } from 'recharts'
 import {
-  TrendingUp, Wallet, AlertTriangle, Info, CalendarClock, Truck, HelpCircle, ChevronLeft, ChevronDown,
-  ChevronRight, Target, UserX, Sparkles, Banknote, Bot,
+  TrendingUp, Wallet, AlertTriangle, Info, ChevronLeft, Target, Sparkles, Bot,
 } from 'lucide-react'
-import type { SerieFinanzas, AvanceCiclo, ResumenDeuda, DatosFlujo, ForecastCliente, DatosCobros } from './page'
-import IngresoRealSection from './IngresoRealSection'
+import type { SerieFinanzas, AvanceCiclo, ResumenDeuda, ForecastCliente, DatosCobros, SaldoBanco } from './page'
+import CajaSection, { type FrescuraDato } from './CajaSection'
+import CobranzaSection from './CobranzaSection'
+import type { DatosCajaCobrada } from '@/lib/administracion/cajaCobradaDatos'
 import { lunesDe } from '@/lib/administracion/finanzas'
 import { inicioDeCiclo, finDeCiclo } from '@/lib/produccion/reglas'
 import { NOMBRE_RESTAURANTE_FORECAST, NOMBRE_COMPRAS_TOTAL } from '@/lib/types'
-import type { ProyeccionCaja, PrecisionCobro, ClienteEnPeriodo } from '@/lib/administracion/finanzas'
-import FlujoCajaDashboard from './FlujoCajaDashboard'
-import DeudaClienteSection, { type DeudorRaw } from './DeudaClienteSection'
+import type { DeudorRaw } from './DeudaClienteSection'
 import type { BarrilesFuera } from '@/lib/barrilesFuera'
 
 interface Props {
   series: SerieFinanzas[]
   avance: AvanceCiclo
   mtd: { neto: number; bruto: number }
-  caja: ProyeccionCaja
   deuda: ResumenDeuda
-  precisionCobro: PrecisionCobro
-  flujo: DatosFlujo
   ultimaCorrida: string | null
-  clientesSinPlazo: number
+  /** Caja real cobrada: el único motor de "cuánto entra y cuándo" del módulo. */
+  cajaCobrada: DatosCajaCobrada
+  saldoActual: { fecha: string; total: number; porBanco: SaldoBanco[] } | null
+  hayCompras: boolean
+  frescura: FrescuraDato[]
   /** Viene del servidor, no de `new Date()` acá: el mismo valor en render de
    *  servidor y de cliente evita un desajuste de hidratación. */
   hoyISO: string
@@ -113,42 +113,11 @@ function semanaISO(iso: string): number {
   const diffSemanas = (fecha.getTime() - primerJueves.getTime()) / (7 * 86_400_000)
   return 1 + Math.round(diffSemanas)
 }
-const fSemana = (iso: string) => `Semana ${semanaISO(iso)}`
 /** "07/09 – 13/09" — el inicio de semana ya viene en lunes (ver lunesDe en
  *  lib/administracion/finanzas.ts), así que el fin es +6 días corridos. */
 function fRangoSemana(iso: string): string {
   const fin = new Date(Date.parse(`${iso}T00:00:00Z`) + 6 * 86_400_000).toISOString().slice(0, 10)
   return `${fDia(iso)} – ${fDia(fin)}`
-}
-
-/** Bajo 3 días de plazo observado no es "crédito" en ningún sentido útil —
- *  es un cliente (típico HORECA chico) que paga al contado o al día
- *  siguiente. Separarlo evita el absurdo de mostrar "Crédito 1 días". */
-function etiquetaPlazo(dias: number): string {
-  if (dias <= 2) return 'Contado'
-  return `Crédito ${dias} día${dias === 1 ? '' : 's'}`
-}
-
-/** Agrupa los clientes de una semana por plazo de pago (7, 15, 30... días),
- *  de menor a mayor plazo — así se ve de un vistazo si el cobro de la semana
- *  depende de crédito corto o largo. Se redondea el plazo al entero más
- *  cercano: el plazo "real" (mediana observada) puede venir fraccionado,
- *  pero el cupo que importa acá es el nominal (7/15/30/45/60/90). */
-function agruparPorPlazo(clientes: ClienteEnPeriodo[]) {
-  const porDias = new Map<number, ClienteEnPeriodo[]>()
-  for (const c of clientes) {
-    const dias = Math.round(c.diasPago)
-    const arr = porDias.get(dias) ?? []
-    arr.push(c)
-    porDias.set(dias, arr)
-  }
-  return [...porDias.entries()]
-    .sort(([a], [b]) => a - b)
-    .map(([dias, arr]) => ({
-      dias,
-      bruto: arr.reduce((s, c) => s + c.bruto, 0),
-      clientes: arr.sort((a, b) => b.bruto - a.bruto),
-    }))
 }
 
 /** Tarjeta blanca con el mismo tratamiento visual que Ventas: fondo blanco,
@@ -361,23 +330,19 @@ function VistaForecastSerie({ fc, hoyISO, subtitulo }: { fc: ForecastCliente; ho
 }
 
 export default function AdministracionClient({
-  series, avance, mtd, caja, deuda, precisionCobro, flujo, ultimaCorrida, clientesSinPlazo, hoyISO,
+  series, avance, mtd, deuda, ultimaCorrida, cajaCobrada, saldoActual, hayCompras, frescura, hoyISO,
   deudoresDetalle, clientesPorVendedor, maquilaPorCliente, barrilesFuera, forecastClientes, forecastCompras, cobros,
 }: Props) {
   const router = useRouter()
-  // 'flujo' primero: es la pregunta operativa del día a día ("¿cuándo entra
-  // la plata?"). 'ingresos' (el modelo de facturación) y 'cobranza' (estado
-  // de deuda del ERP) son consulta más puntual. Reordenado sin fusionar
-  // pestañas — decisión del usuario, 15-sep-2026.
-  // 'cobros' ("Ingreso Real") es la pantalla principal desde el 23-sep-2026 —
-  // responde la pregunta central de Administración (cuánto entra, optimista
-  // vs. según cómo realmente pagan los clientes) antes que ninguna otra.
-  const [tab, setTab] = useState<'flujo' | 'cobros' | 'ingresos' | 'cobranza' | 'forecast'>('cobros')
+  // Tres pestañas, una por pregunta (auditoría del 2-oct-2026; antes eran cinco con
+  // tres modelos distintos de cobro): Caja = ¿cuánta plata vamos a tener?, Cobranza =
+  // ¿a quién llamar?, Ventas y forecast = ¿cuánto vamos a vender y comprar?
+  const [tab, setTab] = useState<'caja' | 'cobranza' | 'ventas'>('caja')
   const [clienteForecast, setClienteForecast] = useState(forecastClientes[0]?.nombre ?? null)
   const [proveedorCompras, setProveedorCompras] = useState(forecastCompras[0]?.nombre ?? null)
   const [serieId, setSerieId] = useState('general::')
+  const [vistaVentas, setVistaVentas] = useState<'serie' | 'fc'>('serie')
   const [verModelo, setVerModelo] = useState(false)
-  const [semanaExpandida, setSemanaExpandida] = useState<string | null>(null)
 
   const serieActual = series.find(s => s.id === serieId) ?? series.find(s => s.nivel === 'general') ?? null
 
@@ -422,12 +387,6 @@ export default function AdministracionClient({
   const cumple = pctCumplimiento != null && pctCumplimiento >= 95
   const avancePct = Math.min(100, (avance.diaActual / avance.diasEnCiclo) * 100)
 
-  const proximas8 = useMemo(
-    () => caja.periodos.filter(p => !p.vencido).slice(0, 8),
-    [caja.periodos]
-  )
-  const atrasadas = useMemo(() => caja.periodos.filter(p => p.vencido), [caja.periodos])
-  const totalAtrasado = atrasadas.reduce((s, p) => s + p.bruto, 0)
 
   const hayModelo = series.length > 0
 
@@ -476,14 +435,9 @@ export default function AdministracionClient({
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 24 }}>
         <div style={{ display: 'flex', gap: 2, background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, padding: 4, width: 'fit-content' }}>
           {([
-            ['flujo', 'Flujo de Caja', Wallet],
-            // Va pegada a Flujo de Caja a propósito: una proyecta la plata que
-            // debería entrar, la otra muestra la que entró de verdad. Leerlas
-            // juntas es lo que permite calibrar si la proyección miente.
-            ['cobros', 'Plata que entró', Banknote],
-            ['ingresos', 'Ingresos', TrendingUp],
-            ['cobranza', 'Cobranza y Deuda', Target],
-            ['forecast', 'Forecast', Sparkles],
+            ['caja', 'Caja', Wallet],
+            ['cobranza', 'Cobranza', Target],
+            ['ventas', 'Ventas y forecast', TrendingUp],
           ] as const).map(([id, label, Icon]) => (
             <button
               key={id}
@@ -512,11 +466,53 @@ export default function AdministracionClient({
         </Link>
         </div>
 
-        {/* ══════════════ PLATA QUE ENTRÓ ══════════════ */}
-        {tab === 'cobros' && <IngresoRealSection datos={cobros} />}
+        {/* ══════════════ CAJA ══════════════ */}
+        {tab === 'caja' && (
+          <CajaSection datos={cajaCobrada} cobros={cobros} saldoActual={saldoActual} hayCompras={hayCompras} frescura={frescura} hoyISO={hoyISO} />
+        )}
 
-        {/* ══════════════ INGRESOS ══════════════ */}
-        {tab === 'ingresos' && (
+        {/* ══════════════ COBRANZA ══════════════ */}
+        {tab === 'cobranza' && (
+          <CobranzaSection
+            caja={cajaCobrada} deuda={deuda} cobros={cobros} deudoresDetalle={deudoresDetalle}
+            clientesPorVendedor={clientesPorVendedor} maquilaPorCliente={maquilaPorCliente} barrilesFuera={barrilesFuera} hoyISO={hoyISO}
+          />
+        )}
+
+        {/* ══════════════ VENTAS Y FORECAST: un solo selector de series ══════════════ */}
+        {tab === 'ventas' && (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+            {/* Series con error de backtest sobre 100% (hoy "Otros": 351%, mezcla merch,
+                descuentos de empaque y maquila) no se ofrecen: un pronóstico que se
+                equivoca más que su propio tamaño no sirve para decidir. */}
+            {[
+              ...series.filter(x => (x.nivel === 'general' || x.nivel === 'categoria') && !(x.mape != null && x.mape > 100))
+                .map(x => ({ id: `serie:${x.id}`, label: x.nivel === 'general' ? 'Total empresa' : x.clave ?? '' })),
+              ...forecastClientes.map(f => ({ id: `fc:${f.nombre}`, label: f.nombre })),
+              ...(forecastCompras.length > 0 ? [{ id: `fc:${forecastCompras[0].nombre}`, label: 'Compras' }] : []),
+            ].map(op => {
+              const activo = op.id.startsWith('serie:') ? vistaVentas === 'serie' && serieId === op.id.slice(6) : vistaVentas === 'fc' && clienteForecast === op.id.slice(3)
+              return (
+                <button
+                  key={op.id}
+                  onClick={() => {
+                    if (op.id.startsWith('serie:')) { setVistaVentas('serie'); setSerieId(op.id.slice(6)) }
+                    else { setVistaVentas('fc'); setClienteForecast(op.id.slice(3)) }
+                  }}
+                  style={{
+                    padding: '7px 14px', borderRadius: 999, cursor: 'pointer', fontSize: 12.5, fontWeight: 700,
+                    border: `1px solid ${activo ? C.blue : C.line}`, background: activo ? C.blueSoft : 'transparent', color: activo ? C.blue : C.muted,
+                  }}
+                >
+                  {op.label}
+                </button>
+              )
+            })}
+          </div>
+        )}
+
+        {/* ── Serie de venta (total o categoría): facturado del ciclo + modelo ── */}
+        {tab === 'ventas' && vistaVentas === 'serie' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             {/* Las tres tarjetas: lo vendido, la extrapolación y lo que dijo el
                 modelo — mismo trío que Producción, en $ en vez de litros. */}
@@ -604,25 +600,9 @@ export default function AdministracionClient({
             ) : (
               <Card>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap', marginBottom: 16 }}>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                    {/* Series con error de backtest sobre 100% (hoy "Otros": 351%, mezcla merch,
-                        descuentos de empaque y maquila) no se ofrecen: un pronóstico que
-                        se equivoca más que su propio tamaño no sirve para decidir. */}
-                    {series.filter(s => s.nivel !== 'cliente' && s.nivel !== 'restaurante' && s.nivel !== 'compra' && !(s.mape != null && s.mape > 100)).map(s => (
-                      <button
-                        key={s.id}
-                        onClick={() => setSerieId(s.id)}
-                        style={{
-                          padding: '7px 14px', borderRadius: 999, cursor: 'pointer', fontSize: 12.5, fontWeight: 700,
-                          border: `1px solid ${serieId === s.id ? C.blue : C.line}`,
-                          background: serieId === s.id ? C.blueSoft : 'transparent',
-                          color: serieId === s.id ? C.blue : C.muted,
-                        }}
-                      >
-                        {s.nivel === 'general' ? 'Total empresa' : s.clave}
-                      </button>
-                    ))}
-                  </div>
+                  <p style={{ fontSize: 14.5, fontWeight: 800, color: C.text }}>
+                    {serieActual?.nivel === 'general' ? 'Venta total' : `Venta de ${serieActual?.clave ?? ''}`} por ciclo (neto)
+                  </p>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     {serieActual?.mape != null && (
                       <span
@@ -678,339 +658,8 @@ export default function AdministracionClient({
           </div>
         )}
 
-        {/* ══════════════ FLUJO DE CAJA SEMANAL ══════════════ */}
-        {tab === 'flujo' && <FlujoCajaDashboard flujo={flujo} hoyISO={hoyISO} />}
-
-        {/* ══════════════ COBRANZA Y DEUDA ══════════════ */}
-        {tab === 'cobranza' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-
-            {/* Precisión de cobro — calibra la proyección contra la realidad:
-                de lo que en el pasado esperábamos cobrar, ¿cuánto entró de
-                verdad? No hay tabla de pagos/recibos sincronizada todavía, así
-                que se infiere cruzando contra Deudores del ERP (dato duro):
-                si el cliente sigue con deuda vencida, no pagó cuando debía. */}
-            <Card acento={precisionCobro.pctCumplimiento != null && precisionCobro.pctCumplimiento < 70 ? C.redBorder : undefined}>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                  <span style={{
-                    width: 52, height: 52, borderRadius: 16, flexShrink: 0,
-                    background: precisionCobro.pctCumplimiento != null && precisionCobro.pctCumplimiento >= 85 ? C.greenSoft : C.amberSoft,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    <Target size={24} color={precisionCobro.pctCumplimiento != null && precisionCobro.pctCumplimiento >= 85 ? C.green : C.amber} />
-                  </span>
-                  <div>
-                    <Etiqueta title="De las ventas cuya fecha de cobro esperada (fecha de entrega + días de pago del cliente) cayó en los últimos 60 días, qué porcentaje del monto NO tiene hoy deuda vencida en el ERP — la mejor aproximación posible sin una tabla de pagos real. No es exacto a nivel de factura: mide si el CLIENTE está al día, no si pagó exactamente esta venta.">
-                      Precisión de cobro — últimos 60 días
-                    </Etiqueta>
-                    <p style={{ fontSize: 30, fontWeight: 900, marginTop: 4, fontVariantNumeric: 'tabular-nums', color: precisionCobro.pctCumplimiento == null ? C.muted : precisionCobro.pctCumplimiento >= 85 ? C.green : precisionCobro.pctCumplimiento >= 70 ? C.amber : C.red }}>
-                      {precisionCobro.pctCumplimiento != null ? `${precisionCobro.pctCumplimiento}%` : '—'}
-                    </p>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-                  <div>
-                    <p style={{ fontSize: 11, color: C.muted, textTransform: 'uppercase', fontWeight: 700, letterSpacing: '.04em' }}>Esperado</p>
-                    <p style={{ fontSize: 17, fontWeight: 800, color: C.text, marginTop: 2 }}>{fMoney(precisionCobro.totalEsperado.bruto)}</p>
-                    <p style={{ fontSize: 11, color: C.muted }}>{precisionCobro.totalEsperado.clientes} clientes</p>
-                  </div>
-                  <div>
-                    <p style={{ fontSize: 11, color: C.muted, textTransform: 'uppercase', fontWeight: 700, letterSpacing: '.04em' }}>Confirmado al día</p>
-                    <p style={{ fontSize: 17, fontWeight: 800, color: C.green, marginTop: 2 }}>{fMoney(precisionCobro.totalConfirmadoPagado.bruto)}</p>
-                    <p style={{ fontSize: 11, color: C.muted }}>{precisionCobro.totalConfirmadoPagado.clientes} clientes</p>
-                  </div>
-                  <div>
-                    <p style={{ fontSize: 11, color: C.muted, textTransform: 'uppercase', fontWeight: 700, letterSpacing: '.04em' }}>Sigue vencido</p>
-                    <p style={{ fontSize: 17, fontWeight: 800, color: C.red, marginTop: 2 }}>{fMoney(precisionCobro.totalIncumplido.bruto)}</p>
-                    <p style={{ fontSize: 11, color: C.muted }}>{precisionCobro.totalIncumplido.clientes} clientes</p>
-                  </div>
-                </div>
-              </div>
-
-              {precisionCobro.clientesIncumplidos.length > 0 && (
-                <div style={{ marginTop: 16, borderTop: `1px solid ${C.line}`, paddingTop: 14 }}>
-                  <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 10 }}>
-                    <UserX size={14} color={C.red} />
-                    Clientes que no pagaron cuando correspondía
-                  </p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {precisionCobro.clientesIncumplidos.slice(0, 8).map(c => (
-                      <div key={c.cliente} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, background: C.bg, borderRadius: 10, padding: '9px 12px' }}>
-                        <div style={{ minWidth: 0 }}>
-                          <p style={{ fontSize: 13, fontWeight: 700, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.cliente}</p>
-                          <p style={{ fontSize: 11, color: C.muted }}>Debería haber pagado desde el {fDia(c.fechaEsperadaMasAntigua)}</p>
-                        </div>
-                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                          <p style={{ fontSize: 13, fontWeight: 700, color: C.red }}>{fMoney(c.brutoEsperado)}</p>
-                          <p style={{ fontSize: 11, color: C.muted }}>deuda total: {fMoney(c.deudaVencidaReal)}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  {precisionCobro.clientesIncumplidos.length > 8 && (
-                    <p style={{ fontSize: 11.5, color: C.muted, marginTop: 8 }}>
-                      +{precisionCobro.clientesIncumplidos.length - 8} clientes más — el detalle completo está en Cobranza.
-                    </p>
-                  )}
-                </div>
-              )}
-            </Card>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
-              <Card>
-                <Etiqueta title="Suma de las ventas ya despachadas cuyo plazo de pago vence de hoy en adelante.">
-                  Por cobrar proyectado
-                </Etiqueta>
-                <p style={{ fontSize: 28, fontWeight: 900, color: C.blue, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>
-                  {fMoney(caja.totalProyectado.bruto)}
-                </p>
-                <p style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>
-                  entra al banco · {fMoney(caja.totalProyectado.neto)} neto
-                </p>
-              </Card>
-
-              <Card acento={totalAtrasado > 0 ? C.redBorder : undefined}>
-                <Etiqueta title="Cobros cuya fecha esperada ya pasó (últimas 2 semanas) y que, según el modelo, deberían haber entrado.">
-                  Debería haber entrado
-                </Etiqueta>
-                <p style={{ fontSize: 28, fontWeight: 900, color: totalAtrasado > 0 ? C.red : C.text, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>
-                  {fMoney(totalAtrasado)}
-                </p>
-                <p style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>
-                  en las últimas 2 semanas
-                </p>
-              </Card>
-
-              <Card>
-                <Etiqueta title="Dato duro del informe de Deudores del ERP — no sale de esta proyección.">
-                  Vencido según el ERP
-                </Etiqueta>
-                <p style={{ fontSize: 28, fontWeight: 900, color: C.red, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>
-                  {fMoney(deuda.vencida)}
-                </p>
-                <p style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>
-                  {deuda.clientes} clientes{deuda.ultimaCarga ? ` · al ${deuda.ultimaCarga.slice(0, 10)}` : ''}
-                </p>
-              </Card>
-
-              <Card>
-                <Etiqueta title="Vendido pero todavía no despachado: el plazo de pago recién arranca cuando sale de bodega.">
-                  Aún sin despachar
-                </Etiqueta>
-                <p style={{ fontSize: 28, fontWeight: 900, color: C.text, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>
-                  {fMoney(caja.sinDespachar.bruto)}
-                </p>
-                <p style={{ fontSize: 11.5, color: C.muted, marginTop: 2 }}>
-                  {caja.sinDespachar.filas} líneas · entra después de la entrega
-                </p>
-              </Card>
-            </div>
-
-            {/* Curva semanal */}
-            <Card>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-                <CalendarClock size={16} style={{ color: C.blue }} />
-                <h2 style={{ fontSize: 14.5, fontWeight: 800, color: C.text }}>
-                  Cuándo entra la plata — próximas 8 semanas
-                </h2>
-              </div>
-              {proximas8.length === 0 ? (
-                <p style={{ fontSize: 13, color: C.muted, padding: '20px 0' }}>
-                  No hay cobros proyectados hacia adelante. Puede pasar si hace días que no se despacha nada.
-                </p>
-              ) : (
-                <>
-                  <ResponsiveContainer width="100%" height={260}>
-                    <ComposedChart data={proximas8}>
-                      <CartesianGrid strokeDasharray="3 3" stroke={C.line} />
-                      <XAxis dataKey="inicio" tickFormatter={(iso) => `S${semanaISO(iso)}`} tick={{ fontSize: 11, fill: C.muted }} />
-                      <YAxis tickFormatter={fCompact} tick={{ fontSize: 11, fill: C.muted }} width={62} />
-                      <Tooltip
-                        formatter={(v, n) => [fMoney(Number(v)), n === 'bruto' ? 'Entra al banco' : 'Venta neta']}
-                        labelFormatter={(l) => `${fSemana(String(l))} (${fRangoSemana(String(l))})`}
-                        contentStyle={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 10, fontSize: 12 }}
-                      />
-                      <Legend wrapperStyle={{ fontSize: 12 }} formatter={v => v === 'bruto' ? 'Entra al banco (bruto)' : 'Venta neta'} />
-                      <Bar dataKey="bruto" fill={C.blue} radius={[3, 3, 0, 0]} />
-                      <Bar dataKey="neto" fill={C.blueSoft} radius={[3, 3, 0, 0]} />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-
-                  <div style={{ marginTop: 14, border: `1px solid ${C.line}`, borderRadius: 12, overflow: 'hidden' }}>
-                    <div style={{ overflowX: 'auto' }}>
-                      <table style={{ width: '100%', minWidth: 540, borderCollapse: 'collapse', fontSize: 13 }}>
-                        <thead>
-                          <tr style={{ background: C.bg }}>
-                            <th style={{ textAlign: 'left', padding: '10px 14px', color: C.muted, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap' }}>Semana</th>
-                            <th style={{ textAlign: 'right', padding: '10px 14px', color: C.muted, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap' }}>Venta neta</th>
-                            <th style={{ textAlign: 'right', padding: '10px 14px', color: C.muted, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap' }}>Entra al banco</th>
-                            <th style={{ textAlign: 'right', padding: '10px 14px', color: C.muted, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap' }}>Documentos</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {proximas8.map((p, i) => {
-                            const expandido = semanaExpandida === p.inicio
-                            const grupos = expandido ? agruparPorPlazo(p.clientes) : []
-                            return (
-                              <Fragment key={p.inicio}>
-                                <tr
-                                  onClick={() => setSemanaExpandida(expandido ? null : p.inicio)}
-                                  style={{
-                                    borderTop: i === 0 ? 'none' : `1px solid ${C.line}`, cursor: 'pointer',
-                                    background: expandido ? C.blueSoft : 'transparent',
-                                  }}
-                                >
-                                  <td style={{ padding: '10px 14px', color: C.text, fontWeight: 600, whiteSpace: 'nowrap' }}>
-                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                                      {expandido ? <ChevronDown size={14} color={C.muted} /> : <ChevronRight size={14} color={C.muted} />}
-                                      {fSemana(p.inicio)}
-                                    </span>
-                                    <span style={{ color: C.muted, fontWeight: 400 }}> · {fRangoSemana(p.inicio)}</span>
-                                  </td>
-                                  <td style={{ padding: '10px 14px', textAlign: 'right', color: C.muted, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{fMoney(p.neto)}</td>
-                                  <td style={{ padding: '10px 14px', textAlign: 'right', color: C.blue, fontWeight: 700, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{fMoney(p.bruto)}</td>
-                                  <td style={{ padding: '10px 14px', textAlign: 'right', color: C.muted, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{p.filas}</td>
-                                </tr>
-                                {expandido && (
-                                  <tr>
-                                    <td colSpan={4} style={{ padding: 0, background: C.bg, borderBottom: `1px solid ${C.line}` }}>
-                                      <div style={{ padding: '4px 14px 16px' }}>
-                                        {grupos.length === 0 ? (
-                                          <p style={{ fontSize: 12.5, color: C.muted, padding: '10px 0' }}>Sin clientes identificados para esta semana.</p>
-                                        ) : grupos.map(g => (
-                                          <div key={g.dias} style={{ marginTop: 12 }}>
-                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6, flexWrap: 'wrap', gap: 4 }}>
-                                              <span style={{
-                                                fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em',
-                                                color: g.dias <= 2 ? C.green : C.blue, background: g.dias <= 2 ? C.greenSoft : C.blueSoft,
-                                                padding: '3px 9px', borderRadius: 999, whiteSpace: 'nowrap',
-                                              }}>
-                                                {etiquetaPlazo(g.dias)}
-                                              </span>
-                                              <span style={{ fontSize: 12, color: C.muted, whiteSpace: 'nowrap' }}>
-                                                {fMoney(g.bruto)} · {g.clientes.length} cliente{g.clientes.length !== 1 ? 's' : ''}
-                                              </span>
-                                            </div>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                              {/* Nombre y monto uno debajo del otro, no lado a lado: si van en la
-                                                  misma línea (justify-content: space-between), el monto queda al
-                                                  borde derecho de la tabla ANCHA (min-width 540), invisible sin
-                                                  arrastrar el scroll horizontal — pasó en la primera versión. */}
-                                              {g.clientes.map(c => (
-                                                <div key={c.cliente} style={{
-                                                  background: C.card, border: `1px solid ${C.line}`, borderRadius: 8,
-                                                  padding: '7px 10px', maxWidth: 280,
-                                                }}>
-                                                  <p style={{ fontSize: 12.5, color: C.text, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                                    {c.cliente}
-                                                  </p>
-                                                  <p style={{ fontSize: 13.5, color: C.blue, fontWeight: 800, fontVariantNumeric: 'tabular-nums', marginTop: 2 }}>
-                                                    {fMoney(c.bruto)}
-                                                  </p>
-                                                </div>
-                                              ))}
-                                            </div>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </td>
-                                  </tr>
-                                )}
-                              </Fragment>
-                            )
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </>
-              )}
-            </Card>
-
-            {/* Lo que no se puede proyectar — visible a propósito */}
-            {(caja.sinPlazo.filas > 0 || caja.sinDespachar.filas > 0) && (
-              <CardAlerta>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                  <HelpCircle size={17} style={{ color: C.amber, flexShrink: 0, marginTop: 1 }} />
-                  <div style={{ minWidth: 0 }}>
-                    <p style={{ fontSize: 13.5, fontWeight: 700, color: C.text }}>
-                      {fMoney(caja.sinPlazo.bruto)} sin fecha de cobro estimable
-                    </p>
-                    <p style={{ fontSize: 12.5, color: C.muted, marginTop: 4, lineHeight: 1.5 }}>
-                      Son ventas ya despachadas a {caja.sinPlazo.clientes.length} cliente(s) que no tienen
-                      &quot;días de pago&quot; cargado en el maestro ({clientesSinPlazo} fichas sin el dato en total),
-                      así que no se pueden repartir en ninguna semana. No están sumadas arriba: aparecen acá para
-                      que se corrija la ficha, no para que se pierdan de vista.
-                    </p>
-                    {caja.sinPlazo.clientes.length > 0 && (
-                      <p style={{ fontSize: 12, color: C.muted, marginTop: 8, lineHeight: 1.6 }}>
-                        {caja.sinPlazo.clientes.slice(0, 12).join(' · ')}
-                        {caja.sinPlazo.clientes.length > 12 ? ` · +${caja.sinPlazo.clientes.length - 12} más` : ''}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </CardAlerta>
-            )}
-
-            {/* Quién debe */}
-            {caja.porCliente.length > 0 && (
-              <Card>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-                  <Truck size={16} style={{ color: C.blue }} />
-                  <h2 style={{ fontSize: 14.5, fontWeight: 800, color: C.text }}>
-                    Quién tiene esa plata — top 15
-                  </h2>
-                </div>
-                <div style={{ border: `1px solid ${C.line}`, borderRadius: 12, overflow: 'hidden' }}>
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', minWidth: 560, borderCollapse: 'collapse', fontSize: 13 }}>
-                      <thead>
-                        <tr style={{ background: C.bg }}>
-                          <th style={{ textAlign: 'left', padding: '10px 14px', color: C.muted, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap' }}>Cliente</th>
-                          <th style={{ textAlign: 'right', padding: '10px 14px', color: C.muted, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap' }}>Plazo</th>
-                          <th style={{ textAlign: 'right', padding: '10px 14px', color: C.muted, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap' }}>Cobro estimado</th>
-                          <th style={{ textAlign: 'right', padding: '10px 14px', color: C.muted, fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap' }}>Entra al banco</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {caja.porCliente.slice(0, 15).map((c, i) => (
-                          <tr key={c.cliente} style={{ borderTop: i === 0 ? 'none' : `1px solid ${C.line}` }}>
-                            <td style={{ padding: '10px 14px', color: C.text, fontWeight: 600, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.cliente}</td>
-                            <td style={{ padding: '10px 14px', textAlign: 'right', color: C.muted, whiteSpace: 'nowrap' }}>{c.diasPago} días</td>
-                            {/* En rojo cuando la fecha ya pasó: es plata que
-                                debería estar cobrada, no un cobro por venir. */}
-                            <td style={{
-                              padding: '10px 14px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
-                              color: c.proximoCobro < hoyISO ? C.red : C.muted,
-                              fontWeight: c.proximoCobro < hoyISO ? 700 : 400,
-                            }}>
-                              {fSemana(c.proximoCobro)} · {fDia(c.proximoCobro)}{c.proximoCobro < hoyISO ? ' · vencido' : ''}
-                            </td>
-                            <td style={{ padding: '10px 14px', textAlign: 'right', color: C.blue, fontWeight: 700, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{fMoney(c.bruto)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </Card>
-            )}
-
-            <div style={{ borderTop: `1px solid ${C.line}`, paddingTop: 22, marginTop: 4 }}>
-              <DeudaClienteSection
-                initialDeudores={deudoresDetalle}
-                clientesPorVendedor={clientesPorVendedor}
-                maquilaPorCliente={maquilaPorCliente}
-                barrilesFuera={barrilesFuera}
-              />
-            </div>
-          </div>
-        )}
-
         {/* ══════════════ FORECAST POR CLIENTE / RESTAURANTE / COMPRAS ══════════════ */}
-        {tab === 'forecast' && (() => {
+        {tab === 'ventas' && vistaVentas === 'fc' && (() => {
           // Compras entra como UNA pastilla más ("Total compras"), al lado
           // de Cliente PDV y Restaurante BaseCamp — decisión del usuario,
           // 15-sep-2026. El desglose por proveedor vive DENTRO de esa
@@ -1035,25 +684,6 @@ export default function AdministracionClient({
 
           return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-              {pastillas.length > 1 && (
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {pastillas.map(f => (
-                    <button
-                      key={f.nombre}
-                      onClick={() => setClienteForecast(f.nombre)}
-                      style={{
-                        padding: '7px 14px', borderRadius: 999, cursor: 'pointer', fontSize: 12.5, fontWeight: 700,
-                        border: `1px solid ${activa.nombre === f.nombre ? C.blue : C.line}`,
-                        background: activa.nombre === f.nombre ? C.blueSoft : 'transparent',
-                        color: activa.nombre === f.nombre ? C.blue : C.muted,
-                      }}
-                    >
-                      {f.nombre}
-                    </button>
-                  ))}
-                </div>
-              )}
-
               {esCompras && fcCompra ? (
                 <Fragment key={fcCompra.nombre}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>

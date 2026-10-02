@@ -1,26 +1,22 @@
 import { redirect } from 'next/navigation'
 import { getServerUser } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { construirCajaCobrada } from '@/lib/administracion/cajaCobradaDatos'
+import { PARAMETROS_CAJA } from '@/lib/administracion/cajaCobrada'
 import { cicloEnCursoISO, inicioDeCiclo, finDeCiclo } from '@/lib/produccion/reglas'
 import { armarDatosCalendario, type DatosCalendario } from '@/lib/administracion/calendarioEntradas'
 import { resumenMensualForecast, type MesForecast } from '@/lib/administracion/forecastMensual'
 import {
-  proyectarCaja, esIngresoReal, normalizarNombreCliente, brutoDeFila, lunesDe,
-  categoriaNormalizada, calcularPrecisionCobro, BANCOS, type FilaVentaFinanzas, type ProyeccionCaja,
-  type PrecisionCobro, type BancoId,
+  esIngresoReal, normalizarNombreCliente, brutoDeFila, lunesDe,
+  categoriaNormalizada, BANCOS, type FilaVentaFinanzas, type BancoId,
 } from '@/lib/administracion/finanzas'
-import {
-  construirFlujoSemanal, semanasRodantes, calcularAging, semaforoClientes,
-  cicloConversionEfectivo, calcularDiasPagoProveedores,
-  type SemanaFlujo, type EntradaCompra, type FilaDeudorAging, type TramoAging,
-  type ClienteRiesgo, type CicloConversion,
-} from '@/lib/administracion/flujoSemanal'
+import { semanasRodantes, calcularDiasPagoProveedores, type EntradaCompra } from '@/lib/administracion/flujoSemanal'
 import { proyectarCobros, type ProyeccionCobros, type PlazoCliente } from '@/lib/administracion/proyeccionCobros'
-import { esCamaraProduccion } from '@/lib/camaras'
-import { vendedorCanonico, grupoCarteraDe, diasPagoEfectivo, CLIENTES_FORECAST_INDIVIDUAL, NOMBRE_RESTAURANTE_FORECAST, NOMBRE_COMPRAS_TOTAL } from '@/lib/types'
+import { vendedorCanonico, grupoCarteraDe, CLIENTES_FORECAST_INDIVIDUAL, NOMBRE_RESTAURANTE_FORECAST, NOMBRE_COMPRAS_TOTAL } from '@/lib/types'
 import { maquilaVencidaDe, type FilaVenta } from '@/lib/cobranza'
 import { barrilesFueraPorCartera } from '@/lib/barrilesFuera'
 import AdministracionClient from './AdministracionClient'
+import type { FrescuraDato } from './CajaSection'
 
 export const dynamic = 'force-dynamic'
 
@@ -97,42 +93,6 @@ export interface SaldoBanco {
   saldo: number
 }
 
-/** Todo lo que consume el dashboard de flujo de caja semanal. */
-export interface DatosFlujo {
-  semanas: SemanaFlujo[]
-  /** Suma del saldo MÁS RECIENTE de cada uno de los 3 bancos (null = ninguno
-   *  tiene saldo cargado todavía). `fecha` es la más VIEJA entre los saldos
-   *  sumados: si un banco lleva más tiempo sin actualizarse que los otros,
-   *  el total es sólo tan fresco como el más atrasado — no tiene sentido
-   *  mostrar una fecha optimista para un número que en parte es viejo.
-   *  `porBanco` trae el detalle para mostrar cada cuenta por separado, como
-   *  ya hace la planilla de Administración. */
-  saldoActual: { fecha: string; total: number; porBanco: SaldoBanco[] } | null
-  /** Sólo para la etiqueta "vs. DD/MM" de la tarjeta — la fecha más vieja
-   *  entre los bancos que SÍ tienen una lectura anterior con la que
-   *  comparar. null si ninguno la tiene todavía. */
-  saldoPrevio: { fecha: string } | null
-  /** % de variación del saldo, comparando sólo los bancos que ya tienen 2+
-   *  lecturas — a propósito NO es (saldoActual.total vs. un total previo
-   *  cualquiera): si Itaú recién se carga por primera vez, sumarlo al total
-   *  de HOY pero no tener nada que restarle del total de AYER inflaría la
-   *  variación con la incorporación de una cuenta nueva, no con un cambio
-   *  real de saldo. null si ningún banco tiene aún un punto de comparación. */
-  variacionSaldoPct: number | null
-  aging: { tramos: TramoAging[]; total: number }
-  riesgo: ClienteRiesgo[]
-  ciclo: CicloConversion
-  /** Clientes que aparecen en la proyección, para el filtro. */
-  clientesFiltro: string[]
-  /** `${lunes}|${cliente}` → bruto. Permite filtrar por cliente en el
-   *  navegador sin volver al servidor. Sólo cubre la parte ATRIBUIBLE a un
-   *  cliente: lo confirmado (venta despachada) y el backlog. El forecast del
-   *  modelo es agregado y no se puede repartir por cliente, así que al filtrar
-   *  por uno se excluye — la UI lo dice explícitamente. */
-  confirmadoPorClienteSemana: Record<string, number>
-  backlogPorClienteSemana: Record<string, number>
-  hayCompras: boolean
-}
 
 /** Una semana de plata que EFECTIVAMENTE entró (tabla `cobros_erp`). */
 export interface SemanaCobro {
@@ -255,7 +215,7 @@ export default async function AdministracionPage() {
 
   const [
     forecastRaw, validacionRaw, ventasRaw, clientesRaw, deudoresRaw, ultimaCorridaRaw,
-    saldosRaw, comprasRaw, stockRaw, ventasRestauranteRaw, comprasHistoricoRaw,
+    saldosRaw, comprasRaw, ventasRestauranteRaw, comprasHistoricoRaw,
   ] = await Promise.all([
     (async () => {
       const filas: Record<string, unknown>[] = []
@@ -282,7 +242,7 @@ export default async function AdministracionPage() {
       const lotes = await Promise.all(
         Array.from({ length: paginas }, (_, i) =>
           admin.from('ventas')
-            .select('nombre_fantasia, producto, categoria_producto, envase, litros, total_sin_impuesto, fecha_pedido, fecha_entrega, entregado, numero_factura')
+            .select('nombre_fantasia, producto, categoria_producto, envase, litros, total_sin_impuesto, fecha_pedido, fecha_entrega, entregado, numero_factura, fecha_entrega_estimada')
             .gte('fecha_pedido', desdeVentas)
             .order('id', { ascending: true })
             .range(i * PAGE, i * PAGE + PAGE - 1)
@@ -312,10 +272,6 @@ export default async function AdministracionPage() {
     admin.from('caja_saldos').select('fecha, saldo, banco')
       .order('fecha', { ascending: false }).then(r => r.data ?? []),
     admin.from('compras_comprometidas').select('monto, fecha_pago, fecha_documento, estado')
-      .then(r => r.data ?? []),
-    // Litros de producto terminado propio, para los días de inventario del
-    // ciclo de conversión. Mismo criterio de cámaras que usa Producción.
-    admin.from('stock_productos').select('camara, litros, tipo')
       .then(r => r.data ?? []),
     // Venta diaria del restaurante de BaseCamp (POS Toteat, cargada a mano —
     // ver ventas_restaurante) para el forecast individual y su MTD en vivo.
@@ -352,7 +308,7 @@ export default async function AdministracionPage() {
      pago no se muestra en ninguna pantalla, sólo el semanal y el resumen por
      cliente. */
   const desdeCobros = correrDias(hoyISO, -182)
-  const [cobrosSemanaRaw, comportamientoRaw, impagasRaw, mostradorRaw, cobrosPorDiaRaw] = await Promise.all([
+  const [cobrosSemanaRaw, comportamientoRaw, impagasRaw, mostradorRaw, cobrosPorDiaRaw, pagosPonderadosRaw, cobradoMesRaw] = await Promise.all([
     admin.rpc('cobros_por_semana', { p_desde: desdeCobros })
       .then(r => (r.data ?? []) as { semana: string; metodo: string; monto: number; movimientos: number }[]),
     admin.rpc('comportamiento_pago_clientes', { p_min_muestras: 3 })
@@ -370,6 +326,13 @@ export default async function AdministracionPage() {
     admin.rpc('cobros_por_dia', { p_desde: correrDias(hoyISO, -112) })
       .then(r => ((r.data ?? []) as { fecha: string; tipo: string; monto: number }[])
         .map(f => ({ fecha: String(f.fecha).slice(0, 10), tipo: f.tipo, monto: Number(f.monto) || 0 }))),
+    // Caja real cobrada: comportamiento de pago ponderado por monto (12 meses) y lo
+    // cobrado por cliente en el mes calendario en curso.
+    admin.rpc('comportamiento_pago_ponderado', { p_desde: correrDias(hoyISO, -PARAMETROS_CAJA.ventanaDias) })
+      .then(r => ((r.data ?? []) as { cliente: string; pagos: number; monto: number; dias_ponderado: number }[])
+        .map(p => ({ cliente: p.cliente, pagos: Number(p.pagos), monto: Number(p.monto), diasPonderado: Number(p.dias_ponderado) }))),
+    admin.rpc('cobros_por_cliente', { p_desde: `${hoyISO.slice(0, 7)}-01` })
+      .then(r => ((r.data ?? []) as { cliente: string; monto: number }[]).map(c => ({ cliente: c.cliente, monto: Number(c.monto) || 0 }))),
   ])
 
   const semanasCobroMap = new Map<string, SemanaCobro>()
@@ -592,34 +555,6 @@ export default async function AdministracionPage() {
     }
   })
 
-  // ── Proyección de cobranza ─────────────────────────────────────────────────
-  // El maestro puede traer el mismo nombre más de una vez; gana el que tenga
-  // plazo cargado, para no perder el dato por culpa de una ficha duplicada
-  // incompleta.
-  //
-  // Prioridad: plazo REAL observado (mediana de días entre remito y pago,
-  // calculado desde "Movimientos Cta. Cte." del ERP — 10-sep-2026) por sobre
-  // el plazo DECLARADO en el ERP, cuando hay al menos 3 facturas matcheadas
-  // para confiar en la mediana. La brecha entre ambos es real: mediana
-  // declarada global 7 días vs. mediana real observada 13-14 — los clientes
-  // en promedio pagan más lento de lo que el ERP dice que deberían.
-  const diasPagoPorCliente = new Map<string, number | null>()
-  for (const c of clientesRaw) {
-    const k = normalizarNombreCliente(c.nombre_fantasia)
-    if (!k) continue
-    const previo = diasPagoPorCliente.get(k)
-    const dias = c.dias_pago_real_muestras != null && c.dias_pago_real_muestras >= 3
-      ? c.dias_pago_real_mediana
-      : c.dias_pago
-    if (previo == null) diasPagoPorCliente.set(k, diasPagoEfectivo(c.nombre_fantasia, dias))
-  }
-
-  // Se descartan los cobros esperados de hace más de 14 días: `ventas` no dice
-  // qué está pagado, así que más atrás la proyección dejaría de ser "lo que
-  // falta cobrar". Esa mora vieja la mide el informe de Deudores del ERP.
-  const desdeCobro = new Date(Date.now() - 14 * MS_POR_DIA).toISOString().slice(0, 10)
-  const caja: ProyeccionCaja = proyectarCaja(ventasRaw, diasPagoPorCliente, hoyISO, desdeCobro)
-
   // Sólo la cartera de venta (las 4 carteras + la de Claudio), mismo universo que
   // DeudaClienteSection: el informe Deudores trae además cuentas internas
   // (vendedor CERVECERÍA: Marketing, PDV, BaseCamp, Feria, mermas) e incobrables.
@@ -635,97 +570,11 @@ export default async function AdministracionPage() {
     }, null),
   }
 
-  // ── Precisión de cobro ──────────────────────────────────────────────────────
-  // Cruza lo que ESTE módulo esperaba cobrar en los últimos 60 días contra el
-  // dato duro del ERP (Deudores): ¿el cliente sigue con deuda vencida, o no?
-  // Es la única forma de calibrar la proyección sin una tabla de pagos real —
-  // ver el comentario extenso en calcularPrecisionCobro().
-  const deudaVencidaPorCliente = new Map<string, number>()
-  for (const d of deudoresRaw) {
-    const k = normalizarNombreCliente(d.nombre_fantasia as string | null)
-    if (!k) continue
-    deudaVencidaPorCliente.set(k, (deudaVencidaPorCliente.get(k) ?? 0) + (Number(d.deuda_vencida) || 0))
-  }
-  const ventana60d = new Date(Date.now() - 60 * MS_POR_DIA).toISOString().slice(0, 10)
-  const precisionCobro: PrecisionCobro = calcularPrecisionCobro(
-    ventasRaw, diasPagoPorCliente, deudaVencidaPorCliente, hoyISO, ventana60d
-  )
-
-  // ── Dashboard de flujo de caja semanal ──────────────────────────────────────
-  // 13 semanas hacia adelante (el horizonte que pidió el usuario) más 4 hacia
-  // atrás, para que el gráfico muestre de dónde viene la curva y no arranque
-  // en el aire.
-  const semanas = semanasRodantes(hoyISO, 4, 12)
-
-  // Factor neto→bruto real del período: el forecast del modelo está en NETO y
-  // todo el resto del dashboard va en BRUTO (la plata que llega a la cuenta).
-  let netoPeriodo = 0
-  let brutoPeriodo = 0
-  const ventaNetaPorMes = new Map<string, number>()
-  let litrosUltimos28 = 0
-  const hace28 = correrDias(hoyISO, -28)
-  for (const v of ventasRaw) {
-    if (!esIngresoReal(v)) continue
-    const neto = Number(v.total_sin_impuesto) || 0
-    if (neto === 0) continue
-    netoPeriodo += neto
-    brutoPeriodo += brutoDeFila(v)
-    if (v.fecha_pedido) {
-      const mes = `${v.fecha_pedido.slice(0, 7)}-01`
-      ventaNetaPorMes.set(mes, (ventaNetaPorMes.get(mes) ?? 0) + neto)
-      if (v.fecha_pedido.slice(0, 10) >= hace28) litrosUltimos28 += Number(v.litros) || 0
-    }
-  }
-  const factorBruto = netoPeriodo > 0 ? brutoPeriodo / netoPeriodo : 1.19
-
-  // Plazo de cobro típico: mediana de los plazos efectivamente en uso (que ya
-  // son el real observado cuando existe — ver el bloque de arriba).
-  const plazos = [...diasPagoPorCliente.values()].filter((d): d is number => d != null).sort((a, b) => a - b)
-  const diasCobroPromedio = plazos.length > 0 ? plazos[Math.floor(plazos.length / 2)] : 14
-
-  // Backlog: vendido y sin despachar, por cliente (el plazo recién arranca
-  // cuando salga, así que va del lado proyectado, nunca del confirmado).
-  const backlogPorCliente = new Map<string, { bruto: number; diasPago: number | null }>()
-  for (const v of ventasRaw) {
-    if (!esIngresoReal(v)) continue
-    if (v.fecha_entrega) continue
-    const neto = Number(v.total_sin_impuesto) || 0
-    if (neto === 0) continue
-    const nombre = v.nombre_fantasia ?? '(sin nombre)'
-    const acc = backlogPorCliente.get(nombre)
-      ?? { bruto: 0, diasPago: diasPagoPorCliente.get(normalizarNombreCliente(v.nombre_fantasia)) ?? null }
-    acc.bruto += brutoDeFila(v)
-    backlogPorCliente.set(nombre, acc)
-  }
-
-  // Desglose por cliente y semana, para el filtro por cliente del dashboard.
-  const confirmadoPorClienteSemana: Record<string, number> = {}
-  const backlogPorClienteSemana: Record<string, number> = {}
   const lunesDeFecha = (iso: string) => {
     const [y, m, d] = iso.slice(0, 10).split('-').map(Number)
     const dt = new Date(Date.UTC(y, m - 1, d))
     const dow = dt.getUTCDay()
     return new Date(dt.getTime() + (dow === 0 ? -6 : 1 - dow) * MS_POR_DIA).toISOString().slice(0, 10)
-  }
-  for (const v of ventasRaw) {
-    if (!esIngresoReal(v) || !v.fecha_entrega) continue
-    const neto = Number(v.total_sin_impuesto) || 0
-    if (neto === 0) continue
-    const dias = diasPagoPorCliente.get(normalizarNombreCliente(v.nombre_fantasia))
-    if (dias == null) continue
-    const fechaCobro = new Date(
-      Date.parse(`${v.fecha_entrega.slice(0, 10)}T00:00:00Z`) + dias * MS_POR_DIA
-    ).toISOString().slice(0, 10)
-    if (fechaCobro < desdeCobro) continue
-    const clave = `${lunesDeFecha(fechaCobro)}|${v.nombre_fantasia ?? '(sin nombre)'}`
-    confirmadoPorClienteSemana[clave] = (confirmadoPorClienteSemana[clave] ?? 0) + brutoDeFila(v)
-  }
-  const entregaSupuesta = correrDias(hoyISO, 7)
-  for (const [nombre, b] of backlogPorCliente) {
-    const dias = b.diasPago ?? diasCobroPromedio
-    const cobro = new Date(Date.parse(`${entregaSupuesta}T00:00:00Z`) + dias * MS_POR_DIA).toISOString().slice(0, 10)
-    const clave = `${lunesDeFecha(cobro)}|${nombre}`
-    backlogPorClienteSemana[clave] = (backlogPorClienteSemana[clave] ?? 0) + b.bruto
   }
 
   const compras = comprasRaw as unknown as EntradaCompra[]
@@ -755,100 +604,6 @@ export default async function AdministracionPage() {
   const saldoActual = masRecientePorBanco.length > 0
     ? { fecha: fechaMasVieja!, total: totalActual, porBanco: masRecientePorBanco }
     : null
-
-  // Comparación PAREADA: un banco sólo entra a la variación % si tiene TANTO
-  // la lectura actual como la anterior — si Itaú recién se carga por primera
-  // vez, no tiene par y queda fuera de este cálculo (aunque sí suma al total
-  // de HOY en saldoActual). Sin este cuidado, incorporar una cuenta nueva se
-  // leería como "subió el saldo" en vez de "se agregó una cuenta".
-  let totalActualPareado = 0
-  let totalPrevioPareado = 0
-  let fechaPrevMasVieja: string | null = null
-  let hayPar = false
-  for (const banco of BANCOS) {
-    const actual = filasPorBanco.get(banco)?.[0]
-    const previo = filasPorBanco.get(banco)?.[1]
-    if (!actual || !previo) continue
-    hayPar = true
-    totalActualPareado += actual.saldo
-    totalPrevioPareado += previo.saldo
-    if (fechaPrevMasVieja == null || previo.fecha < fechaPrevMasVieja) fechaPrevMasVieja = previo.fecha
-  }
-  const saldoPrevio = hayPar ? { fecha: fechaPrevMasVieja! } : null
-  const variacionSaldoPct = hayPar && totalPrevioPareado !== 0
-    ? ((totalActualPareado - totalPrevioPareado) / Math.abs(totalPrevioPareado)) * 100
-    : null
-
-  // Promedio semanal de gasto real de los últimos 90 días — sirve de estimado
-  // por defecto para semanas futuras sin ningún pago cargado a mano (ver
-  // construirFlujoSemanal). Se excluyen los montos negativos (notas de
-  // crédito/ajustes contables): son correcciones puntuales, no gasto
-  // recurrente, y promediarlas de vuelta subestimaría el gasto típico.
-  const hace90 = correrDias(hoyISO, -90)
-  const gastoUltimos90 = compras
-    .filter(c => c.estado !== 'estimada' && c.fecha_pago >= hace90 && c.fecha_pago <= hoyISO && Number(c.monto) > 0)
-    .reduce((s, c) => s + Number(c.monto), 0)
-  const promedioSemanalHistorico = gastoUltimos90 > 0 ? (gastoUltimos90 / 90) * 7 : null
-
-  const semanasFlujo = construirFlujoSemanal({
-    cobrosConfirmados: caja.periodos.map(p => ({ inicio: p.inicio, bruto: p.bruto })),
-    backlog: [...backlogPorCliente.values()],
-    forecastMensual: forecastRaw
-      .filter(f => f.nivel === 'general' && f.tipo === 'forecast')
-      .map(f => ({ mes: String(f.mes).slice(0, 10), monto: Number(f.monto) })),
-    ventaRegistradaPorMes: ventaNetaPorMes,
-    factorBruto,
-    compras,
-    promedioSemanalHistorico,
-    saldoInicial: saldoActual?.total ?? null,
-    diasCobroPromedio,
-    hoyISO,
-    semanas,
-  })
-
-  // Aging y semáforo: sólo la cartera de venta. Antes filtraba con esIngresoReal,
-  // que deja pasar PDV y BaseCamp (criterio de VENTA de Finanzas, no de deuda):
-  // el aging sumaba $190 M contra $51,9 M de cartera real (auditoría 2-oct-2026).
-  const deudoresReales = (deudoresCartera as unknown as FilaDeudorAging[])
-
-  const plazosPorCliente = new Map<string, { real: number | null; declarado: number | null }>()
-  for (const c of clientesRaw) {
-    const k = normalizarNombreCliente(c.nombre_fantasia)
-    if (!k || plazosPorCliente.has(k)) continue
-    plazosPorCliente.set(k, {
-      real: c.dias_pago_real_muestras != null && c.dias_pago_real_muestras >= 3 ? c.dias_pago_real_mediana : null,
-      declarado: c.dias_pago,
-    })
-  }
-
-  // Días de inventario: litros de producto terminado propio dividido por los
-  // litros que salen al día (venta real de las últimas 4 semanas).
-  const litrosStock = (stockRaw as { camara: string | null; litros: number | null; tipo: string | null }[])
-    .filter(s => s.tipo !== 'tanque' && esCamaraProduccion(s.camara))
-    .reduce((s, r) => s + (Number(r.litros) || 0), 0)
-  const litrosPorDia = litrosUltimos28 / 28
-  const diasInventario = litrosPorDia > 0 && litrosStock > 0 ? Math.round(litrosStock / litrosPorDia) : null
-
-  const datosFlujo: DatosFlujo = {
-    semanas: semanasFlujo,
-    saldoActual,
-    saldoPrevio,
-    variacionSaldoPct,
-    aging: calcularAging(deudoresReales),
-    riesgo: semaforoClientes(deudoresReales, plazosPorCliente, normalizarNombreCliente),
-    ciclo: cicloConversionEfectivo(
-      diasInventario,
-      plazos.length > 0 ? diasCobroPromedio : null,
-      calcularDiasPagoProveedores(compras),
-    ),
-    clientesFiltro: [...new Set([
-      ...Object.keys(confirmadoPorClienteSemana).map(k => k.split('|')[1]),
-      ...Object.keys(backlogPorClienteSemana).map(k => k.split('|')[1]),
-    ])].sort((a, b) => a.localeCompare(b)),
-    confirmadoPorClienteSemana,
-    backlogPorClienteSemana,
-    hayCompras: compras.length > 0,
-  }
 
   // ── Forecast individual (pestaña "Forecast") ────────────────────────────────
   // 8 semanas atrás (venta real, para ver la tendencia) + 16 adelante
@@ -974,17 +729,64 @@ export default async function AdministracionPage() {
       .map(s => armarForecastCliente(s.clave!, s, realesComprasPorProveedor.get(s.clave!) ?? new Map())),
   ]
 
+  // ── Caja real cobrada (pestaña Caja) ──
+  const cajaCobrada = construirCajaCobrada({
+    hoyISO,
+    hastaISO: `${hoyISO.slice(0, 4)}-12-31`,
+    ventas: ventasRaw,
+    facturasImpagas: new Set(impagasRaw.map(f => f.numero_factura)),
+    saldoErp: saldosErp.size > 0 && cargaDeudores ? { saldos: saldosErp, cargadoISO: cargaDeudores } : null,
+    pagos: pagosPonderadosRaw,
+    clientes: clientesRaw,
+    deudores: deudoresRaw,
+    pactadoPorDefecto: medianaPactadaCartera,
+    forecastGeneral: forecastRaw.filter(f => f.nivel === 'general')
+      .map(f => ({ mes: String(f.mes).slice(0, 10), tipo: String(f.tipo), monto: Number(f.monto) || 0 })),
+    inicioDeCiclo,
+    finDeCiclo,
+    comprasProyectadasSemana: new Map((forecastCompras[0]?.semanas ?? [])
+      .filter(s => s.proyectado != null).map(s => [s.inicio, s.proyectado!] as [string, number])),
+    comprasComprometidas: compras.map(c => ({ monto: Number(c.monto) || 0, fecha_pago: c.fecha_pago, estado: c.estado })),
+    diasPagoProveedores: calcularDiasPagoProveedores(compras),
+    mostradorSemanal: mostradorRaw,
+    ventasRestaurante: ventasRestauranteRaw.map(r => ({ fecha: String(r.fecha).slice(0, 10), monto: Number(r.monto) || 0 })),
+    saldoBanco: saldoActual?.total ?? null,
+    cobradoMesPorCliente: cobradoMesRaw,
+  })
+
+  // ── Datos al día (pestaña Caja): de qué fecha es cada fuente. Lo que se carga a
+  // mano envejece sin aviso; acá se ve y se enlaza a donde se carga. ──
+  const maxFecha = (xs: (string | null | undefined)[]) => xs.reduce<string | null>((m, x) => (x && (!m || x > m) ? String(x).slice(0, 10) : m), null)
+  const diasDesde = (f: string | null) => (f ? Math.round((Date.parse(`${hoyISO}T00:00:00Z`) - Date.parse(`${f}T00:00:00Z`)) / MS_POR_DIA) : Infinity)
+  const estadoPor = (f: string | null, maxDias: number): FrescuraDato['estado'] => (f == null ? 'vacio' : diasDesde(f) > maxDias ? 'viejo' : 'ok')
+  const fechaPagosFuturos = maxFecha(compras.filter(c => c.fecha_pago >= hoyISO && c.estado !== 'pagada').map(c => c.fecha_pago))
+  const fVentas = maxFecha(ventasRaw.map(v => v.fecha_pedido))
+  const fCobros = maxFecha(cobrosPorDiaRaw.map(c => c.fecha))
+  const fRest = maxFecha(ventasRestauranteRaw.map(r => String(r.fecha)))
+  const fCompras = maxFecha(comprasHistoricoRaw.map(c => String(c.fecha)))
+  const fForecast = ultimaCorridaRaw?.creado_at ? String(ultimaCorridaRaw.creado_at).slice(0, 10) : null
+  const frescura: FrescuraDato[] = [
+    { nombre: 'Bancos', fecha: saldoActual?.fecha ?? null, estado: estadoPor(saldoActual?.fecha ?? null, 7), detalle: 'Saldo de las 3 cuentas, cargado a mano al pie de esta pestaña.', href: '#carga-datos' },
+    { nombre: 'Pagos a proveedores', fecha: fechaPagosFuturos, estado: fechaPagosFuturos ? 'ok' : 'vacio', detalle: fechaPagosFuturos ? 'Pagos cargados con fecha futura.' : 'No hay pagos a proveedores con fecha futura: las salidas son sólo una estimación del forecast de compras.', href: '#carga-datos' },
+    { nombre: 'Ventas ERP', fecha: fVentas, estado: estadoPor(fVentas, 3), detalle: 'Sync automático del ERP.' },
+    { nombre: 'Pagos de clientes', fecha: fCobros, estado: estadoPor(fCobros, 4), detalle: 'Informe Movimientos Cta. Cte.', href: '/administracion/cargar-cobros' },
+    { nombre: 'Deudores', fecha: cargaDeudores || null, estado: estadoPor(cargaDeudores || null, 2), detalle: 'Informe Deudores del ERP (sync cada hora).' },
+    { nombre: 'BaseCamp (Toteat)', fecha: fRest, estado: estadoPor(fRest, 9), detalle: 'Ventas del restaurante, se suben a mano cada semana.', href: '/administracion/forecast/cargar-restaurante' },
+    { nombre: 'Compras de insumos', fecha: fCompras, estado: estadoPor(fCompras, 14), detalle: 'Informe Compras detalladas del ERP, se sube a mano.', href: '/administracion/forecast/cargar-compras' },
+    { nombre: 'Forecast', fecha: fForecast, estado: estadoPor(fForecast, 35), detalle: 'Última corrida del modelo de venta (Prophet).' },
+  ]
+
   return (
     <AdministracionClient
+      cajaCobrada={cajaCobrada}
       series={series}
       avance={avance}
       mtd={mtdGeneral}
-      caja={caja}
       deuda={deuda}
-      precisionCobro={precisionCobro}
-      flujo={datosFlujo}
       ultimaCorrida={ultimaCorridaRaw?.creado_at ?? null}
-      clientesSinPlazo={[...diasPagoPorCliente.values()].filter(v => v == null).length}
+      saldoActual={saldoActual}
+      hayCompras={compras.length > 0}
+      frescura={frescura}
       hoyISO={hoyISO}
       deudoresDetalle={deudoresDetalle ?? []}
       clientesPorVendedor={clientesPorVendedor}

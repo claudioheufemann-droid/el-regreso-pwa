@@ -6,13 +6,10 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts'
 import {
-  Banknote, ArrowUpRight, ArrowDownRight, Clock, Upload, Search, ArrowUpDown,
-  TriangleAlert, Info, CalendarCheck, ArrowRight, ChevronDown, Target, Activity,
-} from 'lucide-react'
+  Banknote, Upload, Search, ArrowUpDown,
+  } from 'lucide-react'
 import type { DatosCobros, ComportamientoPago } from './page'
 import { LABEL_METODO, type MetodoPago } from '@/lib/administracion/movimientosCtaCte'
-import { BACKTEST_MAE_SEMANAL } from '@/lib/administracion/proyeccionCobros'
-import { semanaISO } from '@/lib/administracion/calendarioEntradas'
 import CalendarioSemana from './CalendarioSemana'
 
 /**
@@ -68,7 +65,14 @@ const TRAMOS = [
 type TramoId = (typeof TRAMOS)[number]['id']
 type OrdenCol = 'monto' | 'p50' | 'brecha' | 'cliente'
 
-export default function IngresoRealSection({ datos }: { datos: DatosCobros }) {
+/**
+ * Desde la auditoría del 2-oct-2026 esta sección se reparte en dos pestañas:
+ *   · modo 'caja'     → calendario de la semana + lo que entró de verdad semana a semana.
+ *   · modo 'cobranza' → cuánto se demoran en pagar y cliente por cliente.
+ * La proyección de cobros ("cuánto entra") ya no vive acá: la da la Caja real cobrada
+ * (lib/administracion/cajaCobrada.ts), un solo motor para todo el módulo.
+ */
+export default function IngresoRealSection({ datos, modo }: { datos: DatosCobros; modo: 'caja' | 'cobranza' }) {
   const [verDesglose, setVerDesglose] = useState(true)
   const [tramoActivo, setTramoActivo] = useState<TramoId | null>(null)
   const [busqueda, setBusqueda] = useState('')
@@ -125,13 +129,6 @@ export default function IngresoRealSection({ datos }: { datos: DatosCobros }) {
     })
   }, [cartera, tramoActivo, busqueda, orden])
 
-  /** Clientes que tardan 10+ días más de lo que dice su ficha: son los que
-   *  hacen que la proyección de caja prometa plata antes de tiempo. */
-  const desalineados = useMemo(
-    () => cartera.filter(c => c.declarado != null && c.p50 - c.declarado >= 10),
-    [cartera]
-  )
-
   if (!datos.hayDatos) {
     return (
       <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: 40, textAlign: 'center' }}>
@@ -157,99 +154,13 @@ export default function IngresoRealSection({ datos }: { datos: DatosCobros }) {
     )
   }
 
-  const variacion = datos.totalPrevias4 > 0
-    ? ((datos.totalUltimas4 - datos.totalPrevias4) / datos.totalPrevias4) * 100
-    : null
-  const subio = (variacion ?? 0) >= 0
-  const brechaGlobal = datos.medianaGlobal != null && datos.declaradaGlobal != null
-    ? datos.medianaGlobal - datos.declaradaGlobal
-    : null
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
 
-      {/* ── Qué estoy mirando ─────────────────────────────────────────────── */}
-      <div style={{ background: C.blueSoft, border: '1px solid #BFDBFE', borderRadius: 12, padding: '13px 16px', display: 'flex', gap: 10 }}>
-        <Info size={16} style={{ color: C.blue, flexShrink: 0, marginTop: 1 }} />
-        <p style={{ fontSize: 12.5, color: C.text, lineHeight: 1.65 }}>
-          Acá ves <strong>la plata que entró de verdad a la empresa</strong>, según los pagos registrados en
-          el ERP. Es distinto de lo facturado (que es lo que se vendió) y de la deuda (que es lo que falta
-          cobrar): esto es dinero ya recibido.
-        </p>
-      </div>
-
-      {/* ── Los dos grandes items: optimista (pactado) vs. real (comportamiento) ── */}
-      <PanoramaCobranza datos={datos} />
-
-      {/* ── Calendario de la semana: qué día entra cuánta plata, por concepto de venta ── */}
-      <CalendarioSemana datos={datos} />
-
-      {/* ── Detalle de la proyección: atrasados y quiénes pagan próximo ─────── */}
-      <ProyeccionProximaSemana datos={datos} />
-
-      {/* ── Los 4 números principales (plata YA cobrada, historia reciente) ─── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 14 }}>
-        <Tarjeta
-          icono={<Banknote size={15} />}
-          titulo="Entró en las últimas 4 semanas"
-          ayuda="Suma de todos los pagos recibidos en las últimas 4 semanas completas. No cuenta la semana en curso, que todavía está a medias."
-        >
-          <p style={{ fontSize: 28, fontWeight: 900, color: C.text, fontVariantNumeric: 'tabular-nums' }}>
-            {fMoney(datos.totalUltimas4)}
-          </p>
-          {variacion != null && (
-            <p style={{ fontSize: 12, fontWeight: 700, color: subio ? C.green : C.red, display: 'flex', alignItems: 'center', gap: 3, marginTop: 3 }}>
-              {subio ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}
-              {Math.abs(variacion).toFixed(0)}% vs. las 4 semanas anteriores
-            </p>
-          )}
-        </Tarjeta>
-
-        <Tarjeta
-          icono={<CalendarCheck size={15} />}
-          titulo="Promedio por semana"
-          ayuda="Promedio de las últimas 12 semanas completas. Sirve como referencia de cuánto entra en una semana normal."
-        >
-          <p style={{ fontSize: 28, fontWeight: 900, color: C.text, fontVariantNumeric: 'tabular-nums' }}>
-            {fMoney(datos.promedioSemanal)}
-          </p>
-          <p style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>promedio de 12 semanas</p>
-        </Tarjeta>
-
-        <Tarjeta
-          icono={<Clock size={15} />}
-          titulo="Un cliente típico nos paga en"
-          ayuda="Mediana de días entre la entrega y el pago, medida sobre los pagos reales. No incluye las ventas de mostrador (PDV), que se cobran al instante."
-        >
-          <p style={{ fontSize: 28, fontWeight: 900, color: C.text, fontVariantNumeric: 'tabular-nums' }}>
-            {datos.medianaGlobal ?? '—'} <span style={{ fontSize: 15, fontWeight: 700, color: C.muted }}>días</span>
-          </p>
-          {datos.declaradaGlobal != null && (
-            <p style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>
-              la ficha dice {datos.declaradaGlobal} días
-              {brechaGlobal != null && brechaGlobal > 0 && (
-                <strong style={{ color: C.amber }}> · {brechaGlobal} más de lo pactado</strong>
-              )}
-            </p>
-          )}
-        </Tarjeta>
-
-        <Tarjeta
-          icono={<TriangleAlert size={15} />}
-          titulo="Clientes que se atrasan"
-          ayuda="Clientes que en la práctica tardan 10 días o más de lo que dice su ficha. Son los que hacen que la proyección de caja prometa plata antes de tiempo."
-          acento={desalineados.length > 0 ? C.amber : undefined}
-        >
-          <p style={{ fontSize: 28, fontWeight: 900, color: desalineados.length > 0 ? C.amber : C.text, fontVariantNumeric: 'tabular-nums' }}>
-            {desalineados.length}
-          </p>
-          <p style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>
-            tardan 10+ días más de lo pactado
-          </p>
-        </Tarjeta>
-      </div>
+      {modo === 'caja' && <CalendarioSemana datos={datos} />}
 
       {/* ── Gráfico semanal ───────────────────────────────────────────────── */}
+      {modo === 'caja' && (
       <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: '18px 18px 8px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14, flexWrap: 'wrap', marginBottom: 6 }}>
           <div>
@@ -334,7 +245,9 @@ export default function IngresoRealSection({ datos }: { datos: DatosCobros }) {
           </ResponsiveContainer>
         </div>
       </div>
+      )}
 
+      {modo === 'cobranza' && (<>
       {/* ── Comportamiento de pago ────────────────────────────────────────── */}
       <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: 18 }}>
         <h3 style={{ fontSize: 15, fontWeight: 800, color: C.text }}>¿Cuánto se demoran en pagarnos?</h3>
@@ -468,341 +381,12 @@ export default function IngresoRealSection({ datos }: { datos: DatosCobros }) {
           </Link>
         </div>
       </div>
+      </>)}
     </div>
   )
 }
 
 /* ── Los dos grandes items: optimista (pactado) vs. real (comportamiento) ── */
-
-/**
- * El corazón de la pestaña, pedido explícitamente por Administración
- * (23-sep-2026) como el "apartado principal" de todo el módulo: dos cifras
- * que contestan la misma pregunta —cuánto va a entrar— desde dos ángulos
- * distintos, para que la diferencia entre ambos sea visible y no un dato
- * escondido en una tabla.
- *
- *   · "Si todos pagan como pactaron": usa `SemanaProyectada.pactado`, el
- *     reparto que asume CERO atraso frente al plazo que cada cliente tiene
- *     en su ficha (`PlazoCliente.pactado`) — el escenario ideal.
- *   · "Lo que realmente va a entrar": usa `SemanaProyectada.base`, el reparto
- *     que ya usaba el resto del módulo, calculado con el COMPORTAMIENTO
- *     medido de cada cliente (ver BACKTEST_MAE_SEMANAL) — el número honesto
- *     para planificar.
- *
- * Son dos repartos independientes de universos de facturas parcialmente
- * distintos (cada uno con su propio criterio de atraso — ver el comentario en
- * proyeccionCobros.ts), así que cada total se arma sumando su propio bucket
- * semanal MÁS su propio atrasado, igual que ya hacía `ProyeccionProximaSemana`
- * para una sola semana.
- */
-function PanoramaCobranza({ datos }: { datos: DatosCobros }) {
-  const p = datos.proyeccion
-
-  const filas = useMemo(() => p.semanas.map(s => ({
-    lunes: s.lunes,
-    etiqueta: `Sem. ${semanaISO(s.lunes)}`,
-    subetiqueta: fFechaCorta(s.lunes),
-    pactado: Math.round(s.pactado + p.mostradorSemanal),
-    real: Math.round(s.base + p.mostradorSemanal),
-  })), [p.semanas, p.mostradorSemanal])
-
-  if (!p.hayDatos) return null
-
-  const nSemanas = p.semanas.length
-  const totalOptimista = p.semanas.reduce((s, x) => s + x.pactado, 0) + p.atrasadoPactado.monto + p.mostradorSemanal * nSemanas
-  const totalReal = p.semanas.reduce((s, x) => s + x.base, 0) + p.atrasado.monto + p.mostradorSemanal * nSemanas
-  const brecha = totalOptimista - totalReal
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
-        <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 16, padding: 20, borderTop: `3px solid ${C.blue}` }}>
-          <p style={{ fontSize: 11.5, fontWeight: 800, color: C.blue, textTransform: 'uppercase', letterSpacing: '.03em', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Target size={14} /> Dinero que entra, optimistamente
-          </p>
-          <p style={{ fontSize: 32, fontWeight: 900, color: C.text, marginTop: 9, fontVariantNumeric: 'tabular-nums' }}>
-            {fMoney(totalOptimista)}
-          </p>
-          <p style={{ fontSize: 12.5, color: C.muted, marginTop: 7, lineHeight: 1.65 }}>
-            Si <strong>todos</strong> los clientes pagaran exactamente al plazo que tienen pactado en su
-            ficha, sin ningún atraso — el escenario ideal, en las próximas {nSemanas} semanas.
-          </p>
-        </div>
-
-        <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 16, padding: 20, borderTop: `3px solid ${C.teal}` }}>
-          <p style={{ fontSize: 11.5, fontWeight: 800, color: C.teal, textTransform: 'uppercase', letterSpacing: '.03em', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Activity size={14} /> Lo que verdaderamente va a entrar
-          </p>
-          <p style={{ fontSize: 32, fontWeight: 900, color: C.text, marginTop: 9, fontVariantNumeric: 'tabular-nums' }}>
-            {fMoney(totalReal)}
-          </p>
-          <p style={{ fontSize: 12.5, color: C.muted, marginTop: 7, lineHeight: 1.65 }}>
-            Según el <strong>comportamiento de pago real</strong> medido de cada cliente (no lo que promete
-            su ficha) — el número a usar para planificar caja.
-          </p>
-        </div>
-      </div>
-
-      {brecha > 0 && (
-        <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start', background: C.amberSoft, border: `1px solid ${C.amberBorder}`, borderRadius: 12, padding: '12px 15px' }}>
-          <TriangleAlert size={15} style={{ color: C.amber, flexShrink: 0, marginTop: 1 }} />
-          <p style={{ fontSize: 12.5, color: C.text, lineHeight: 1.6 }}>
-            La diferencia entre ambos escenarios es <strong>{fMoney(brecha)}</strong>: es lo que le cuesta
-            al flujo de caja que los clientes se demoren más de lo que prometieron.
-          </p>
-        </div>
-      )}
-
-      <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: '18px 18px 8px' }}>
-        <h3 style={{ fontSize: 15, fontWeight: 800, color: C.text }}>Cuánto entra, semana a semana</h3>
-        <p style={{ fontSize: 12.5, color: C.muted, marginTop: 3, marginBottom: 4 }}>
-          Próximas {nSemanas} semanas, identificadas por su número de semana del año. Incluye la venta de
-          mostrador, que se cobra al instante.
-        </p>
-        <div style={{ height: 260 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={filas} margin={{ top: 10, right: 8, left: 4, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.line} vertical={false} />
-              <XAxis dataKey="etiqueta" tick={{ fontSize: 11, fill: C.muted }} tickLine={false} axisLine={{ stroke: C.line }} />
-              <YAxis tickFormatter={fCorto} tick={{ fontSize: 11, fill: C.muted }} tickLine={false} axisLine={false} width={52} />
-              <Tooltip
-                cursor={{ fill: 'rgba(37,99,235,.05)' }}
-                content={({ active, payload, label }) => {
-                  if (!active || !payload?.length) return null
-                  const d = payload[0]?.payload as (typeof filas)[number]
-                  return (
-                    <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 10, padding: '11px 13px', boxShadow: '0 4px 14px rgba(0,0,0,.08)', minWidth: 220 }}>
-                      <p style={{ fontSize: 12, fontWeight: 800, color: C.text, marginBottom: 7 }}>
-                        {label} · semana del {d.subetiqueta}
-                      </p>
-                      <LineaTooltip color={C.blue} label="Si pagan como pactaron" valor={d.pactado} />
-                      <LineaTooltip color={C.teal} label="Según comportamiento real" valor={d.real} />
-                    </div>
-                  )
-                }}
-              />
-              <Legend
-                verticalAlign="bottom" height={30} iconType="circle" iconSize={8}
-                formatter={v => <span style={{ fontSize: 11.5, color: C.muted }}>{v}</span>}
-              />
-              <Bar dataKey="pactado" name="Si pagan como pactaron" fill={C.blue} radius={[3, 3, 0, 0]} />
-              <Bar dataKey="real" name="Según comportamiento real" fill={C.teal} radius={[3, 3, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/* ── Proyección de lo que debería entrar ────────────────────────────────── */
-
-/**
- * Responde "¿cuánta plata entra la próxima semana?" cruzando las facturas que
- * siguen impagas con el comportamiento de pago real de cada cliente.
- *
- * Se muestran DOS escenarios en vez de un número solo porque el mismo cliente
- * a veces paga a 10 días y a veces a 30: dar una cifra única sería fingir una
- * precisión que los datos no tienen. Y la venta de mostrador va en su propia
- * línea, no sumada a la cobranza, porque no es plata que se esté esperando —
- * es venta nueva que se cobra en el momento.
- */
-function ProyeccionProximaSemana({ datos }: { datos: DatosCobros }) {
-  const [verDetalle, setVerDetalle] = useState(false)
-  const [verAtrasados, setVerAtrasados] = useState(false)
-  const p = datos.proyeccion
-
-  if (!p.hayDatos) {
-    return (
-      <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: 20 }}>
-        <h3 style={{ fontSize: 15, fontWeight: 800, color: C.text }}>Lo que debería entrar</h3>
-        <p style={{ fontSize: 12.5, color: C.muted, marginTop: 6, lineHeight: 1.6 }}>
-          No hay facturas pendientes de cobro en la ventana analizada. Si esperabas ver algo acá,
-          puede que falte cargar ventas recientes o un informe de pagos más nuevo.
-        </p>
-      </div>
-    )
-  }
-
-  return (
-    <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, overflow: 'hidden' }}>
-      <div style={{ padding: '18px 18px 0' }}>
-        <h3 style={{ fontSize: 15, fontWeight: 800, color: C.text }}>
-          Detalle de la cobranza esperada
-        </h3>
-        <p style={{ fontSize: 12.5, color: C.muted, marginTop: 3, lineHeight: 1.6 }}>
-          Qué tan confiable es el número de arriba, qué está atrasado y quiénes deberían pagar la
-          semana del {fFechaCorta(p.proximaSemana.lunes)}.
-        </p>
-      </div>
-
-      {/* Qué tan confiable es este número. Se muestra el error medido en el
-          backtest en vez de presentar la cifra como exacta: una proyección sin
-          su margen de error invita a tomar decisiones que no aguanta. */}
-      <div style={{ margin: '0 18px 18px', display: 'flex', gap: 9, alignItems: 'flex-start', background: C.bg, borderRadius: 11, padding: 13 }}>
-        <Info size={15} style={{ color: C.muted, flexShrink: 0, marginTop: 1 }} />
-        <p style={{ fontSize: 12, color: C.text, lineHeight: 1.6 }}>
-          Probado contra las últimas 26 semanas reales: el modelo se equivoca en promedio{' '}
-          <strong>±{fMoney(BACKTEST_MAE_SEMANAL)}</strong> por semana, sin inclinarse a quedar corto ni largo.
-          Usar el comportamiento real de cada cliente en vez del plazo que dice su ficha baja ese error un
-          28%. Sirve para saber si viene una semana floja o cargada, no para cuadrar un pago al peso.
-        </p>
-      </div>
-
-      {/* Atrasado: lo más accionable de toda la pestaña */}
-      {p.atrasado.monto > 0 && (
-        <div style={{ margin: '0 18px 18px', background: C.amberSoft, border: `1px solid ${C.amberBorder}`, borderRadius: 11, padding: 14 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', gap: 9 }}>
-              <TriangleAlert size={16} style={{ color: C.amber, flexShrink: 0, marginTop: 2 }} />
-              <div>
-                <p style={{ fontSize: 13, fontWeight: 800, color: C.text }}>
-                  Ya debería haber entrado: {fMoney(p.atrasado.monto)}
-                </p>
-                <p style={{ fontSize: 11.5, color: C.muted, marginTop: 2, lineHeight: 1.5 }}>
-                  {p.atrasado.facturas} {p.atrasado.facturas === 1 ? 'factura pasó' : 'facturas pasaron'} la fecha
-                  en que ese cliente suele pagar y siguen sin aparecer pagadas. No se cuentan en la
-                  proyección de arriba: se probó estimarlas y el modelo empeoraba.
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => setVerAtrasados(v => !v)}
-              style={{ display: 'flex', alignItems: 'center', gap: 4, background: C.card, border: `1px solid ${C.amberBorder}`, borderRadius: 8, padding: '7px 12px', fontSize: 12, fontWeight: 700, color: C.text, cursor: 'pointer', whiteSpace: 'nowrap' }}
-            >
-              {verAtrasados ? 'Ocultar' : 'Ver quiénes'}
-              <ChevronDown size={13} style={{ transform: verAtrasados ? 'rotate(180deg)' : undefined }} />
-            </button>
-          </div>
-
-          {verAtrasados && (
-            <div style={{ marginTop: 12, maxHeight: 260, overflowY: 'auto', background: C.card, borderRadius: 9 }}>
-              {p.atrasado.detalle.slice(0, 40).map(f => (
-                <div key={f.factura} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '8px 12px', borderBottom: `1px solid ${C.line}`, alignItems: 'baseline' }}>
-                  <div style={{ minWidth: 0 }}>
-                    <p style={{ fontSize: 12.5, fontWeight: 600, color: C.text }}>{f.cliente}</p>
-                    <p style={{ fontSize: 11, color: C.muted }}>
-                      factura {f.factura} · entregada {fFechaCorta(f.fechaEntrega)} · {f.diasAtraso} días de atraso
-                    </p>
-                  </div>
-                  <span style={{ fontSize: 12.5, fontWeight: 700, color: C.text, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                    {fMoney(f.bruto)}
-                  </span>
-                </div>
-              ))}
-              {p.atrasado.detalle.length > 40 && (
-                <p style={{ fontSize: 11.5, color: C.muted, padding: '9px 12px' }}>
-                  y {p.atrasado.detalle.length - 40} facturas más.
-                </p>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Detalle de quién paga la próxima semana */}
-      {p.proximaSemana.detalle.length > 0 && (
-        <div style={{ borderTop: `1px solid ${C.line}` }}>
-          <button
-            onClick={() => setVerDetalle(v => !v)}
-            style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '13px 18px', background: 'transparent', border: 'none', cursor: 'pointer' }}
-          >
-            <span style={{ fontSize: 12.5, fontWeight: 700, color: C.blue, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <ArrowRight size={14} /> Quiénes deberían pagar la próxima semana
-            </span>
-            <ChevronDown size={15} style={{ color: C.muted, transform: verDetalle ? 'rotate(180deg)' : undefined }} />
-          </button>
-          {verDetalle && (
-            <div style={{ maxHeight: 300, overflowY: 'auto', borderTop: `1px solid ${C.line}` }}>
-              {p.proximaSemana.detalle.map(f => (
-                <div key={f.factura} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '9px 18px', borderBottom: `1px solid ${C.line}`, alignItems: 'baseline' }}>
-                  <div style={{ minWidth: 0 }}>
-                    <p style={{ fontSize: 12.5, fontWeight: 600, color: C.text }}>
-                      {f.cliente}
-                      {f.fuente !== 'medido' && (
-                        <span
-                          title={f.fuente === 'declarado'
-                            ? 'Sin historial de pagos suficiente: se usó el plazo de su ficha.'
-                            : 'Sin plazo en la ficha ni historial: se usó el promedio de la cartera.'}
-                          style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, color: C.muted, background: C.bg, borderRadius: 100, padding: '2px 7px', cursor: 'help' }}
-                        >
-                          {f.fuente === 'declarado' ? 'plazo de ficha' : 'estimado'}
-                        </span>
-                      )}
-                    </p>
-                    <p style={{ fontSize: 11, color: C.muted }}>
-                      entregada {fFechaCorta(f.fechaEntrega)} · paga a {f.dias} días · esperada {fFechaCorta(f.fechaEsperada)}
-                    </p>
-                  </div>
-                  <span style={{ fontSize: 12.5, fontWeight: 700, color: C.text, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                    {fMoney(f.bruto)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Transparencia sobre la calidad del dato */}
-      <div style={{ background: C.bg, borderTop: `1px solid ${C.line}`, padding: '11px 18px' }}>
-        <p style={{ fontSize: 11, color: C.muted, lineHeight: 1.6 }}>
-          Total pendiente de cobro: <strong>{fMoney(p.totalPendiente)}</strong>.
-          {' '}{pct(p.cobertura.medido, p.totalPendiente)}% se proyectó con el comportamiento real del cliente,
-          {' '}{pct(p.cobertura.declarado, p.totalPendiente)}% con el plazo de su ficha y
-          {' '}{pct(p.cobertura.estimado, p.totalPendiente)}% con el promedio de la cartera.
-          {p.sinRastreo.monto > 0 && (
-            <> Quedan fuera {fMoney(p.sinRastreo.monto)} de ventas despachadas sin número de factura, que no se
-            pueden cruzar contra los pagos.</>
-          )}
-          {p.pagadasSegunErp.monto > 0 && (
-            <> Se descartaron {fMoney(p.pagadasSegunErp.monto)} de facturas cuyo pago el ERP no imputó a la
-            factura, pero que el informe Deudores ya da por pagadas.</>
-          )}
-        </p>
-      </div>
-    </div>
-  )
-}
-
-const pct = (parte: number, total: number) => (total > 0 ? Math.round((parte / total) * 100) : 0)
-
-function LineaTooltip({ color, label, valor }: { color: string; label: string; valor: number }) {
-  if (valor <= 0) return null
-  return (
-    <p style={{ fontSize: 12, display: 'flex', justifyContent: 'space-between', gap: 14, marginTop: 2 }}>
-      <span style={{ color: C.muted, display: 'flex', alignItems: 'center', gap: 5 }}>
-        <span style={{ width: 8, height: 8, borderRadius: 100, background: color, display: 'inline-block' }} />
-        {label}
-      </span>
-      <span style={{ color: C.text, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fMoney(valor)}</span>
-    </p>
-  )
-}
-
-/* ── Piezas chicas ──────────────────────────────────────────────────────── */
-
-function Tarjeta({ icono, titulo, ayuda, acento, children }: {
-  icono: React.ReactNode; titulo: string; ayuda: string; acento?: string; children: React.ReactNode
-}) {
-  return (
-    <div style={{
-      background: C.card, border: `1px solid ${acento ?? C.line}`, borderRadius: 14, padding: 16,
-      borderTop: acento ? `3px solid ${acento}` : undefined,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: C.muted, marginBottom: 7 }}>
-        <span style={{ color: acento ?? C.blue, display: 'flex' }}>{icono}</span>
-        <span
-          title={ayuda}
-          style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '.01em', cursor: 'help', borderBottom: `1px dotted ${C.line}` }}
-        >
-          {titulo}
-        </span>
-      </div>
-      {children}
-    </div>
-  )
-}
 
 function Th({ children, centro, derecha, ayuda }: {
   children: React.ReactNode; centro?: boolean; derecha?: boolean; ayuda?: string

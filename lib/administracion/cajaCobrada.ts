@@ -205,3 +205,248 @@ export function cobrosConfirmados({ facturas, perfiles, hoyISO, hastaISO }: {
   atrasado.detalle.sort((a, b) => b.bruto - a.bruto)
   return { semanas, atrasado, despuesDelHorizonte, cobertura, total: detalle.reduce((s, f) => s + f.bruto, 0), detalle }
 }
+
+/* ═══════════════ Etapa 2: cobros PROYECTADOS (venta que todavía no se factura) ═══════════════ */
+
+/** Un tramo del mix de plazos de la venta a crédito reciente. */
+export interface TramoPlazo {
+  pactado: number
+  /** Parte de la venta a crédito que tiene este plazo (0-1). */
+  participacion: number
+  /** Días reales medios emisión→pago de los clientes de este tramo (pactado + desvío), ponderados por venta. */
+  diasMedios: number
+}
+
+/**
+ * Mix histórico de plazos (1/7/15/30…) y el patrón de pago real de cada tramo, a
+ * partir de la venta a crédito reciente por cliente. Es lo que se aplica a la venta
+ * proyectada, que todavía no tiene cliente.
+ */
+export function mixDePlazos(ventas: { cliente: string; bruto: number }[], perfiles: PerfilesPago): TramoPlazo[] {
+  const acc = new Map<number, { monto: number; dias: number }>()
+  let total = 0
+  for (const v of ventas) {
+    if (v.bruto <= 0 || !esClienteCredito(v.cliente)) continue
+    const p = perfiles.perfilDe(v.cliente)
+    const a = acc.get(p.pactado) ?? { monto: 0, dias: 0 }
+    a.monto += v.bruto
+    a.dias += Math.max(0, p.pactado + p.desvio) * v.bruto
+    acc.set(p.pactado, a)
+    total += v.bruto
+  }
+  if (total <= 0) return []
+  return [...acc.entries()].sort((a, b) => a[0] - b[0])
+    .map(([pactado, a]) => ({ pactado, participacion: a.monto / total, diasMedios: a.dias / a.monto }))
+}
+
+/** 0 = lunes … 6 = domingo. */
+const dow = (iso: string) => (new Date(`${iso}T00:00:00Z`).getUTCDay() + 6) % 7
+
+/**
+ * Reparte un monto en los días de [inicio, fin] desde `desde`, con el peso de cada día
+ * de la semana (`patron`, 7 valores lun→dom: cómo se factura de verdad). Si el patrón
+ * no da peso a ningún día del rango, reparte parejo de lunes a viernes.
+ */
+export function repartirEnDias(inicio: string, fin: string, monto: number, patron: number[], desde: string): { fecha: string; monto: number }[] {
+  const dias: string[] = []
+  for (let d = inicio < desde ? desde : inicio; d <= fin; d = sumarDias(d, 1)) dias.push(d)
+  if (!dias.length || monto <= 0) return []
+  let pesos = dias.map(d => patron[dow(d)] ?? 0)
+  if (pesos.reduce((a, b) => a + b, 0) <= 0) pesos = dias.map(d => (dow(d) < 5 ? 1 : 0))
+  const suma = pesos.reduce((a, b) => a + b, 0) || 1
+  return dias.map((fecha, i) => ({ fecha, monto: (monto * pesos[i]) / suma })).filter(x => x.monto > 0)
+}
+
+/** Venta futura a crédito, en bruto: del forecast (sin cliente) o de pedidos sin despachar (con cliente). */
+export interface EmisionProyectada {
+  fecha: string
+  bruto: number
+  origen: 'forecast' | 'pedido'
+  cliente?: string
+}
+
+export interface Cobro { fecha: string; monto: number }
+
+export interface CobrosProyectados {
+  porSemana: Map<string, number>
+  /** Se cobraría después del horizonte. */
+  despuesDelHorizonte: number
+  cobros: Cobro[]
+  total: number
+}
+
+export function cobrosProyectados({ emisiones, mix, perfiles, hastaISO }: {
+  emisiones: EmisionProyectada[]
+  mix: TramoPlazo[]
+  perfiles: PerfilesPago
+  hastaISO: string
+}): CobrosProyectados {
+  const porSemana = new Map<string, number>()
+  const cobros: Cobro[] = []
+  let despuesDelHorizonte = 0
+  let total = 0
+  const anotar = (fecha: string, monto: number) => {
+    total += monto
+    if (fecha > hastaISO) { despuesDelHorizonte += monto; return }
+    cobros.push({ fecha, monto })
+    const l = lunesDe(fecha)
+    porSemana.set(l, (porSemana.get(l) ?? 0) + monto)
+  }
+  for (const e of emisiones) {
+    if (e.bruto <= 0) continue
+    if (e.cliente) { anotar(fechaCobroEsperada(e.fecha, perfiles.perfilDe(e.cliente)).cobro, e.bruto); continue }
+    // Sin tramos medidos no se inventa un plazo: queda fuera del horizonte y la cuadratura lo muestra.
+    if (!mix.length) { total += e.bruto; despuesDelHorizonte += e.bruto; continue }
+    for (const t of mix) anotar(siguienteHabil(sumarDias(e.fecha, Math.round(t.diasMedios))), e.bruto * t.participacion)
+  }
+  return { porSemana, despuesDelHorizonte, cobros, total }
+}
+
+/* ═══════════════ Etapa 3: salidas (semana a semana y mes a mes) ═══════════════ */
+
+export interface SemanaCajaCompleta {
+  lunes: string
+  semanaIso: number
+  /** Facturas emitidas e impagas que deberían pagarse esa semana. */
+  confirmado: number
+  /** Venta futura a crédito (forecast + pedidos sin despachar) que se cobraría esa semana. */
+  proyectado: number
+  /** Venta al contado (mostrador PDV + restaurante BaseCamp): promedio real reciente. */
+  contado: number
+  /** confirmado + proyectado + contado. */
+  entradas: number
+  /** Pagos a proveedores: comprometidos cargados + compras proyectadas. */
+  salidas: number
+  /** entradas − salidas. */
+  neto: number
+  /** Saldo de bancos (si está cargado) + neto acumulado. */
+  acumulado: number
+}
+
+export interface MesCaja {
+  /** yyyy-mm (mes calendario: la caja se mide por mes de banco, no por ciclo 24→23). */
+  mes: string
+  /** Venta a crédito facturada (real del mes en curso + proyectada), bruto. */
+  facturado: number
+  /** Caja cobrada a crédito (real del mes en curso + esperada), bruto. */
+  cobrado: number
+  /** Saldo por cobrar a crédito al cierre del mes. */
+  saldoCierre: number
+}
+
+export interface Cuadratura {
+  carteraInicial: number
+  facturadoFuturo: number
+  cobradoFuturo: number
+  saldoFinal: number
+  diferencia: number
+  ok: boolean
+  mensaje: string
+}
+
+export interface CajaCobrada {
+  semanas: SemanaCajaCompleta[]
+  meses: MesCaja[]
+  atrasado: CobrosConfirmados['atrasado']
+  cuadratura: Cuadratura
+  saldoInicialBanco: number | null
+}
+
+const mesDe = (iso: string) => iso.slice(0, 7)
+const sumaMap = (m: Map<string, number>) => [...m.values()].reduce((a, b) => a + b, 0)
+
+export function armarCajaCobrada({
+  confirmados, proyectados, emisiones, contadoSemanal, salidasPorSemana, saldoInicialBanco, hoyISO, hastaISO, realMesEnCurso,
+}: {
+  confirmados: CobrosConfirmados
+  proyectados: CobrosProyectados
+  emisiones: EmisionProyectada[]
+  contadoSemanal: number
+  salidasPorSemana: Map<string, number>
+  saldoInicialBanco: number | null
+  hoyISO: string
+  hastaISO: string
+  /** Lo ya facturado y cobrado a crédito en el mes calendario en curso (hasta ayer). */
+  realMesEnCurso: { facturado: number; cobrado: number }
+}): CajaCobrada {
+  let acumulado = saldoInicialBanco ?? 0
+  const semanas: SemanaCajaCompleta[] = confirmados.semanas.map(s => {
+    const proyectado = proyectados.porSemana.get(s.lunes) ?? 0
+    // La semana en curso ya tiene días pasados: el contado se prorratea a los días que quedan.
+    const pasados = s.lunes < hoyISO ? Math.round((Date.parse(`${hoyISO}T00:00:00Z`) - Date.parse(`${s.lunes}T00:00:00Z`)) / DIA) : 0
+    const contado = contadoSemanal * (Math.max(0, 7 - pasados) / 7)
+    const entradas = s.confirmado + proyectado + contado
+    const salidas = salidasPorSemana.get(s.lunes) ?? 0
+    const neto = entradas - salidas
+    acumulado += neto
+    return { lunes: s.lunes, semanaIso: s.semanaIso, confirmado: s.confirmado, proyectado, contado, entradas, salidas, neto, acumulado }
+  })
+
+  // ── Meses calendario, del en curso al del horizonte ──
+  const facturadoFuturo = new Map<string, number>()
+  for (const e of emisiones) if (e.fecha <= hastaISO) facturadoFuturo.set(mesDe(e.fecha), (facturadoFuturo.get(mesDe(e.fecha)) ?? 0) + e.bruto)
+  const cobradoFuturo = new Map<string, number>()
+  const sumarCobro = (fecha: string, monto: number) => cobradoFuturo.set(mesDe(fecha), (cobradoFuturo.get(mesDe(fecha)) ?? 0) + monto)
+  for (const f of confirmados.detalle) if (f.cobroEsperado >= hoyISO && f.cobroEsperado <= hastaISO) sumarCobro(f.cobroEsperado, f.bruto)
+  for (const c of proyectados.cobros) sumarCobro(c.fecha, c.monto)
+
+  const meses: MesCaja[] = []
+  let saldo = confirmados.total
+  for (let m = mesDe(hoyISO); m <= mesDe(hastaISO); m = sumarDias(`${m}-01`, 32).slice(0, 7)) {
+    const fFut = facturadoFuturo.get(m) ?? 0
+    const cFut = cobradoFuturo.get(m) ?? 0
+    saldo += fFut - cFut
+    const enCurso = m === mesDe(hoyISO)
+    meses.push({
+      mes: m,
+      facturado: fFut + (enCurso ? realMesEnCurso.facturado : 0),
+      cobrado: cFut + (enCurso ? realMesEnCurso.cobrado : 0),
+      saldoCierre: saldo,
+    })
+  }
+
+  /* ── Etapa 4: cuadratura ──
+     cartera inicial + facturado futuro = cobrado futuro + saldo por cobrar al cierre.
+     El saldo final se calcula POR SEPARADO (lo atrasado + lo que se cobra después del
+     horizonte), no despejado de la fórmula: si algún monto se perdiera o se contara dos
+     veces en el reparto a semanas/meses, la diferencia lo delata. `emisiones` debe venir
+     ya recortada al horizonte (lo mismo que se pasó a cobrosProyectados). */
+  const carteraInicial = confirmados.total
+  const factFut = sumaMap(facturadoFuturo)
+  const cobFut = sumaMap(cobradoFuturo)
+  const saldoFinal = confirmados.atrasado.monto + confirmados.despuesDelHorizonte.monto + proyectados.despuesDelHorizonte
+  const diferencia = carteraInicial + factFut - cobFut - saldoFinal
+  const ok = Math.abs(diferencia) < 1
+  return {
+    semanas, meses, atrasado: confirmados.atrasado, saldoInicialBanco,
+    cuadratura: {
+      carteraInicial, facturadoFuturo: factFut, cobradoFuturo: cobFut, saldoFinal, diferencia, ok,
+      mensaje: ok
+        ? 'Cuadra: cartera inicial + facturado = cobrado + saldo por cobrar.'
+        : `No cuadra por $${Math.round(diferencia).toLocaleString('es-CL')}: hay plata que se pierde o se cuenta dos veces entre facturas, semanas y meses. No usar estas cifras hasta revisarlo.`,
+    },
+  }
+}
+
+/**
+ * Backtest walk-forward (scripts/analisis/backtest-caja-cobrada.ts, corrida del
+ * 2-oct-2026): parado el 1.º de cada mes, con perfiles medidos sólo con pagos
+ * anteriores, contra lo que de verdad entró por venta a crédito (cobros_erp). Mide el
+ * modelo de PAGO (las facturas del mes entran con su fecha real).
+ *
+ * Lectura honesta: error mensual medio 16,3% en jul-sep (16,8% en 6 meses), casi igual
+ * que usar sólo el plazo pactado (16,1%). A nivel mensual el desvío medido todavía no
+ * le gana al pactado; a nivel semanal sí (backtest de cobranza: correlación 0,49 vs 0,23).
+ * ~25% de lo que entra cada mes son pagos sin factura imputada o de facturas viejas que
+ * el modelo por factura no ve; sumar un promedio de eso EMPEORÓ el error (35%), porque
+ * parte de esas facturas el modelo ya las cuenta como pendientes. Mayo-2026 (−36%) fue
+ * un mes atípico de recuperación de deuda.
+ */
+export const BACKTEST_CAJA: { mes: string; real: number; modelo: number; soloPactado: number }[] = [
+  { mes: '2026-04', real: 36_015_685, modelo: 37_355_768, soloPactado: 36_770_060 },
+  { mes: '2026-05', real: 41_561_191, modelo: 26_436_790, soloPactado: 26_031_149 },
+  { mes: '2026-06', real: 24_976_216, modelo: 27_927_569, soloPactado: 30_738_274 },
+  { mes: '2026-07', real: 29_249_075, modelo: 26_055_200, soloPactado: 25_814_888 },
+  { mes: '2026-08', real: 27_603_170, modelo: 32_607_089, soloPactado: 34_445_499 },
+  { mes: '2026-09', real: 40_590_510, modelo: 32_560_234, soloPactado: 35_781_563 },
+]
