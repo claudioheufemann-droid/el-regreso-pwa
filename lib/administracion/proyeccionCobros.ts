@@ -241,29 +241,24 @@ function recortarContraSaldoErp(
   return descartadas
 }
 
-export function proyectarCobros({
-  ventas, facturasImpagas, saldoErp, plazoPorCliente, plazoPorDefecto, hoyISO,
-  mostradorSemanal, semanasAdelante = 6,
-}: {
+/** Factura impaga, ya agrupada (una factura viene partida en una línea por producto). */
+export interface FacturaImpaga { cliente: string; fechaEntrega: string; bruto: number }
+
+/**
+ * Facturas despachadas y sin pago, en BRUTO, agrupadas por número y recortadas
+ * contra el saldo del ERP. Compartida por la proyección de "Plata que entró" y
+ * por la Caja real cobrada (cajaCobrada.ts), para que ambas partan del mismo
+ * universo de facturas.
+ */
+export function armarFacturasPendientes({ ventas, facturasImpagas, saldoErp }: {
   ventas: FilaVentaFinanzas[]
-  /** Números de factura que NO aparecen en `cobros_erp` (RPC facturas_impagas). */
   facturasImpagas: Set<string>
-  /** Saldo total por cliente (nombre normalizado) del informe Deudores y la
-   *  fecha de esa carga. Null si el informe no está cargado: en ese caso no
-   *  se recorta nada, antes que dar todo por pagado. */
   saldoErp: { saldos: Map<string, number>; cargadoISO: string } | null
-  plazoPorCliente: Map<string, PlazoCliente>
-  /** Para clientes sin plazo propio: la mediana MEDIDA de la cartera (cubre
-   *  promedio/p25/p75). `PlazoCliente.pactado` no usa este fallback — cada
-   *  entrada del mapa ya trae su propio pactado resuelto (ficha propia o
-   *  mediana DECLARADA de la cartera), porque son ejes distintos: un cliente
-   *  puede tener comportamiento medido pero ninguna ficha con plazo, o al
-   *  revés. */
-  plazoPorDefecto: number
-  hoyISO: string
-  mostradorSemanal: number
-  semanasAdelante?: number
-}): ProyeccionCobros {
+}): {
+  porFactura: Map<string, FacturaImpaga>
+  sinRastreo: { monto: number; filas: number }
+  pagadasSegunErp: { monto: number; facturas: number }
+} {
   /* Una factura puede venir partida en varias líneas de venta (una por
      producto). Se agrupa primero, porque el cobro ocurre por factura
      completa, no por línea. */
@@ -299,6 +294,34 @@ export function proyectarCobros({
   const pagadasSegunErp = saldoErp
     ? recortarContraSaldoErp(porFactura, saldoErp)
     : { monto: 0, facturas: 0 }
+
+  return { porFactura, sinRastreo, pagadasSegunErp }
+}
+
+export function proyectarCobros({
+  ventas, facturasImpagas, saldoErp, plazoPorCliente, plazoPorDefecto, hoyISO,
+  mostradorSemanal, semanasAdelante = 6,
+}: {
+  ventas: FilaVentaFinanzas[]
+  /** Números de factura que NO aparecen en `cobros_erp` (RPC facturas_impagas). */
+  facturasImpagas: Set<string>
+  /** Saldo total por cliente (nombre normalizado) del informe Deudores y la
+   *  fecha de esa carga. Null si el informe no está cargado: en ese caso no
+   *  se recorta nada, antes que dar todo por pagado. */
+  saldoErp: { saldos: Map<string, number>; cargadoISO: string } | null
+  plazoPorCliente: Map<string, PlazoCliente>
+  /** Para clientes sin plazo propio: la mediana MEDIDA de la cartera (cubre
+   *  promedio/p25/p75). `PlazoCliente.pactado` no usa este fallback — cada
+   *  entrada del mapa ya trae su propio pactado resuelto (ficha propia o
+   *  mediana DECLARADA de la cartera), porque son ejes distintos: un cliente
+   *  puede tener comportamiento medido pero ninguna ficha con plazo, o al
+   *  revés. */
+  plazoPorDefecto: number
+  hoyISO: string
+  mostradorSemanal: number
+  semanasAdelante?: number
+}): ProyeccionCobros {
+  const { porFactura, sinRastreo, pagadasSegunErp } = armarFacturasPendientes({ ventas, facturasImpagas, saldoErp })
 
   const pendientes: FacturaPendiente[] = []
   const cobertura = { medido: 0, declarado: 0, estimado: 0 }
