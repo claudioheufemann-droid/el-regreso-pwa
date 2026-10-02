@@ -17,7 +17,7 @@ import {
 } from '@/lib/administracion/flujoSemanal'
 import { proyectarCobros, type ProyeccionCobros, type PlazoCliente } from '@/lib/administracion/proyeccionCobros'
 import { esCamaraProduccion } from '@/lib/camaras'
-import { vendedorCanonico, diasPagoEfectivo, CLIENTES_FORECAST_INDIVIDUAL, NOMBRE_RESTAURANTE_FORECAST, NOMBRE_COMPRAS_TOTAL } from '@/lib/types'
+import { vendedorCanonico, grupoCarteraDe, diasPagoEfectivo, CLIENTES_FORECAST_INDIVIDUAL, NOMBRE_RESTAURANTE_FORECAST, NOMBRE_COMPRAS_TOTAL } from '@/lib/types'
 import { maquilaVencidaDe, type FilaVenta } from '@/lib/cobranza'
 import { barrilesFueraPorCartera } from '@/lib/barrilesFuera'
 import AdministracionClient from './AdministracionClient'
@@ -303,7 +303,7 @@ export default async function AdministracionPage() {
       }
       return filas
     })(),
-    admin.from('deudores').select('nombre_fantasia, deuda_vencida, saldo_total, updated_at, ultimo_pago, deuda_menor_14_dias, deuda_entre_15_29_dias, deuda_entre_30_44_dias, deuda_entre_45_59_dias, deuda_entre_60_89_dias, deuda_mas_90_dias').then(r => r.data ?? []),
+    admin.from('deudores').select('nombre_fantasia, vendedor, deuda_vencida, saldo_total, updated_at, ultimo_pago, deuda_menor_14_dias, deuda_entre_15_29_dias, deuda_entre_30_44_dias, deuda_entre_45_59_dias, deuda_entre_60_89_dias, deuda_mas_90_dias').then(r => r.data ?? []),
     admin.from('erp_sync_log').select('creado_at').eq('fuente', 'forecast_finanzas').eq('ok', true)
       .order('creado_at', { ascending: false }).limit(1).maybeSingle().then(r => r.data),
     // Sin límite: son 3 cuentas con carga manual/semanal, nunca va a ser una
@@ -620,9 +620,15 @@ export default async function AdministracionPage() {
   const desdeCobro = new Date(Date.now() - 14 * MS_POR_DIA).toISOString().slice(0, 10)
   const caja: ProyeccionCaja = proyectarCaja(ventasRaw, diasPagoPorCliente, hoyISO, desdeCobro)
 
+  // Sólo la cartera de venta (las 4 carteras + la de Claudio), mismo universo que
+  // DeudaClienteSection: el informe Deudores trae además cuentas internas
+  // (vendedor CERVECERÍA: Marketing, PDV, BaseCamp, Feria, mermas) e incobrables.
+  // Sumándolas, esta tarjeta mostraba $91,4 M de vencido contra $30,4 M reales
+  // (auditoría del 2-oct-2026).
+  const deudoresCartera = deudoresRaw.filter(d => grupoCarteraDe(d.vendedor) === 'vendedor')
   const deuda: ResumenDeuda = {
-    vencida: deudoresRaw.reduce((s, d) => s + (Number(d.deuda_vencida) || 0), 0),
-    clientes: deudoresRaw.filter(d => (Number(d.deuda_vencida) || 0) > 0).length,
+    vencida: deudoresCartera.reduce((s, d) => s + (Number(d.deuda_vencida) || 0), 0),
+    clientes: deudoresCartera.filter(d => (Number(d.deuda_vencida) || 0) > 0).length,
     ultimaCarga: deudoresRaw.reduce<string | null>((max, d) => {
       const u = d.updated_at as string | null
       return u && (!max || u > max) ? u : max
@@ -800,10 +806,10 @@ export default async function AdministracionPage() {
     semanas,
   })
 
-  // Aging y semáforo: sólo clientes reales (los internos tipo PDV/BaseCamp
-  // arrastran saldos artificiales de millones que distorsionarían todo).
-  const deudoresReales = (deudoresRaw as unknown as FilaDeudorAging[])
-    .filter(d => esIngresoReal({ nombre_fantasia: d.nombre_fantasia, producto: null }))
+  // Aging y semáforo: sólo la cartera de venta. Antes filtraba con esIngresoReal,
+  // que deja pasar PDV y BaseCamp (criterio de VENTA de Finanzas, no de deuda):
+  // el aging sumaba $190 M contra $51,9 M de cartera real (auditoría 2-oct-2026).
+  const deudoresReales = (deudoresCartera as unknown as FilaDeudorAging[])
 
   const plazosPorCliente = new Map<string, { real: number | null; declarado: number | null }>()
   for (const c of clientesRaw) {

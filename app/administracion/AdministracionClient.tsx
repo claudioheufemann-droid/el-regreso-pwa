@@ -605,7 +605,10 @@ export default function AdministracionClient({
               <Card>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap', marginBottom: 16 }}>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                    {series.filter(s => s.nivel !== 'cliente' && s.nivel !== 'restaurante').map(s => (
+                    {/* Series con error de backtest sobre 100% (hoy "Otros": 351%, mezcla merch,
+                        descuentos de empaque y maquila) no se ofrecen: un pronóstico que
+                        se equivoca más que su propio tamaño no sirve para decidir. */}
+                    {series.filter(s => s.nivel !== 'cliente' && s.nivel !== 'restaurante' && s.nivel !== 'compra' && !(s.mape != null && s.mape > 100)).map(s => (
                       <button
                         key={s.id}
                         onClick={() => setSerieId(s.id)}
