@@ -13,7 +13,7 @@ import {
 import type { SerieFinanzas, AvanceCiclo, ResumenDeuda, ForecastCliente, DatosCobros, SaldoBanco } from './page'
 import CajaSection, { type FrescuraDato } from './CajaSection'
 import CobranzaSection from './CobranzaSection'
-import type { DatosCajaCobrada } from '@/lib/administracion/cajaCobradaDatos'
+import type { DatosCajaCobrada, EscenariosCaja } from '@/lib/administracion/cajaCobradaDatos'
 import { lunesDe } from '@/lib/administracion/finanzas'
 import { inicioDeCiclo, finDeCiclo } from '@/lib/produccion/reglas'
 import { NOMBRE_RESTAURANTE_FORECAST, NOMBRE_COMPRAS_TOTAL } from '@/lib/types'
@@ -28,6 +28,7 @@ interface Props {
   ultimaCorrida: string | null
   /** Caja real cobrada: el único motor de "cuánto entra y cuándo" del módulo. */
   cajaCobrada: DatosCajaCobrada
+  escenariosCaja: EscenariosCaja
   saldoActual: { fecha: string; total: number; porBanco: SaldoBanco[] } | null
   hayCompras: boolean
   frescura: FrescuraDato[]
@@ -330,7 +331,7 @@ function VistaForecastSerie({ fc, hoyISO, subtitulo }: { fc: ForecastCliente; ho
 }
 
 export default function AdministracionClient({
-  series, avance, mtd, deuda, ultimaCorrida, cajaCobrada, saldoActual, hayCompras, frescura, hoyISO,
+  series, avance, mtd, deuda, ultimaCorrida, cajaCobrada, escenariosCaja, saldoActual, hayCompras, frescura, hoyISO,
   deudoresDetalle, clientesPorVendedor, maquilaPorCliente, barrilesFuera, forecastClientes, forecastCompras, cobros,
 }: Props) {
   const router = useRouter()
@@ -468,7 +469,7 @@ export default function AdministracionClient({
 
         {/* ══════════════ CAJA ══════════════ */}
         {tab === 'caja' && (
-          <CajaSection datos={cajaCobrada} cobros={cobros} saldoActual={saldoActual} hayCompras={hayCompras} frescura={frescura} hoyISO={hoyISO} />
+          <CajaSection datos={cajaCobrada} escenarios={escenariosCaja} cobros={cobros} saldoActual={saldoActual} hayCompras={hayCompras} frescura={frescura} hoyISO={hoyISO} />
         )}
 
         {/* ══════════════ COBRANZA ══════════════ */}

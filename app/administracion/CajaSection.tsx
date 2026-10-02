@@ -16,11 +16,12 @@ import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine,
 } from 'recharts'
 import { Wallet, ArrowDownToLine, CalendarRange, FileDown, CheckCircle2, TriangleAlert, Info, ChevronDown, ChevronRight, Database } from 'lucide-react'
-import type { DatosCajaCobrada } from '@/lib/administracion/cajaCobradaDatos'
+import type { DatosCajaCobrada, EscenariosCaja } from '@/lib/administracion/cajaCobradaDatos'
 import { BACKTEST_CAJA } from '@/lib/administracion/cajaCobrada'
 import type { DatosCobros, SaldoBanco } from './page'
 import IngresoRealSection from './IngresoRealSection'
 import CargaDatosCaja from './CargaDatosCaja'
+import EscenariosMensuales from './EscenariosMensuales'
 
 const C = {
   card: '#FFFFFF', text: '#0F172A', muted: '#64748B', faint: '#94A3B8', line: '#E2E8F0', bg: '#F8FAFC',
@@ -81,8 +82,9 @@ const td: React.CSSProperties = { padding: '8px 12px', fontSize: 13, textAlign: 
 type Semaforo = 'rojo' | 'amarillo' | 'verde'
 const COLOR_SEMAFORO: Record<Semaforo, string> = { rojo: C.red, amarillo: C.amber, verde: C.green }
 
-export default function CajaSection({ datos, cobros, saldoActual, hayCompras, frescura, hoyISO }: {
+export default function CajaSection({ datos, escenarios, cobros, saldoActual, hayCompras, frescura, hoyISO }: {
   datos: DatosCajaCobrada
+  escenarios: EscenariosCaja
   cobros: DatosCobros
   saldoActual: { fecha: string; total: number; porBanco: SaldoBanco[] } | null
   hayCompras: boolean
@@ -171,6 +173,9 @@ export default function CajaSection({ datos, cobros, saldoActual, hayCompras, fr
           </p>
         </Card>
       </div>
+
+      {/* ── Por mes y escenario: mayoristas + enlatado ── */}
+      <EscenariosMensuales datos={escenarios} hoyISO={hoyISO} />
 
       {/* ── Gráfico ── */}
       <Card>

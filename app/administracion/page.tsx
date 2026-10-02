@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { getServerUser } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { construirCajaCobrada } from '@/lib/administracion/cajaCobradaDatos'
+import { construirCajaCobrada, construirEscenarios } from '@/lib/administracion/cajaCobradaDatos'
 import { PARAMETROS_CAJA } from '@/lib/administracion/cajaCobrada'
 import { cicloEnCursoISO, inicioDeCiclo, finDeCiclo } from '@/lib/produccion/reglas'
 import { armarDatosCalendario, type DatosCalendario } from '@/lib/administracion/calendarioEntradas'
@@ -308,7 +308,7 @@ export default async function AdministracionPage() {
      pago no se muestra en ninguna pantalla, sólo el semanal y el resumen por
      cliente. */
   const desdeCobros = correrDias(hoyISO, -182)
-  const [cobrosSemanaRaw, comportamientoRaw, impagasRaw, mostradorRaw, cobrosPorDiaRaw, pagosPonderadosRaw, cobradoMesRaw] = await Promise.all([
+  const [cobrosSemanaRaw, comportamientoRaw, impagasRaw, mostradorRaw, cobrosPorDiaRaw, pagosPonderadosRaw, cobradoMesRaw, cobrosMensualesRaw] = await Promise.all([
     admin.rpc('cobros_por_semana', { p_desde: desdeCobros })
       .then(r => (r.data ?? []) as { semana: string; metodo: string; monto: number; movimientos: number }[]),
     admin.rpc('comportamiento_pago_clientes', { p_min_muestras: 3 })
@@ -333,6 +333,19 @@ export default async function AdministracionPage() {
         .map(p => ({ cliente: p.cliente, pagos: Number(p.pagos), monto: Number(p.monto), diasPonderado: Number(p.dias_ponderado) }))),
     admin.rpc('cobros_por_cliente', { p_desde: `${hoyISO.slice(0, 7)}-01` })
       .then(r => ((r.data ?? []) as { cliente: string; monto: number }[]).map(c => ({ cliente: c.cliente, monto: Number(c.monto) || 0 }))),
+    // Escenarios: cobros por mes y cliente desde el mismo mes del año anterior (ritmo de EWU y comparación interanual).
+    // ~300 clientes × 13 meses pasa las 1000 filas que corta PostgREST: se pide por páginas.
+    (async () => {
+      const filas: { mes: string; cliente: string; monto: number }[] = []
+      for (let offset = 0; ; offset += PAGE) {
+        const { data } = await admin.rpc('cobros_mensuales_por_cliente', { p_desde: `${Number(hoyISO.slice(0, 4)) - 1}-${hoyISO.slice(5, 7)}-01` })
+          .order('mes').order('cliente').range(offset, offset + PAGE - 1)
+        const lote = (data ?? []) as { mes: string; cliente: string; monto: number }[]
+        filas.push(...lote.map(c => ({ mes: String(c.mes).slice(0, 10), cliente: c.cliente, monto: Number(c.monto) || 0 })))
+        if (lote.length < PAGE) break
+      }
+      return filas
+    })(),
   ])
 
   const semanasCobroMap = new Map<string, SemanaCobro>()
@@ -730,7 +743,7 @@ export default async function AdministracionPage() {
   ]
 
   // ── Caja real cobrada (pestaña Caja) ──
-  const cajaCobrada = construirCajaCobrada({
+  const entradaCaja: Parameters<typeof construirCajaCobrada>[0] = {
     hoyISO,
     hastaISO: `${hoyISO.slice(0, 4)}-12-31`,
     ventas: ventasRaw,
@@ -752,7 +765,10 @@ export default async function AdministracionPage() {
     ventasRestaurante: ventasRestauranteRaw.map(r => ({ fecha: String(r.fecha).slice(0, 10), monto: Number(r.monto) || 0 })),
     saldoBanco: saldoActual?.total ?? null,
     cobradoMesPorCliente: cobradoMesRaw,
-  })
+  }
+  const cajaCobrada = construirCajaCobrada(entradaCaja)
+  // Escenarios mensuales: el conservador repite el cálculo con la venta al ritmo de los últimos 3 ciclos.
+  const escenariosCaja = construirEscenarios(cajaCobrada, construirCajaCobrada(entradaCaja, { venta: 'ritmo' }), cobrosMensualesRaw, hoyISO)
 
   // ── Datos al día (pestaña Caja): de qué fecha es cada fuente. Lo que se carga a
   // mano envejece sin aviso; acá se ve y se enlaza a donde se carga. ──
@@ -779,6 +795,7 @@ export default async function AdministracionPage() {
   return (
     <AdministracionClient
       cajaCobrada={cajaCobrada}
+      escenariosCaja={escenariosCaja}
       series={series}
       avance={avance}
       mtd={mtdGeneral}
