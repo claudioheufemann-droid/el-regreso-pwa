@@ -29,7 +29,7 @@ nueva: preguntas sobre la app se responden con nombres de pantalla, nunca con ta
 | Ventas `/ventas` | Hoy, Cotizaciones, Rentabilidad, Comisiones, Deudores, Barriles, Stock, Clientes (+ Misiones, Metas, Leads, Mapa, Ranking, Histórico, Admin) |
 | Control Comercial | Resumen Ejecutivo, Ventas, Clientes, Cobranza, Barriles, Equipo, Reunión Comercial, Reportes, Metas |
 | Administración y Finanzas | Flujo de Caja, Plata que entró, Ingresos, Cobranza y Deuda, Forecast (+ Asistente, cargas manuales) |
-| Producción | Resumen, 1·Cuánto vamos a vender, 2·Cuánto producir, 3·Cuándo y dónde, Plan Maestro, Qué comprar, Presupuesto |
+| Producción | Hoy, Demanda, Plan, Planta, Compras (rediseño 4-oct-2026) |
 | Venta en terreno | Visitas, Nueva visita, Planificación, Jornada, Historial; admin: Resumen, Visitas, Clientes, Rutas, Revisión, Reportes |
 | Logística (flota) | Vehículos, Nueva Salida, Despachos, Historial, KPIs, Control |
 | Producción Logística | Declarar lote, Recepción, Alertas, Historial |

@@ -80,3 +80,27 @@ Si $F_{\text{gestión}}$ o $F_{\text{inicio}}$ son anteriores a la fecha de hoy,
 - **Respaldo:** con menos de 50 L en 90 días, un formato hereda el precio de su **producto**, y si tampoco alcanza, el del **consolidado** (`precioFuente`: propio / producto / general). Sin precio de ningún tipo, esa serie se muestra solo en litros.
 - **Todo a un mismo precio:** el historial y la proyección se valorizan al precio de hoy, para que la comparación entre meses refleje volumen y no cambios de lista de precios. Valores medidos el 1-oct-2026: consolidado ≈ $2.300/L; cerveza ≈ $2.480/L; kombucha ≈ $1.985/L; por formato entre $1.800 y $3.050/L.
 - **Costo:** esa ventana de 90 días (~14 mil filas de `ventas`) se trae con el conteo primero y las páginas en paralelo.
+
+---
+
+## Motor único de cobertura (`lib/produccion/cobertura.ts`, 4-oct-2026)
+
+Antes "¿cuánto y cuándo producir?" se contestaba en seis lugares (Calculadora de cobertura, Necesidad anticipada, tabla de Stock de seguridad, Alarmas de quiebre, Proyección de carga y Necesidad mensual), con cuentas distintas. Ahora las pestañas **Hoy** y **Plan** y las marcas de alerta leen todas de `calcularCobertura()` (con tests en `lib/produccion/__tests__/cobertura.test.ts`). Las alarmas del servidor (`sugerenciasPlan`) siguen alimentando sólo la simulación del Gantt (`planSugerido`).
+
+Unidad: producto × **familia** de envase (barril = barril 30 + barril 50; lata aparte; "otros" no tiene colchón). Datos: la fila `producto_envase` del primer ciclo de `stock_seguridad` (stock actual, litros en producción, colchón, punto de reorden, lead time) y las series `producto_envase` del forecast.
+
+| Cifra | Regla |
+|---|---|
+| Disponible | stock en cámaras de Producción + litros fermentando (`litrosEnProduccion`) |
+| Ritmo | demanda proyectada de las próximas 4 semanas ÷ días hábiles de esas 4 semanas (ritmo real del ciclo en curso + forecast de los siguientes, vía `demandaProyectadaEnPeriodo`) |
+| Días de cobertura | disponible ÷ ritmo (días hábiles); quiebre = hoy + esos días hábiles |
+| Cocinar antes | quiebre − lead time (semanas × 5 días hábiles) |
+| Pedir insumos | quiebre − (lead time + `LEAD_TIME_INSUMOS_SEMANAS`) |
+| A producir | demanda hasta la fecha elegida + colchón al final − disponible (≥ 0) |
+| Urgente | disponible < colchón, o "cocinar antes" ya pasó |
+| Reponer pronto | disponible < punto de reorden, o "cocinar antes" dentro de 10 días hábiles |
+| Sin stock cargado | el producto no aparece en el informe de stock |
+
+El estado del producto es el peor de sus familias. Orden: urgente → reponer → sin dato → cubierto; dentro de cada estado, líneas fijas primero y luego menos días de cobertura. `aSugerencias()` traduce una fila al formato del modal "Programar cocción" (`ModalConfirmarLoteGrupo`).
+
+`demandaProyectadaEnPeriodo` (antes en el cliente) vive ahora en el motor; descarta un punto de forecast del ciclo en curso si existiera, para no contarlo dos veces con el ritmo real.

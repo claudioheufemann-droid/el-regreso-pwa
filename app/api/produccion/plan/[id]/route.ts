@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { getServerUser } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { actualizarEventoLote, eliminarEventoLote } from '@/lib/google-calendar'
@@ -24,6 +24,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     fermentador: string | null
     /** Días corridos de ocupación. null vuelve al default del producto. */
     diasOcupacion: number | null
+    /** Seguimiento real (rediseño 4-oct-2026). yyyy-mm-dd. */
+    fechaInicioReal: string | null
+    fechaFinReal: string | null
+    litrosReales: number | null
   }>
   try {
     body = await req.json()
@@ -48,23 +52,51 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     cambios.dias_ocupacion = d
   }
 
+  // Seguimiento real: al pasar a "en curso" se registra el día de cocción y al
+  // "completado" el día de término, salvo que vengan explícitos. Así el plan
+  // se puede comparar contra lo que de verdad se cocinó.
+  const esFecha = (v: unknown) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)
+  const hoyChile = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' })
+  for (const [campo, columna] of [['fechaInicioReal', 'fecha_inicio_real'], ['fechaFinReal', 'fecha_fin_real']] as const) {
+    const v = body[campo]
+    if (v === undefined) continue
+    if (v !== null && !esFecha(v)) return NextResponse.json({ error: `${campo} debe ser yyyy-mm-dd` }, { status: 400 })
+    cambios[columna] = v
+  }
+  if (body.litrosReales !== undefined) {
+    const l = body.litrosReales
+    if (l !== null && !(Number.isFinite(l) && l >= 0)) return NextResponse.json({ error: 'litrosReales inválido' }, { status: 400 })
+    cambios.litros_reales = l
+  }
+  if (body.estado === 'en_curso' && cambios.fecha_inicio_real === undefined) cambios.fecha_inicio_real = hoyChile
+  if (body.estado === 'completado' && cambios.fecha_fin_real === undefined) cambios.fecha_fin_real = hoyChile
+
   const admin = createAdminClient()
   const { data, error } = await admin.from('plan_produccion').update(cambios).eq('id', id).select('*').single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   // Mismo criterio que la creación: la sincronización con Calendar es
-  // mejor-esfuerzo, nunca bloquea la actualización del lote.
+  // mejor-esfuerzo, nunca bloquea la actualización del lote. Corre DESPUÉS de
+  // responder (after): esperar a Google antes de contestar era lo que hacía
+  // sentir lento mover o quitar un bloque en el Gantt.
   if (data.google_event_id) {
-    if (data.estado === 'cancelado') {
-      await eliminarEventoLote(data.google_event_id)
-      await admin.from('plan_produccion').update({ google_event_id: null }).eq('id', id)
-    } else if (body.litrosPlanificados != null || body.fechaPlanificada) {
-      await actualizarEventoLote(data.google_event_id, {
-        producto: data.producto, categoria: data.categoria,
-        litrosPlanificados: Number(data.litros_planificados), fechaPlanificada: String(data.fecha_planificada).slice(0, 10),
-        origen: data.origen, motivo: data.motivo,
-      })
-    }
+    const eventoId = data.google_event_id as string
+    after(async () => {
+      try {
+        if (data.estado === 'cancelado') {
+          await eliminarEventoLote(eventoId)
+          await admin.from('plan_produccion').update({ google_event_id: null }).eq('id', id)
+        } else if (body.litrosPlanificados != null || body.fechaPlanificada) {
+          await actualizarEventoLote(eventoId, {
+            producto: data.producto, categoria: data.categoria,
+            litrosPlanificados: Number(data.litros_planificados), fechaPlanificada: String(data.fecha_planificada).slice(0, 10),
+            origen: data.origen, motivo: data.motivo,
+          })
+        }
+      } catch (e) {
+        console.error('[plan] sincronización con Google Calendar falló', e)
+      }
+    })
   }
 
   return NextResponse.json(data)

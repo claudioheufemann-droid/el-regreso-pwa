@@ -1404,6 +1404,149 @@ input[type="date"], input[type="time"], input[type="datetime-local"] {
 }
 
 /* ═══════════════════════════════════════════════════════════
+   COLOR — módulo de Producción (.prod-root), rediseño 4-oct-2026
+   Toma la paleta de Ventas (carbón + dorado + crema) y respeta el modo
+   claro/oscuro de la app: todo color del módulo sale de estos --p-*, nunca
+   de un gris o verde fijo de Tailwind. Cuatro familias semánticas (ok,
+   warn, bad, info) + violeta, cada una con tono de texto, fondo suave y
+   borde, para que un aviso se lea igual sobre fondo oscuro o claro.
+   ═══════════════════════════════════════════════════════════ */
+.prod-root {
+  --p-bg: var(--bg);
+  --p-card: var(--surface);
+  --p-card-2: var(--surface2);
+  --p-chip: rgba(255, 255, 255, 0.06);
+  --p-hover: rgba(255, 255, 255, 0.04);
+  --p-text: var(--cream);
+  --p-text-2: rgba(244, 238, 223, 0.74);
+  --p-text-3: rgba(244, 238, 223, 0.52);
+  --p-text-4: rgba(244, 238, 223, 0.32);
+  --p-line: rgba(255, 255, 255, 0.09);
+  --p-line-2: rgba(255, 255, 255, 0.05);
+  --p-accent: #D4AF37;
+  --p-accent-soft: rgba(212, 175, 55, 0.13);
+  --p-accent-line: rgba(212, 175, 55, 0.32);
+  --p-ink: #0A0A0A;
+  --p-ok: #4ADE80;
+  --p-ok-soft: rgba(74, 222, 128, 0.12);
+  --p-ok-line: rgba(74, 222, 128, 0.28);
+  --p-warn: #FBBF24;
+  --p-warn-soft: rgba(251, 191, 36, 0.12);
+  --p-warn-line: rgba(251, 191, 36, 0.3);
+  --p-bad: #F87171;
+  --p-bad-soft: rgba(248, 113, 113, 0.12);
+  --p-bad-line: rgba(248, 113, 113, 0.3);
+  --p-info: #60A5FA;
+  --p-info-soft: rgba(96, 165, 250, 0.12);
+  --p-info-line: rgba(96, 165, 250, 0.3);
+  --p-violet: #A78BFA;
+  --p-violet-soft: rgba(167, 139, 250, 0.13);
+  --p-violet-line: rgba(167, 139, 250, 0.3);
+  --p-shadow: 0 1px 3px rgba(0, 0, 0, 0.45), 0 1px 2px rgba(0, 0, 0, 0.3);
+  /* Sin background acá: los popovers en portal también llevan .prod-root y
+     no deben pintar el fondo de página. El fondo lo pone el contenedor. */
+  color: var(--p-text);
+  color-scheme: dark;
+}
+[data-theme="light"] .prod-root,
+.prod-root[data-theme="light"] {
+  --p-chip: rgba(26, 16, 8, 0.06);
+  --p-hover: rgba(26, 16, 8, 0.04);
+  --p-text-2: rgba(26, 16, 8, 0.74);
+  --p-text-3: rgba(26, 16, 8, 0.55);
+  --p-text-4: rgba(26, 16, 8, 0.36);
+  --p-line: rgba(0, 0, 0, 0.11);
+  --p-line-2: rgba(0, 0, 0, 0.06);
+  --p-accent: #A8870F;
+  --p-accent-soft: rgba(168, 135, 15, 0.12);
+  --p-accent-line: rgba(168, 135, 15, 0.35);
+  --p-ok: #15803D;
+  --p-ok-soft: rgba(21, 128, 61, 0.1);
+  --p-ok-line: rgba(21, 128, 61, 0.28);
+  --p-warn: #B45309;
+  --p-warn-soft: rgba(217, 119, 6, 0.11);
+  --p-warn-line: rgba(217, 119, 6, 0.3);
+  --p-bad: #DC2626;
+  --p-bad-soft: rgba(220, 38, 38, 0.09);
+  --p-bad-line: rgba(220, 38, 38, 0.28);
+  --p-info: #2563EB;
+  --p-info-soft: rgba(37, 99, 235, 0.09);
+  --p-info-line: rgba(37, 99, 235, 0.26);
+  --p-violet: #7C3AED;
+  --p-violet-soft: rgba(124, 58, 237, 0.09);
+  --p-violet-line: rgba(124, 58, 237, 0.26);
+  --p-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.05);
+  color-scheme: light;
+}
+
+/* Acción principal: el mismo dorado degradado con tinta oscura que
+   .btn-primary / .btn-cta de Ventas. */
+.prod-root .prod-primario {
+  background: linear-gradient(135deg, #E5C45A, #B8962E);
+  color: #0A0A0A;
+  box-shadow: 0 3px 14px rgba(212, 175, 55, 0.22);
+}
+.prod-root .prod-primario:hover { filter: brightness(1.05); }
+.prod-root .prod-primario:disabled { filter: grayscale(0.4); opacity: 0.5; }
+
+/* Tarjeta base del módulo: superficie + borde de la paleta de Ventas. */
+.prod-root .prod-card {
+  background: var(--p-card);
+  border: 1px solid var(--p-line);
+  border-radius: 14px;
+  box-shadow: var(--p-shadow);
+}
+
+/* Franja de cifras: UNA superficie con divisores finos en vez de cuatro
+   tarjetas iguales. Las cifras son una lectura corrida, no cuatro objetos. */
+.prod-root .prod-franja {
+  display: grid;
+  gap: 1px;
+  overflow: hidden;
+  background: var(--p-line);
+  border: 1px solid var(--p-line);
+  border-radius: 14px;
+  box-shadow: var(--p-shadow);
+}
+.prod-root .prod-franja > * {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--p-card);
+}
+
+/* Acción dentro de una fila o lista: la versión suave del botón dorado. El
+   degradado dorado queda para UNA acción principal por pantalla. */
+.prod-root .prod-accion {
+  background: var(--p-accent-soft);
+  color: var(--p-accent);
+  border: 1px solid var(--p-accent-line);
+  transition: background-color 150ms ease, border-color 150ms ease, transform 140ms var(--p-ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .prod-root .prod-accion:hover:not(:disabled) { background: var(--p-accent); color: var(--p-ink); }
+}
+.prod-root .prod-accion:disabled { opacity: 0.5; }
+
+/* Cifras grandes: seguimiento negativo al crecer (regla de tipografía de
+   Apple: el texto grande se ve demasiado suelto con el mismo tracking que
+   el de lectura) y números de ancho fijo. */
+.prod-root .prod-cifra {
+  letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1, 'cv11' 1;
+}
+
+/* Etiqueta en mayúsculas (eyebrow) */
+.prod-root .prod-eyebrow {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--p-text-3);
+}
+
+/* ═══════════════════════════════════════════════════════════
    MOVIMIENTO — módulo de Producción (.prod-root)
    Acotado a Producción a propósito: es el único módulo excluido del
    reset global, así que es el único donde se puede confiar en el
@@ -1422,64 +1565,125 @@ input[type="date"], input[type="time"], input[type="datetime-local"] {
    TODA animación y transición de la app a 0.01ms.
    ═══════════════════════════════════════════════════════════ */
 
+/* Curvas del módulo (las de Emil Kowalski; las del navegador son demasiado
+   débiles). ease-out para todo lo que entra o responde; nunca ease-in. */
+.prod-root {
+  --p-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --p-ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+}
+
+/* Cambiar de pestaña es navegación de uso diario: sólo un fundido corto, sin
+   desplazamiento ni escalonado. Un movimiento que se repite decenas de veces
+   al día deja de ser un detalle y pasa a ser una demora. */
 @keyframes prod-enter {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: none; }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
-
-/* Entrada de una sección al cambiar de pestaña. `both` deja el elemento
-   en el estado final: si la animación se recorta por movimiento reducido,
-   el contenido igual queda visible, nunca atrapado en opacity:0. */
 .prod-root .prod-enter {
-  animation: prod-enter 0.26s var(--spring) both;
+  animation: prod-enter 140ms var(--p-ease-out) both;
 }
+/* Sin escalonado: las listas de Hoy y Plan se miran todos los días. Se deja
+   el nombre de la clase porque hay usos viejos; ahora no anima nada. */
+.prod-root .prod-stagger > * { animation: none; }
 
-/* Escalonado de las tarjetas dentro de una sección: cada una entra un
-   pelo después que la anterior. El tope de 6 pasos es deliberado —sin él,
-   una lista de 90 insumos tendría la última tarjeta entrando 3,6 s
-   después, que se lee como lentitud, no como fluidez. */
-.prod-root .prod-stagger > * {
-  animation: prod-enter 0.26s var(--spring) both;
-  animation-delay: calc(min(var(--i, 0), 6) * 45ms);
-}
-
-/* Tarjetas y paneles: se levantan apenas al pasar el cursor. 2px es
-   suficiente para que se sienta vivo sin que la página parezca temblar. */
-.prod-root .prod-hover-card {
-  transition: transform 0.18s var(--spring), box-shadow 0.18s var(--spring);
-}
-.prod-root .prod-hover-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 24px -12px rgba(15, 61, 46, 0.28);
-}
-
-/* Filas de tabla: además del fondo, una guía de color a la izquierda que
-   ayuda a no perder la línea al leer hacia la derecha. Se dibuja con
-   box-shadow interior y no con border, porque un borde empujaría el
-   contenido 3px y la fila "saltaría" al pasar el mouse. */
+/* Todo lo que se mueve al pasar el cursor va detrás de (hover: hover) and
+   (pointer: fine): en el celular un toque deja el :hover pegado. */
 .prod-root .prod-hover-row {
-  transition: background-color 0.15s ease-out, box-shadow 0.15s ease-out;
+  transition: background-color 120ms ease;
 }
-.prod-root .prod-hover-row:hover {
-  box-shadow: inset 3px 0 0 0 var(--gold, #E5A922);
+@media (hover: hover) and (pointer: fine) {
+  .prod-root .prod-hover-row:hover { background-color: var(--p-hover); }
 }
 
-/* Feedback al presionar: el control cede un poco bajo el dedo. Es lo que
-   más aporta a que la interfaz se sienta responsiva en celular, donde no
-   existe el hover. */
+/* Feedback al presionar: cede un poco bajo el dedo. Se aplica en :active
+   (al tocar, no al soltar) y con la curva fuerte. */
 .prod-root .prod-press {
-  transition: transform 0.12s var(--spring), background-color 0.15s ease-out, box-shadow 0.15s ease-out;
+  transition: transform 140ms var(--p-ease-out), background-color 150ms ease, border-color 150ms ease, color 150ms ease, opacity 150ms ease;
 }
-.prod-root .prod-press:active {
+.prod-root .prod-press:active:not(:disabled) {
   transform: scale(0.97);
 }
 
-/* Íconos y botones chicos: crecen apenas en hover. */
+/* Íconos chicos: sólo cambian de color, no crecen. */
 .prod-root .prod-hover-icon {
-  transition: transform 0.18s var(--spring), color 0.15s ease-out, background-color 0.15s ease-out;
+  transition: color 150ms ease, background-color 150ms ease;
 }
-.prod-root .prod-hover-icon:hover {
-  transform: scale(1.08);
+
+/* Tarjetas: sin levantarse. El hover de una tarjeta no dice nada que el
+   cursor no diga ya. Se conserva la clase por los usos existentes. */
+.prod-root .prod-hover-card { transition: border-color 150ms ease; }
+@media (hover: hover) and (pointer: fine) {
+  .prod-root .prod-hover-card:hover { border-color: var(--p-accent-line); }
+}
+
+/* Modales y diálogos (ocasionales): aparecen desde scale(0.96) con opacity,
+   centrados porque no están anclados a un botón. El fondo oscuro sólo funde. */
+@keyframes prod-modal-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes prod-scrim-in { from { opacity: 0; } to { opacity: 1; } }
+.prod-root .prod-modal { animation: prod-modal-in 200ms var(--p-ease-out) both; }
+.prod-root .prod-scrim { animation: prod-scrim-in 160ms ease-out both; }
+@media (max-width: 639px) {
+  /* En el celular el diálogo es una hoja que sube desde abajo. */
+  @keyframes prod-sheet-in { from { transform: translateY(100%); } to { transform: none; } }
+  .prod-root .prod-modal { animation: prod-sheet-in 280ms cubic-bezier(0.32, 0.72, 0, 1) both; }
+}
+
+/* Detalle plegable de una fila: sólo `grid-template-rows`, que anima la
+   altura sin reflujo del contenido de arriba. */
+.prod-root .prod-pliegue {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 220ms var(--p-ease-out);
+}
+.prod-root .prod-pliegue[data-abierto="true"] { grid-template-rows: 1fr; }
+.prod-root .prod-pliegue > div { overflow: hidden; min-height: 0; }
+
+/* Plataforma táctil: controles sin selección de texto al mantener apretado,
+   sin retardo de doble toque y sin el destello gris del navegador. Los campos
+   de texto en 16 px, porque iOS hace zoom a la página si son menores. */
+.prod-root button,
+.prod-root [role="button"],
+.prod-root summary,
+.prod-root label:has(input[type="checkbox"]) {
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+@media (pointer: coarse) {
+  .prod-root input:not([type="checkbox"]):not([type="radio"]),
+  .prod-root select,
+  .prod-root textarea { font-size: 16px; }
+}
+
+/* Reducir movimiento = más suave, no cero: se conservan los fundidos que
+   ayudan a entender y se quita el desplazamiento. */
+@media (prefers-reduced-motion: reduce) {
+  .prod-root .prod-enter { animation: prod-enter 120ms linear both !important; }
+  .prod-root .prod-modal { animation: prod-scrim-in 120ms linear both !important; }
+  .prod-root .prod-pliegue { transition-duration: 1ms !important; }
+}
+
+/* Botón para quitar un bloque del Gantt: aparece al pasar el mouse o al
+   enfocar el bloque con el teclado; en pantallas táctiles está siempre (no hay
+   hover). Se quita con un clic y se puede deshacer. */
+.prod-root .prod-gantt-quitar { opacity: 0; transition: opacity 120ms ease, background-color 120ms ease; }
+.prod-root .prod-gantt-bloque:focus-visible .prod-gantt-quitar { opacity: 1; }
+@media (hover: hover) and (pointer: fine) {
+  .prod-root .prod-gantt-bloque:hover .prod-gantt-quitar { opacity: 1; }
+}
+@media (pointer: coarse) {
+  .prod-root .prod-gantt-quitar { opacity: 1; }
+}
+
+/* Aviso "Deshacer": entra desde abajo, rápido (es respuesta del sistema). */
+@keyframes prod-aviso-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+.prod-root .prod-aviso { animation: prod-aviso-in 220ms var(--p-ease-out) both; }
+@media (prefers-reduced-motion: reduce) {
+  .prod-root .prod-aviso { animation: prod-scrim-in 120ms linear both; }
 }
 
 /* ═══════════════ Calendario de cocciones ═══════════════
@@ -1493,17 +1697,16 @@ input[type="date"], input[type="time"], input[type="datetime-local"] {
    doble-tap, que es lo que hacía sentir lento el toque en el teléfono. */
 .prod-root .prod-chip {
   touch-action: manipulation;
-  transition: transform 0.15s var(--spring), box-shadow 0.15s var(--spring),
-              opacity 0.15s ease-out, border-color 0.15s ease-out;
+  transition: transform 150ms var(--p-ease-out), box-shadow 150ms ease,
+              opacity 150ms ease, border-color 150ms ease;
   /* El texto no debe seleccionarse al mantener apretado para arrastrar: sin
      esto, el gesto de levantar una cocción en el teléfono dispara la lupa de
      selección de texto del sistema y tapa justo lo que se está moviendo. */
   user-select: none;
   -webkit-user-select: none;
 }
-.prod-root .prod-chip:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px -4px rgba(15, 61, 46, 0.35);
+@media (hover: hover) and (pointer: fine) {
+  .prod-root .prod-chip:hover { box-shadow: 0 2px 8px -2px rgba(0, 0, 0, 0.35); }
 }
 
 /* La manija sólo aparece al acercarse: estando siempre visible robaba ancho
@@ -1512,8 +1715,8 @@ input[type="date"], input[type="time"], input[type="datetime-local"] {
 .prod-root .prod-chip .prod-chip-grip {
   transition: opacity 0.15s ease-out;
 }
-.prod-root .prod-chip:hover .prod-chip-grip {
-  opacity: 0.45;
+@media (hover: hover) and (pointer: fine) {
+  .prod-root .prod-chip:hover .prod-chip-grip { opacity: 0.45; }
 }
 
 /* Celda de día. La transición va en el borde y el fondo para que el
@@ -1527,11 +1730,7 @@ input[type="date"], input[type="time"], input[type="datetime-local"] {
 /* Día bajo el puntero: además del anillo, un latido muy corto que confirma
    "acá se suelta". Es la señal que el drag nativo nunca dio. */
 .prod-root .prod-dia-activo {
-  animation: prod-latido 0.9s ease-in-out infinite;
-}
-@keyframes prod-latido {
-  0%, 100% { box-shadow: 0 0 0 2px rgba(201, 162, 39, 0.4); }
-  50%      { box-shadow: 0 0 0 5px rgba(201, 162, 39, 0.18); }
+  box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.55);
 }
 
 /* Panel de detalle de la cocción: entra con un desplazamiento mínimo. No se
@@ -1565,17 +1764,17 @@ input[type="date"], input[type="time"], input[type="datetime-local"] {
    que ese borde se quede quieto mientras el bloque aparece es lo que hace
    que se lea como "esto empieza acá" y no como un rectángulo que infla. */
 @keyframes prod-gantt-bloque-in {
-  from { opacity: 0; transform: scaleX(0.55); }
-  to   { opacity: 1; transform: none; }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 .prod-root .prod-gantt-bloque {
   transform-origin: left center;
-  animation: prod-gantt-bloque-in 0.32s var(--spring) both;
+  animation: prod-gantt-bloque-in 160ms var(--p-ease-out) both;
   /* El color lo cambia el usuario desde la configuración: que transicione
      hace visible qué bloques se repintaron sin tener que buscarlos. */
-  transition: transform 0.18s var(--spring), box-shadow 0.18s var(--spring),
-              background-color 0.35s ease-out, border-color 0.35s ease-out,
-              opacity 0.18s ease-out;
+  transition: transform 180ms var(--p-ease-out), box-shadow 180ms ease,
+              background-color 250ms ease, border-color 250ms ease,
+              opacity 180ms ease;
 }
 /* Escalonado por fila, con el mismo tope de 6 pasos que `prod-stagger`:
    con 23 tanques, sin tope la última fila entraría casi un segundo
@@ -1584,12 +1783,14 @@ input[type="date"], input[type="time"], input[type="datetime-local"] {
    a TODAS las animaciones de la lista, así que sin excluir a los bloques en
    alerta o aterrizando, el escalonado les correría también su latido. */
 .prod-root .prod-gantt-fila > .prod-gantt-bloque:not(.prod-gantt-alerta):not(.prod-gantt-aterriza) {
-  animation-delay: calc(min(var(--fila, 0), 6) * 40ms);
+  animation-delay: 0ms;
 }
+@media (hover: hover) and (pointer: fine) {
 .prod-root .prod-gantt-bloque:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px -6px rgba(15, 61, 46, 0.45);
+  filter: brightness(1.06);
+  box-shadow: 0 4px 12px -4px rgba(0, 0, 0, 0.45);
   z-index: 5;
+}
 }
 
 /* El bloque que se está arrastrando se queda en su lugar de origen, pero
@@ -1599,17 +1800,22 @@ input[type="date"], input[type="time"], input[type="datetime-local"] {
   opacity: 0.32;
   filter: saturate(0.4);
 }
+/* Mientras se arrastra, los bloques no capturan el puntero: si no, el que
+   está debajo (incluido el mismo que se mueve) tapa la celda y no deja
+   soltar ahí. El choque igual se ve: el contorno de destino se pone rojo. */
+.prod-root [data-arrastrando] .prod-gantt-bloque,
+.prod-root [data-arrastrando] .prod-gantt-quitar { pointer-events: none; }
 
 /* Aterrizaje: el bloque que acaba de cambiar de día o de tanque late una
    vez. Es la confirmación de que el arrastre hizo algo — sobre todo
    cuando cambió de fila y el ojo lo perdió de vista. */
 @keyframes prod-gantt-aterriza {
-  0%   { transform: scale(1); box-shadow: 0 0 0 0 rgba(47, 107, 79, 0.55); }
-  35%  { transform: scale(1.04); box-shadow: 0 0 0 6px rgba(47, 107, 79, 0.18); }
-  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(47, 107, 79, 0); }
+  0%   { transform: scale(1); box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.55); }
+  35%  { transform: scale(1.03); box-shadow: 0 0 0 5px rgba(212, 175, 55, 0.2); }
+  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(212, 175, 55, 0); }
 }
 .prod-root .prod-gantt-aterriza {
-  animation: prod-gantt-aterriza 0.7s var(--spring) both;
+  animation: prod-gantt-aterriza 450ms var(--p-ease-out) both;
 }
 
 /* Choque de tanque o litraje que no cabe: late lento e indefinidamente.
@@ -1621,8 +1827,8 @@ input[type="date"], input[type="time"], input[type="datetime-local"] {
   50%      { box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.22); }
 }
 .prod-root .prod-gantt-alerta {
-  animation: prod-gantt-bloque-in 0.32s var(--spring) both,
-             prod-gantt-alerta 2.2s ease-in-out 0.32s infinite;
+  animation: prod-gantt-bloque-in 160ms var(--p-ease-out) both,
+             prod-gantt-alerta 2.2s ease-in-out 160ms infinite;
 }
 
 /* Navegación por semanas: la grilla entra desde el lado hacia el que se
@@ -1637,8 +1843,8 @@ input[type="date"], input[type="time"], input[type="datetime-local"] {
   from { opacity: 0.35; transform: translateX(-26px); }
   to   { opacity: 1; transform: none; }
 }
-.prod-root .prod-gantt-ventana-der { animation: prod-gantt-ventana-der 0.3s var(--spring) both; }
-.prod-root .prod-gantt-ventana-izq { animation: prod-gantt-ventana-izq 0.3s var(--spring) both; }
+.prod-root .prod-gantt-ventana-der { animation: prod-gantt-ventana-der 240ms var(--p-ease-out) both; }
+.prod-root .prod-gantt-ventana-izq { animation: prod-gantt-ventana-izq 240ms var(--p-ease-out) both; }
 
 /* Celda destino bajo el puntero: reusa el latido dorado del calendario
    (`prod-dia-activo`) pero en verde, porque acá el destino es una celda

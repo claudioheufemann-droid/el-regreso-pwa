@@ -4,11 +4,10 @@ import { useCallback, useRef, useState } from 'react'
 import GanttProduccion, { type BloqueGantt } from '@/app/produccion/GanttProduccion'
 import ConfigProductosGantt from '@/app/produccion/ConfigProductosGantt'
 import NecesidadMensual from '@/app/produccion/NecesidadMensual'
-import MenuLateral, { type TabId } from '@/app/produccion/MenuLateral'
 import ModalAgregarProducto from '@/app/produccion/ModalAgregarProducto'
 import PopoverCoccion, { type LoteCalendario } from '@/app/produccion/PopoverCoccion'
 import PopoverEditarTanque, { type DatosTanqueEditar } from '@/app/produccion/PopoverEditarTanque'
-import { useArrastreCalendario, type DestinoArrastre } from '@/app/produccion/useArrastreCalendario'
+import { useArrastreCalendario, useEstadoArrastre, transformFantasma, type StoreArrastre, type DestinoArrastre } from '@/app/produccion/useArrastreCalendario'
 import {
   FERMENTADORES, CONFIG, SERIES, STOCK_SEGURIDAD, PLAN, HOY,
   ESCENARIOS, bloquesDe, COBERTURA, NECESIDAD, HASTA_MES, type Escenario,
@@ -36,7 +35,6 @@ export default function DevProduccionClient() {
   const [ajustesTanque, setAjustesTanque] = useState<{ tanque: string; codigoLote: string }[]>([])
   const [recienMovido, setRecienMovido] = useState<string | null>(null)
   const [registro, setRegistro] = useState<string[]>([])
-  const [tab, setTab] = useState<TabId>('calendario')
   /** Detalle de una cocción sugerida. En la app lo abre ProduccionClient; acá
    *  se monta igual porque si no, el botón de confirmar no se puede probar en
    *  ningún lado — y es la acción que crea un lote en base. */
@@ -80,7 +78,7 @@ export default function DevProduccionClient() {
     ].slice(0, 8))
   }, [bloques])
 
-  const { arrastre, propsOrigen } = useArrastreCalendario({
+  const { store: arrastreStore, fantasmaRef, propsOrigen } = useArrastreCalendario({
     onSoltar: alSoltarEnCelda,
     puedeSoltarEn: puedeSoltarEnCelda,
   })
@@ -88,18 +86,7 @@ export default function DevProduccionClient() {
   const pista = ESCENARIOS.find(e => e.id === escenario)?.pista
 
   return (
-    <div className="prod-root flex h-[100dvh] w-full overflow-hidden bg-gray-50">
-      {/* El menú va acá y no dentro del contenedor centrado porque en la app
-          real es una columna de alto completo: verlo flotando en una caja no
-          probaría nada del riel. */}
-      <MenuLateral
-        activeTab={tab}
-        onCambiarTab={setTab}
-        alertasPorTab={{ calendario: 3, seguridad: 12, insumos: 1 }}
-        ultimaCorrida="2026-09-20T08:00:00Z"
-        nombreUsuario="Benjamín Alarcón"
-        inicialesUsuario="BA"
-      />
+    <div className="prod-root flex h-[100dvh] w-full overflow-hidden bg-(--p-bg)">
 
       {/* MISMA estructura que la app: un scroller PLANO con flex-1, y el flex
           column adentro. Si el scroller mismo es el flex column, sus hijos
@@ -111,12 +98,12 @@ export default function DevProduccionClient() {
 
         {/* Barra del banco de pruebas — deliberadamente fea y distinta del
             módulo real, para que nadie confunda esta pantalla con la app. */}
-        <div className="flex flex-col gap-3 rounded-xl border-2 border-dashed border-fuchsia-400 bg-fuchsia-50 p-4">
+        <div className="flex flex-col gap-3 rounded-xl border-2 border-dashed border-fuchsia-400 bg-(--p-violet-soft) p-4">
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded bg-fuchsia-600 px-2 py-0.5 text-[11px] font-black uppercase tracking-wider text-white">
               Banco de pruebas
             </span>
-            <span className="text-[12px] text-fuchsia-900">
+            <span className="text-[12px] text-(--p-violet)">
               Datos inventados. No toca la base. Sólo existe en desarrollo.
             </span>
           </div>
@@ -127,15 +114,15 @@ export default function DevProduccionClient() {
                 className={`prod-press rounded-lg border px-3 py-1.5 text-[11px] font-bold transition ${
                   escenario === e.id
                     ? 'border-fuchsia-600 bg-fuchsia-600 text-white'
-                    : 'border-fuchsia-300 bg-white text-fuchsia-800 hover:bg-fuchsia-100'
+                    : 'border-(--p-violet-line) bg-(--p-card) text-(--p-violet) hover:bg-(--p-violet-soft)'
                 }`}>{e.label}</button>
             ))}
           </div>
 
-          {pista && <p className="text-[12px] font-medium text-fuchsia-900">Qué mirar: {pista}</p>}
+          {pista && <p className="text-[12px] font-medium text-(--p-violet)">Qué mirar: {pista}</p>}
 
           {registro.length > 0 && (
-            <div className="flex flex-col gap-0.5 rounded-lg bg-white/70 p-2 font-mono text-[10.5px] text-fuchsia-900">
+            <div className="flex flex-col gap-0.5 rounded-lg bg-(--p-card)/70 p-2 font-mono text-[10.5px] text-(--p-violet)">
               {registro.map((l, i) => <div key={i}>{l}</div>)}
             </div>
           )}
@@ -145,7 +132,7 @@ export default function DevProduccionClient() {
           fermentadores={FERMENTADORES}
           bloques={bloques}
           config={config}
-          arrastre={arrastre}
+          arrastreStore={arrastreStore}
           propsOrigen={(carga, habilitado) => {
             const base = propsOrigen(carga, habilitado) as Record<string, unknown>
             const onPointerDown = base.onPointerDown as ((e: React.PointerEvent) => void) | undefined
@@ -308,20 +295,25 @@ export default function DevProduccionClient() {
         />
       )}
 
-      {/* Ghost del arrastre: en producción lo pinta ProduccionClient, así que
-          acá va una versión mínima — sin él, arrastrar no muestra nada y
-          parecería que el gesto no funciona. */}
-      {arrastre && !arrastre.pendiente && (
-        <div className="pointer-events-none fixed z-[90] rounded-md bg-gray-900 px-2 py-1 text-[11px] font-bold text-white shadow-lg"
-          style={{ left: arrastre.x + 12, top: arrastre.y + 12 }}>
-          {arrastre.carga.producto}
-          {arrastre.destino && (
-            <span className="text-white/60">
-              {' → '}{arrastre.destino.fecha}
-              {arrastre.destino.fermentador ? ` · ${arrastre.destino.fermentador}` : ''}
-            </span>
-          )}
-        </div>
+      {/* Ghost del arrastre: versión mínima del banco, movida por referencia
+          igual que en el módulo. */}
+      <FantasmaBanco store={arrastreStore} fantasmaRef={fantasmaRef} />
+    </div>
+  )
+}
+
+function FantasmaBanco({ store, fantasmaRef }: { store: StoreArrastre; fantasmaRef: React.RefObject<HTMLDivElement | null> }) {
+  const arrastre = useEstadoArrastre(store)
+  if (!arrastre) return null
+  return (
+    <div ref={fantasmaRef} className="pointer-events-none fixed left-0 top-0 z-[90] rounded-md bg-gray-900 px-2 py-1 text-[11px] font-bold text-white shadow-lg"
+      style={{ transform: transformFantasma(arrastre.x, arrastre.y) }}>
+      {arrastre.carga.producto}
+      {arrastre.destino && (
+        <span className="text-white/60">
+          {' → '}{arrastre.destino.fecha}
+          {arrastre.destino.fermentador ? ` · ${arrastre.destino.fermentador}` : ''}
+        </span>
       )}
     </div>
   )

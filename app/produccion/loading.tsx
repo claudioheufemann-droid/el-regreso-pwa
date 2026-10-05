@@ -2,9 +2,9 @@ import { Skeleton } from '@/components/ui/States'
 
 export default function ProduccionLoading() {
   return (
-    <div className="min-h-screen bg-[#0A0A0A] text-gray-100 flex">
+    <div className="min-h-screen bg-[#0A0A0A] text-(--p-text-4) flex">
       {/* Skeleton del menú lateral */}
-      <div className="w-64 border-r border-gray-800 p-4 hidden md:block shrink-0">
+      <div className="w-64 border-r border-(--p-text-4) p-4 hidden md:block shrink-0">
         <Skeleton height={40} className="mb-6 bg-gray-800" />
         <div className="space-y-3">
           {[1, 2, 3, 4, 5, 6].map(i => (
@@ -16,7 +16,7 @@ export default function ProduccionLoading() {
       {/* Skeleton del área principal */}
       <div className="flex-1 p-6 space-y-6 overflow-hidden">
         {/* Encabezado */}
-        <div className="flex items-center justify-between border-b border-gray-800 pb-4">
+        <div className="flex items-center justify-between border-b border-(--p-text-4) pb-4">
           <div>
             <Skeleton height={28} width={220} className="bg-gray-800" />
             <Skeleton height={16} width={340} className="bg-gray-800/60 mt-2" />

@@ -324,7 +324,49 @@ export interface LotePlan {
   /** Días corridos de ocupación del tanque. Null = hereda de la config del
    *  producto (config_produccion_producto.dias_fermentacion). */
   diasOcupacion: number | null
+  /** Seguimiento real (4-oct-2026): cuándo se cocinó y terminó, y cuánto salió. */
+  fechaInicioReal: string | null
+  fechaFinReal: string | null
+  litrosReales: number | null
 }
+
+/** Lote ya cerrado (completado o cancelado) en las últimas semanas: para
+ *  comparar lo planificado con lo que de verdad se cocinó. */
+export interface LoteCerrado {
+  id: string
+  producto: string
+  categoria: 'cerveza' | 'kombucha'
+  estado: 'completado' | 'cancelado'
+  litrosPlanificados: number
+  litrosReales: number | null
+  fechaPlanificada: string
+  fechaInicioReal: string | null
+  fechaFinReal: string | null
+  actualizadoAt: string
+}
+
+/** Ítem de envase (latas, etiquetas, tapas) — tabla produccion_envase. */
+export interface EnvaseItem {
+  clave: string
+  nombre: string
+  tipo: 'lata' | 'etiqueta' | 'tapa'
+  /** ml de la lata a la que corresponde; null = sirve a todas. */
+  ml: number | null
+  porLata: number
+  precioUnitario: number | null
+  stockUnidades: number | null
+}
+
+/** Una foto diaria del stock de una línea fija (historial desde 4-oct-2026). */
+export interface PuntoHistorialStock {
+  fecha: string
+  producto: string
+  barrilLitros: number
+  lataLitros: number
+}
+
+/** ml de la lata de cada producto, deducido del inventario ("Lata (473 ml) de …"). */
+export type MlLataPorProducto = Record<string, number>
 
 /** Configuración por producto del Gantt de ocupación de fermentadores. */
 export interface ConfigProductoProduccion {
@@ -411,6 +453,13 @@ export interface SugerenciaPlan {
   atrasadoGestion: boolean
 }
 
+/** Fecha de hace `dias` días (yyyy-mm-dd, o el instante completo). Es un
+ *  componente de servidor: se evalúa una vez por request. */
+function haceDiasISO(dias: number, instante = false): string {
+  const d = new Date(Date.now() - dias * 86_400_000).toISOString()
+  return instante ? d : d.slice(0, 10)
+}
+
 export default async function ProduccionPage() {
   const user = await getServerUser()
   if (!user) redirect('/login')
@@ -447,6 +496,7 @@ export default async function ProduccionPage() {
     { data: stockSeguridadRaw }, { data: ultimoSyncStockRaw },
     { data: recetasRaw }, { data: recetaInsumosRaw }, { data: stockInsumosRaw }, { data: insumosRaw },
     { data: fermentadoresRaw }, { data: ajustesTanqueRaw },
+    { data: envaseRaw }, { data: lotesCerradosRaw },
   ] = await Promise.all([
     admin.from('forecast_validacion').select('nivel, clave, mae, mape, meses_historial, metodo'),
     admin.from('forecast_calidad_datos').select('tipo, clave, detalle, severidad, generado_at').order('generado_at', { ascending: false }),
@@ -477,13 +527,20 @@ export default async function ProduccionPage() {
     // migración ajuste_lote_tanque_fechas_manuales) — se cruzan por tanque +
     // código de lote al armar los bloques 'en_tanque' del Gantt.
     admin.from('ajuste_lote_tanque').select('tanque, codigo_lote, fecha_inicio_manual, fecha_embarrillado_manual'),
+    // Envase (latas, etiquetas, tapas) para presupuestar la compra en lata.
+    admin.from('produccion_envase').select('clave, nombre, tipo, ml, por_lata, precio_unitario, stock_unidades').order('clave'),
+    // Lotes cerrados de las últimas 8 semanas: plan vs. real.
+    admin.from('plan_produccion').select('id, producto, categoria, estado, litros_planificados, litros_reales, fecha_planificada, fecha_inicio_real, fecha_fin_real, actualizado_at')
+      .in('estado', ['completado', 'cancelado'])
+      .gte('actualizado_at', haceDiasISO(56, true))
+      .order('actualizado_at', { ascending: false }).limit(200),
   ])
   const ultimoSyncStock = (ultimoSyncStockRaw as { creado_at?: string } | null)?.creado_at ?? null
   // Se calcula server-side (comparado contra la hora del request, no la del
   // navegador) para no arriesgar un mismatch de hidratación entre SSR y
   // cliente — mismo patrón que diaActual/diasEnMes más abajo.
   const minutosDesdeSyncStock = ultimoSyncStock != null
-    ? Math.max(0, Math.round((Date.now() - Date.parse(ultimoSyncStock)) / 60000))
+    ? Math.max(0, Math.round((Date.parse(haceDiasISO(0, true)) - Date.parse(ultimoSyncStock)) / 60000))
     : null
 
   const categoriaPorProducto = new Map(
@@ -861,6 +918,49 @@ export default async function ProduccionPage() {
     stockActualUnidadesPorProductoEnvase.set(clavePE, (stockActualUnidadesPorProductoEnvase.get(clavePE) ?? 0) + cantidad)
   }
 
+  // ml de lata por producto: sale del propio nombre en el inventario. Cerveza
+  // va en 473 y kombucha en 354, pero se toma del dato y no se supone.
+  const mlLataPorProducto: MlLataPorProducto = {}
+  for (const s of stockRaw ?? []) {
+    const ml = (s.producto as string | null)?.match(/Lata \((\d+)\s*ml\)/i)?.[1]
+    if (!ml) continue
+    const nombre = resolverProductoStock(s.producto as string)
+    if (!mlLataPorProducto[nombre]) mlLataPorProducto[nombre] = Number(ml)
+  }
+
+  // Historial diario de stock de las LÍNEAS FIJAS (tabla stock_productos_diario,
+  // que llena un trigger en cada carga desde el 4-oct-2026). Mismo criterio que
+  // el inventario de arriba: sólo cámaras de Producción, sin tanques, y los
+  // nombres resueltos contra el catálogo. Sirve para contar días en quiebre.
+  const historialStock: PuntoHistorialStock[] = []
+  {
+    const desde = haceDiasISO(45)
+    const filas: { fecha: string; producto: string; tipo: string; camara: string; cantidad: number; litros: number | null }[] = []
+    for (let o = 0; ; o += 1000) {
+      const { data, error } = await admin.from('stock_productos_diario').select('fecha, producto, tipo, camara, cantidad, litros')
+        .gte('fecha', desde).order('fecha').order('producto').range(o, o + 999)
+      if (error || !data || data.length === 0) break
+      filas.push(...(data as typeof filas))
+      if (data.length < 1000) break
+    }
+    const acum = new Map<string, PuntoHistorialStock>()
+    for (const f of filas) {
+      if (f.tipo === 'tanque' || !esCamaraProduccion(f.camara || null)) continue
+      const nombre = resolverProductoStock(f.producto)
+      if (!LINEAS_FIJAS.has(nombre)) continue
+      const cantidad = Number(f.cantidad)
+      const litrosCrudos = f.litros != null ? Number(f.litros) : null
+      const bucket = bucketDeStock(f.producto, f.tipo, cantidad, litrosCrudos)
+      const litros = litrosCrudos ?? litrosLata(f.producto, cantidad) ?? 0
+      const k = `${f.fecha}|${nombre}`
+      const p = acum.get(k) ?? { fecha: String(f.fecha).slice(0, 10), producto: nombre, barrilLitros: 0, lataLitros: 0 }
+      if (bucket === 'lata') p.lataLitros += litros
+      else if (bucket === 'barril_30' || bucket === 'barril_50') p.barrilLitros += litros
+      acum.set(k, p)
+    }
+    historialStock.push(...[...acum.values()].map(p => ({ ...p, barrilLitros: Math.round(p.barrilLitros), lataLitros: Math.round(p.lataLitros) })))
+  }
+
   // Litros en fermentación, que van a llegar a bodega dentro del lead time.
   // Sin esto, un producto con una cocción en curso aparece igual como
   // "crítico" y gatillaría una cocción redundante.
@@ -1216,6 +1316,32 @@ export default async function ProduccionPage() {
     observaciones: (p.observaciones as string | null) ?? null,
     fermentador: (p.fermentador as string | null) ?? null,
     diasOcupacion: p.dias_ocupacion == null ? null : Number(p.dias_ocupacion),
+    fechaInicioReal: (p.fecha_inicio_real as string | null)?.slice(0, 10) ?? null,
+    fechaFinReal: (p.fecha_fin_real as string | null)?.slice(0, 10) ?? null,
+    litrosReales: p.litros_reales == null ? null : Number(p.litros_reales),
+  }))
+
+  const lotesCerrados: LoteCerrado[] = (lotesCerradosRaw ?? []).map(p => ({
+    id: p.id as string,
+    producto: p.producto as string,
+    categoria: p.categoria as 'cerveza' | 'kombucha',
+    estado: p.estado as 'completado' | 'cancelado',
+    litrosPlanificados: Number(p.litros_planificados),
+    litrosReales: p.litros_reales == null ? null : Number(p.litros_reales),
+    fechaPlanificada: String(p.fecha_planificada).slice(0, 10),
+    fechaInicioReal: (p.fecha_inicio_real as string | null)?.slice(0, 10) ?? null,
+    fechaFinReal: (p.fecha_fin_real as string | null)?.slice(0, 10) ?? null,
+    actualizadoAt: String(p.actualizado_at),
+  }))
+
+  const envase: EnvaseItem[] = (envaseRaw ?? []).map(e => ({
+    clave: e.clave as string,
+    nombre: e.nombre as string,
+    tipo: e.tipo as EnvaseItem['tipo'],
+    ml: e.ml == null ? null : Number(e.ml),
+    porLata: Number(e.por_lata),
+    precioUnitario: e.precio_unitario == null ? null : Number(e.precio_unitario),
+    stockUnidades: e.stock_unidades == null ? null : Number(e.stock_unidades),
   }))
 
   // Configuración por producto del Gantt: días en tanque, litraje habitual y
@@ -1292,7 +1418,7 @@ export default async function ProduccionPage() {
   const lotesSinReceta: LoteSinReceta[] = []
 
   for (const lote of planProduccion) {
-    if (lote.estado !== 'planificado' && lote.estado !== 'en_curso') continue
+    if (lote.estado !== 'planificado') continue // un lote en curso ya consumió sus insumos
     const receta = recetaPorProducto.get(lote.producto)
     if (!receta) {
       lotesSinReceta.push({ producto: lote.producto, litrosPlanificados: lote.litrosPlanificados })
@@ -1559,6 +1685,11 @@ export default async function ProduccionPage() {
       ultimaCorrida={ultimaCorrida}
       minutosDesdeSyncStock={minutosDesdeSyncStock}
       avanceMes={avanceMes}
+      lotesCerrados={lotesCerrados}
+      envase={envase}
+      historialStock={historialStock}
+      mlLataPorProducto={mlLataPorProducto}
+      esAdmin={user.isAdmin}
       nombreUsuario={user.nombre}
       inicialesUsuario={user.iniciales}
     />

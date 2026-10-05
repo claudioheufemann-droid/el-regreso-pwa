@@ -2,7 +2,7 @@
 
 ## Visión General de Datos
 
-El módulo de Producción se nutre de **13 tablas en Supabase**, combinando datos importados periódicamente del ERP con configuraciones manuales de planta y proyecciones calculadas por el modelo de IA.
+El módulo de Producción se nutre de **15 tablas en Supabase**, combinando datos importados periódicamente del ERP con configuraciones manuales de planta y proyecciones calculadas por el modelo de IA.
 
 ---
 
@@ -30,6 +30,12 @@ Reflejo del informe de existencias del ERP en tiempo real.
 - **Campos**: `producto`, `categoria`, `tipo` (`barril` | `envase` | `tanque`), `camara`, `cantidad`, `litros`, `lotes`.
 - **Filtro de Cámaras de Producción**: Para calcular disponible vendible en producción se filtran cámaras como *Frío Planta*, *Latas FIFO* (definidas en `lib/camaras.ts`).
 
+### `stock_productos_diario` (4-oct-2026)
+Una foto por día del stock de producto terminado, para medir días sin stock. `/api/stock/upload` borra y reinserta `stock_productos`, así que sin esta tabla sólo existía la última foto.
+- **Campos**: `fecha`, `producto`, `tipo`, `camara`, `cantidad`, `litros` (PK: fecha + producto + tipo + cámara).
+- **Cómo se llena**: trigger por sentencia `stock_productos_diario_copiar` (AFTER INSERT en `stock_productos`) que reconstruye la foto del día desde la tabla completa: da igual si el upload inserta de una vez o por tandas, y la segunda carga del día reemplaza a la primera.
+- **Uso**: `page.tsx` lee los últimos 45 días de las líneas fijas (mismas cámaras y normalización que el inventario) → `historialStock` → "Días sin stock en líneas fijas" en la pestaña Hoy.
+
 ### `stock_seguridad`
 Puntos de reorden y colchón de seguridad calculados para cada combinación producto × formato.
 - **Campos**: `nivel`, `producto`, `envase`, `categoria`, `mes`, `lead_time_semanas`, `periodo_revision_semanas`, `demanda_mensual_proyectada`, `demanda_en_ventana`, `sigma_semanal`, `stock_seguridad_litros`, `punto_reorden_litros`, `confianza` (`alta` | `media` | `baja`), `mape_backtest`, `meses_historial`, `metodo`.
@@ -41,6 +47,7 @@ Puntos de reorden y colchón de seguridad calculados para cada combinación prod
 ### `plan_produccion`
 Cola de cocciones planificadas y en curso.
 - **Campos**: `id`, `producto`, `categoria`, `litros_planificados`, `fecha_planificada`, `prioridad` (0..N), `estado` (`planificado` | `en_curso` | `completado` | `cancelado`), `origen` (`sugerido` | `manual`), `motivo`, `observaciones`, `fermentador`, `dias_ocupacion`.
+- **Seguimiento real (4-oct-2026)**: `fecha_inicio_real` (se llena al pasar a `en_curso`), `fecha_fin_real` y `litros_reales` (al pasar a `completado`, desde el modal "Terminar"). La API `PATCH /api/produccion/plan/[id]` pone la fecha de hoy (hora de Chile) si no viene explícita. Un lote `en_curso` ya consumió sus insumos: no entra en la necesidad de insumos.
 
 ### `fermentadores`
 Capacidad física nominal de los tanques activos en la planta.
@@ -63,6 +70,12 @@ Definición de composición por producto base.
 Catálogo de materias primas e inventario actual.
 - **`insumos`**: `id`, `nombre`, `categoria` (`malta` | `lupulo` | `levadura` | `otros`), `unidad_base` (`gr` | `ml`), `precio_unitario`.
 - **`stock_insumos`**: `insumo_id`, `cantidad`, `fecha_informe`.
+
+### `produccion_envase` (4-oct-2026)
+Latas, etiquetas y tapas, por unidad. Tabla propia (no filas en `insumos`) porque el informe de insumos reemplaza ese catálogo y el envase se cuenta por unidad, no por gr/ml.
+- **Campos**: `clave` (`lata_473`, `lata_354`, `etiqueta_473`, `etiqueta_354`, `tapa`), `nombre`, `tipo` (`lata` | `etiqueta` | `tapa`), `ml` (null = sirve a todas), `por_lata` (1 por defecto), `precio_unitario`, `stock_unidades`, `actualizado_at`, `actualizado_por`.
+- **Edición**: en la pestaña Compras (inputs que guardan al salir del campo) vía `PATCH /api/produccion/envase`.
+- **Cálculo**: latas = litros del forecast en lata ÷ ml de la lata del producto (473 cerveza, 354 kombucha, leído del nombre en el inventario); etiquetas y tapas = latas × `por_lata`; la compra descuenta `stock_unidades` en el primer ciclo que lo necesita.
 
 ---
 

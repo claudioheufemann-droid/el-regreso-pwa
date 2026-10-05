@@ -31,6 +31,7 @@
  * dibujo.
  */
 
+import { memo } from 'react'
 import { FAMILIA_LABEL, FAMILIA_AYUDA, type FamiliaEnvase } from '@/lib/produccion/reglas'
 
 export type NivelCobertura = 'ok' | 'bajo' | 'cero'
@@ -126,7 +127,7 @@ function diaMes(iso: string) {
     .replace('.', '')
 }
 
-export default function FilaCobertura({
+function FilaCobertura({
   cobertura: c, dias, anchoDia, altoFila, tamEtiqueta, hoy, color, fila, anchoEtiqueta,
 }: {
   cobertura: CoberturaProducto
@@ -151,16 +152,16 @@ export default function FilaCobertura({
   const cruzado = !!c.agota && !!c.rescate && c.diasEnCero > 0
 
   return (
-    <div className="prod-gantt-fila flex border-b border-gray-100 hover:bg-gray-50/40"
+    <div className="prod-gantt-fila flex border-b border-(--p-line-2) hover:bg-(--p-hover)"
       style={{ ['--fila' as string]: fila }}>
 
       <div style={{ width: anchoEtiqueta, flexShrink: 0, height: altoFila }}
-        className="sticky left-0 z-10 flex items-center gap-2 border-r border-gray-100 bg-white px-3">
+        className="sticky left-0 z-10 flex items-center gap-2 border-r border-(--p-line-2) bg-(--p-card) px-3">
 
         <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
           <div className="flex items-center gap-1.5">
             <span className="h-2 w-2 shrink-0 rounded-sm" style={{ background: color }} />
-            <span className="truncate font-bold text-gray-800" style={{ fontSize: tamEtiqueta + 1 }}
+            <span className="truncate font-bold text-(--p-text)" style={{ fontSize: tamEtiqueta + 1 }}
               title={`${c.producto} · ${Math.round(c.stockActual).toLocaleString('es-CL')} L en cámara hoy`}>
               {c.producto}
             </span>
@@ -169,16 +170,16 @@ export default function FilaCobertura({
           {/* Velocidad y días de inventario. Los dos juntos, porque por separado
               engañan: 40 L/día no dice nada sin saber cuánto hay, y "8 días" no
               dice si eso es mucho o poco para este producto. */}
-          <div className="flex items-center gap-1.5 tabular-nums text-gray-400"
+          <div className="flex items-center gap-1.5 tabular-nums text-(--p-text-3)"
             style={{ fontSize: Math.max(tamEtiqueta - 2, 8) }}>
             <span title={`Se venden ${fRitmo(c.velocidad)} litros por día de ${c.producto} — venta real de las últimas 4 semanas para este mes, forecast para los meses siguientes de la proyección`}>
               {fRitmo(c.velocidad)} L/día
             </span>
             {c.doi != null && (
               <>
-                <span className="text-gray-300">·</span>
+                <span className="text-(--p-text-4)">·</span>
                 <span
-                  className={c.doi <= 7 ? 'font-bold text-red-500' : c.doi <= 21 ? 'font-bold text-amber-600' : ''}
+                  className={c.doi <= 7 ? 'font-bold text-(--p-bad)' : c.doi <= 21 ? 'font-bold text-(--p-warn)' : ''}
                   title={`Días de inventario: lo que hay hoy en cámara alcanza ${c.doi} días a este ritmo, sin contar ningún lote por llegar`}>
                   DOI {c.doi} d
                 </span>
@@ -203,26 +204,26 @@ export default function FilaCobertura({
               const enCero = f.stockActual <= 0
               return (
                 <span key={f.familia}
-                  className={enCero ? 'font-bold text-red-600' : falta ? 'font-bold text-amber-600' : 'text-gray-400'}
+                  className={enCero ? 'font-bold text-(--p-bad)' : falta ? 'font-bold text-(--p-warn)' : 'text-(--p-text-3)'}
                   title={`${FAMILIA_LABEL[f.familia]}: ${fLitros(f.stockActual)} L en cámara hoy contra un colchón de ${fLitros(f.colchon)} L. `
                     + (enCero ? 'Sin stock de este formato. ' : falta ? `Faltan ${fLitros(f.colchon - f.stockActual)} L para el colchón. ` : 'Sobre el colchón. ')
                     + FAMILIA_AYUDA[f.familia]}>
-                  <span className="mr-0.5 font-normal text-gray-300">{FAMILIA_LABEL[f.familia][0]}</span>
+                  <span className="mr-0.5 font-normal text-(--p-text-4)">{FAMILIA_LABEL[f.familia][0]}</span>
                   {fLitros(f.stockActual)}
-                  <span className="font-normal text-gray-300">/</span>
+                  <span className="font-normal text-(--p-text-4)">/</span>
                   {fLitros(f.colchon)}
                 </span>
               )
             })}
           </div>
         ) : (
-          <span className="shrink-0 tabular-nums text-gray-400" style={{ fontSize: tamEtiqueta - 1 }}
+          <span className="shrink-0 tabular-nums text-(--p-text-3)" style={{ fontSize: tamEtiqueta - 1 }}
             title={c.colchonEstimado
               ? `Colchón: sin stock de seguridad calculado todavía para este producto — se usa un respaldo de 7 días de venta (${fLitros(c.colchon)} L)`
               : `Colchón: ${fLitros(c.colchon)} L — el stock de seguridad calculado para este producto (con su σ y nivel de servicio). Por debajo de esto la barra pasa a ámbar.`}>
             {fLitros(c.stockActual)}
-            <span className="text-gray-300"> / </span>
-            <span className={c.colchonEstimado ? 'italic text-gray-300' : 'text-gray-400'}>
+            <span className="text-(--p-text-4)"> / </span>
+            <span className={c.colchonEstimado ? 'italic text-(--p-text-4)' : 'text-(--p-text-3)'}>
               {c.colchonEstimado && '~'}{fLitros(c.colchon)}
             </span>
           </span>
@@ -235,7 +236,7 @@ export default function FilaCobertura({
             <div key={d.iso} style={{ width: anchoDia, flexShrink: 0 }}
               className={`border-l ${
                 d.esHoy ? 'border-[#C9A227] bg-[#C9A227]/10'
-                  : d.finde ? 'border-gray-200 bg-gray-200/70' : 'border-gray-100'
+                  : d.finde ? 'border-(--p-line) bg-(--p-line)/70' : 'border-(--p-line-2)'
               }`} />
           ))}
         </div>
@@ -334,3 +335,7 @@ export default function FilaCobertura({
     </div>
   )
 }
+
+/** Memorizada: durante un arrastre en el Gantt no cambia nada de esta fila,
+ *  así que no tiene por qué redibujarse con cada celda destino. */
+export default memo(FilaCobertura)

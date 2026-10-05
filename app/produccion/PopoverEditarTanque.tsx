@@ -85,7 +85,7 @@ export default function PopoverEditarTanque({ datos, tieneAjuste, guardando, err
   return createPortal(
     <div
       ref={ref}
-      className="prod-root prod-popover fixed z-[85] flex w-[280px] flex-col gap-3 rounded-xl bg-[#10201B] p-4 text-[12px] text-white shadow-2xl ring-1 ring-black/10"
+      className="prod-root prod-popover fixed z-[85] flex w-[280px] flex-col gap-3 rounded-xl bg-[#1C1C1C] p-4 text-[12px] text-white shadow-2xl ring-1 ring-black/10"
       style={pos ? { left: pos.left, top: pos.top, visibility: 'visible' } : { left: -9999, top: -9999, visibility: 'hidden' }}
     >
       <div className="flex items-start justify-between gap-2">
@@ -105,7 +105,7 @@ export default function PopoverEditarTanque({ datos, tieneAjuste, guardando, err
 
       <p className="text-[10.5px] leading-snug text-white/50">
         El ERP no trae la fecha de cocción — la app la calcula desde el
-        embarrillado estimado. Corregí acá si no coincide con la realidad.
+        embarrillado estimado. Corrige acá si no coincide con la realidad.
       </p>
 
       <label className="flex flex-col gap-1">
@@ -138,7 +138,7 @@ export default function PopoverEditarTanque({ datos, tieneAjuste, guardando, err
         <button
           type="button" disabled={!valido || guardando}
           onClick={() => onGuardar({ fechaInicioManual: inicio, fechaEmbarriladoManual: embarrillado || null })}
-          className="prod-press flex-1 rounded-lg bg-[#E6C34A] px-3 py-2 text-[12px] font-bold text-[#10201B] hover:bg-[#F0D264] disabled:cursor-wait disabled:opacity-50"
+          className="prod-press flex-1 rounded-lg bg-[#E6C34A] px-3 py-2 text-[12px] font-bold text-[#1C1C1C] hover:bg-[#F0D264] disabled:cursor-wait disabled:opacity-50"
         >
           {guardando ? 'Guardando…' : 'Guardar'}
         </button>
@@ -154,7 +154,7 @@ export default function PopoverEditarTanque({ datos, tieneAjuste, guardando, err
       </div>
 
       <div
-        className={`absolute left-1/2 h-2.5 w-2.5 -translate-x-1/2 rotate-45 bg-[#10201B] ${
+        className={`absolute left-1/2 h-2.5 w-2.5 -translate-x-1/2 rotate-45 bg-[#1C1C1C] ${
           pos?.abreAbajo ? '-top-1' : 'top-full -translate-y-1.5'
         }`}
       />

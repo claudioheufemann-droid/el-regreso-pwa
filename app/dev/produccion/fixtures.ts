@@ -202,13 +202,13 @@ export const PLAN: LotePlan[] = [
     id: 'p1', producto: 'Red IPA', categoria: 'cerveza', litrosPlanificados: 3000,
     fechaPlanificada: masDias(-2), prioridad: 0, estado: 'planificado', origen: 'sugerido',
     motivo: 'Bajo punto de reorden', observaciones: null,
-    fermentador: 'Fermentador T6', diasOcupacion: 24,
+    fermentador: 'Fermentador T6', diasOcupacion: 24, fechaInicioReal: null, fechaFinReal: null, litrosReales: null,
   },
   {
     id: 'p2', producto: 'Kombucha Berry Menta', categoria: 'kombucha', litrosPlanificados: 2000,
     fechaPlanificada: masDias(1), prioridad: 1, estado: 'planificado', origen: 'manual',
     motivo: null, observaciones: null,
-    fermentador: 'Fermentador K-2', diasOcupacion: 12,
+    fermentador: 'Fermentador K-2', diasOcupacion: 12, fechaInicioReal: null, fechaFinReal: null, litrosReales: null,
   },
 ]
 

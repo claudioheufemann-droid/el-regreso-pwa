@@ -167,7 +167,7 @@ export default function PopoverCoccion({
          devuelve a los `<select>`/`<input>` de adentro sus estilos propios en
          vez de los globales de la app. */
       className={`prod-root prod-popover max-h-[72vh] overflow-y-auto rounded-xl text-[11.5px] font-normal text-white shadow-2xl ring-1 ring-white/10 ${
-        fijado ? 'bg-[#10201B] p-3.5' : 'bg-[#10201B]/95 p-3 backdrop-blur-sm'
+        fijado ? 'bg-[#1C1C1C] p-3.5' : 'bg-[#1C1C1C]/95 p-3 backdrop-blur-sm'
       }`}
     >
       {/* ── Encabezado ── */}
@@ -296,7 +296,7 @@ export default function PopoverCoccion({
               type="button"
               onClick={onConfirmar}
               disabled={confirmando}
-              className="prod-press flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#E6C34A] px-3 py-2 text-[12px] font-bold text-[#10201B] transition-colors hover:bg-[#F0D264] disabled:cursor-wait disabled:opacity-60"
+              className="prod-press flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#E6C34A] px-3 py-2 text-[12px] font-bold text-[#1C1C1C] transition-colors hover:bg-[#F0D264] disabled:cursor-wait disabled:opacity-60"
             >
               <Check size={13} />
               {confirmando ? 'Confirmando…' : `Confirmar en ${l.tanque} el ${fFecha(l.fechaInicio)}`}
@@ -327,12 +327,12 @@ export default function PopoverCoccion({
               onChange={ev => onAnclarTanque(ev.target.value)}
               className="w-full rounded-lg border border-white/15 bg-white/[0.07] px-2 py-1.5 text-[11.5px] font-semibold text-white focus:border-[#E6C34A] focus:outline-none"
             >
-              <option value="" className="bg-[#10201B]">Automático — {l.tanque} ({fNum(l.capacidadTanque)} L)</option>
+              <option value="" className="bg-[#1C1C1C]">Automático — {l.tanque} ({fNum(l.capacidadTanque)} L)</option>
               {tanques
                 .filter(t => t.categoria === l.categoria)
                 .sort((a, b) => a.capacidadLitros - b.capacidadLitros)
                 .map(t => (
-                  <option key={t.tanque} value={t.tanque} className="bg-[#10201B]">
+                  <option key={t.tanque} value={t.tanque} className="bg-[#1C1C1C]">
                     {t.tanque} ({fNum(t.capacidadLitros)} L)
                   </option>
                 ))}
@@ -363,7 +363,7 @@ export default function PopoverCoccion({
       {/* Flechita: apunta desde el lado por el que abrió. */}
       {pos && (
         <div
-          className={`absolute left-1/2 h-2.5 w-2.5 -translate-x-1/2 rotate-45 ${fijado ? 'bg-[#10201B]' : 'bg-[#10201B]/95'} ${
+          className={`absolute left-1/2 h-2.5 w-2.5 -translate-x-1/2 rotate-45 ${fijado ? 'bg-[#1C1C1C]' : 'bg-[#1C1C1C]/95'} ${
             pos.abreAbajo ? '-top-1' : 'top-full -translate-y-1.5'
           }`}
         />

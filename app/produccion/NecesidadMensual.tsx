@@ -137,7 +137,7 @@ function CampoLitros({ valor, onCambio, titulo }: {
         setCrudo(limpio)
         onCambio(limpio === '' ? 0 : Number(limpio))
       }}
-      className="w-24 rounded-lg border border-gray-200 px-2 py-1 text-right text-[12px] font-bold tabular-nums text-gray-800 focus:border-[#2F6B4F] focus:outline-none"
+      className="w-24 rounded-lg border border-(--p-line) px-2 py-1 text-right text-[12px] font-bold tabular-nums text-(--p-text) focus:border-(--p-accent-line) focus:outline-none"
     />
   )
 }
@@ -299,14 +299,14 @@ export default function NecesidadMensual({
   }, [tanques, onConfirmar])
 
   return (
-    <div className="prod-enter flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+    <div className="prod-enter flex flex-col overflow-hidden rounded-xl border border-(--p-line) bg-(--p-card) shadow-sm">
       {/* Cabecera + elección de base */}
-      <div className="flex flex-col gap-3 border-b border-gray-100 bg-gradient-to-b from-gray-50 to-white px-4 py-4 lg:px-6">
+      <div className="flex flex-col gap-3 border-b border-(--p-line-2) bg-(--p-card) px-4 py-4 lg:px-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2.5">
-            <h3 className="font-bold tracking-tight text-gray-900">Cuánto hay que producir</h3>
-            <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-400">
-              {filas.length} productos · {mesesVisibles.length} meses
+            <h3 className="font-bold tracking-tight text-(--p-text)">Cuánto hay que producir</h3>
+            <span className="rounded-full border border-(--p-line) bg-(--p-card) px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-(--p-text-3)">
+              {filas.length} {filas.length === 1 ? 'producto' : 'productos'} · {mesesVisibles.length} {mesesVisibles.length === 1 ? 'mes' : 'meses'}
             </span>
           </div>
 
@@ -314,31 +314,31 @@ export default function NecesidadMensual({
             {(['todos', 'cerveza', 'kombucha'] as const).map(f => (
               <button key={f} type="button" onClick={() => setFiltro(f)}
                 className={`prod-press rounded-full border px-3 py-1 text-[11px] font-bold capitalize transition ${
-                  filtro === f ? 'border-[#2F6B4F] bg-[#2F6B4F] text-white'
-                               : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
-                }`}>{f}</button>
+ filtro === f ? 'border-(--p-accent-line) prod-primario '
+ : 'border-(--p-line) bg-(--p-card) text-(--p-text-3) hover:bg-(--p-hover)'
+ }`}>{f}</button>
             ))}
             <button type="button" onClick={() => setSoloFaltantes(v => !v)}
               className={`prod-press rounded-full border px-3 py-1 text-[11px] font-bold transition ${
-                soloFaltantes ? 'border-[#C9A227] bg-[#C9A227]/15 text-[#7a6216]'
-                              : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
+                soloFaltantes ? 'border-[#C9A227] bg-[#C9A227]/15 text-(--p-accent)'
+                              : 'border-(--p-line) bg-(--p-card) text-(--p-text-3) hover:bg-(--p-hover)'
               }`}>Sólo lo que falta</button>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[11px] font-bold uppercase tracking-wide text-gray-400">Basar la cantidad en</span>
+          <span className="text-[11px] font-bold uppercase tracking-wide text-(--p-text-3)">Basar la cantidad en</span>
           {(Object.keys(ETIQUETA_BASE) as BaseCantidad[]).map(b => (
             <button key={b} type="button" onClick={() => setBase(b)}
               className={`prod-press rounded-lg border px-3 py-1.5 text-[11px] font-bold transition ${
-                base === b ? 'border-[#2F6B4F] bg-[#2F6B4F]/10 text-[#2F6B4F]'
-                           : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
+                base === b ? 'border-(--p-accent-line) bg-(--p-accent-soft) text-(--p-accent)'
+                           : 'border-(--p-line) bg-(--p-card) text-(--p-text-3) hover:bg-(--p-hover)'
               }`}>{ETIQUETA_BASE[b]}</button>
           ))}
         </div>
 
         {base === 'superior' && (
-          <div className="flex items-start gap-2 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-[11.5px] leading-snug text-amber-900">
+          <div className="flex items-start gap-2 rounded-lg border border-(--p-warn-line) bg-(--p-warn-soft) px-3 py-2 text-[11.5px] leading-snug text-(--p-warn)">
             <Info size={14} className="mt-px shrink-0" />
             <span>
               El límite superior es el escenario alto de <strong>cada producto por separado</strong>: planificar
@@ -354,8 +354,8 @@ export default function NecesidadMensual({
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-[12px]">
           <thead>
-            <tr className="border-b border-gray-200 bg-white text-[10px] uppercase tracking-wide text-gray-400">
-              <th className="sticky left-0 z-10 bg-white px-4 py-2 text-left font-bold">Producto</th>
+            <tr className="border-b border-(--p-line) bg-(--p-card) text-[10px] uppercase tracking-wide text-(--p-text-3)">
+              <th className="sticky left-0 z-10 bg-(--p-card) px-4 py-2 text-left font-bold">Producto</th>
               <th className="px-3 py-2 text-right font-bold" title="Litros ya envasados en cámara hoy — se descuentan de la necesidad mes a mes antes de proponer una cocción nueva">Stock hoy</th>
               <th className="px-3 py-2 text-right font-bold" title="Stock de seguridad calibrado que respalda estos litros">Colchón</th>
               <th className="px-3 py-2 text-right font-bold" title="Litros a los que hay que volver a cocer">Pto. reorden</th>
@@ -368,8 +368,8 @@ export default function NecesidadMensual({
           <tbody className="prod-stagger">
             {filas.map((f, i) => (
               <tr key={f.producto} style={{ ['--i' as string]: i }}
-                className="prod-hover-row border-b border-gray-50">
-                <td className="sticky left-0 z-10 bg-white px-4 py-2">
+                className="prod-hover-row border-b border-(--p-line-2)">
+                <td className="sticky left-0 z-10 bg-(--p-card) px-4 py-2">
                   {/* La foto reemplaza al punto de color de antes —mismo
                       criterio que ya usan Split de Envasado y Necesidad
                       Anticipada (ver ProduccionClient.tsx): es la lata que
@@ -377,17 +377,17 @@ export default function NecesidadMensual({
                       que hay que aprenderse. */}
                   <div className="flex items-center gap-2">
                     <ProductImage nombre={f.producto} categoria={f.categoria} size={28} radius={7} />
-                    <span className="font-semibold text-gray-800">{f.producto}</span>
+                    <span className="font-semibold text-(--p-text)">{f.producto}</span>
                   </div>
                 </td>
 
-                <td className="px-3 py-2 text-right align-top text-[11px] font-semibold tabular-nums text-gray-600">
+                <td className="px-3 py-2 text-right align-top text-[11px] font-semibold tabular-nums text-(--p-text-2)">
                   {f.stockHoy != null ? `${fNum(f.stockHoy)} L` : '—'}
                 </td>
-                <td className="px-3 py-2 text-right align-top text-[11px] tabular-nums text-gray-500">
+                <td className="px-3 py-2 text-right align-top text-[11px] tabular-nums text-(--p-text-3)">
                   {f.colchon != null ? `${fNum(f.colchon)} L` : '—'}
                 </td>
-                <td className="px-3 py-2 text-right align-top text-[11px] tabular-nums text-gray-500">
+                <td className="px-3 py-2 text-right align-top text-[11px] tabular-nums text-(--p-text-3)">
                   {f.reorden != null ? `${fNum(f.reorden)} L` : '—'}
                 </td>
 
@@ -403,12 +403,12 @@ export default function NecesidadMensual({
                           titulo={`Centro ${fNum(c.centro)} L · Superior ${fNum(c.superior)} L · Centro+colchón ${fNum(c.centro + c.colchon)} L`}
                         />
                         {c.yaEnPlan > 0 && (
-                          <span className="text-[10px] tabular-nums text-gray-400">
+                          <span className="text-[10px] tabular-nums text-(--p-text-3)">
                             {fNum(c.yaEnPlan)} L en plan
                           </span>
                         )}
                         {c.stockUsado > 0 && (
-                          <span className="text-[10px] tabular-nums text-gray-400">
+                          <span className="text-[10px] tabular-nums text-(--p-text-3)">
                             {fNum(c.stockUsado)} L de stock
                           </span>
                         )}
@@ -416,12 +416,12 @@ export default function NecesidadMensual({
                           <button type="button" disabled={cargando}
                             onClick={() => confirmar(f.producto, f.categoria, c.mes, c.faltante)}
                             title={`Crea las cocciones que cubran ${fNum(c.faltante)} L, partidas por tanque`}
-                            className="prod-press flex items-center gap-1 rounded-md bg-[#2F6B4F] px-2 py-0.5 text-[10px] font-bold text-white hover:bg-[#255941] disabled:opacity-50">
+                            className="prod-press flex items-center gap-1 rounded-md prod-primario px-2 py-0.5 text-[10px] font-bold disabled:opacity-50">
                             {cargando ? <Loader2 size={10} className="animate-spin" /> : <Plus size={10} />}
                             {fNum(c.faltante)} L
                           </button>
                         ) : cubierto ? (
-                          <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-600">
+                          <span className="flex items-center gap-1 text-[10px] font-bold text-(--p-ok)">
                             <Check size={10} /> cubierto
                           </span>
                         ) : null}
@@ -430,24 +430,24 @@ export default function NecesidadMensual({
                   )
                 })}
 
-                <td className="whitespace-nowrap px-4 py-2 text-right align-top text-[12px] font-black tabular-nums text-gray-800">
+                <td className="whitespace-nowrap px-4 py-2 text-right align-top text-[12px] font-black tabular-nums text-(--p-text)">
                   {fNum(f.total)} L
                 </td>
               </tr>
             ))}
           </tbody>
           <tfoot>
-            <tr className="border-t-2 border-gray-200 bg-gray-50 text-[11px] font-black text-gray-700">
-              <td className="sticky left-0 z-10 bg-gray-50 px-4 py-2.5 text-left uppercase tracking-wide">Total del mes</td>
+            <tr className="border-t-2 border-(--p-line) bg-(--p-card-2) text-[11px] font-black text-(--p-text-2)">
+              <td className="sticky left-0 z-10 bg-(--p-card-2) px-4 py-2.5 text-left uppercase tracking-wide">Total del mes</td>
               <td /><td /><td />
               {totalesPorMes.map(t => (
                 <td key={t.mes} className="px-3 py-2.5 text-right tabular-nums">
                   <div>{fNum(t.objetivo)} L</div>
                   {t.yaEnPlan > 0 && (
-                    <div className="text-[10px] font-semibold text-gray-400">{fNum(t.yaEnPlan)} en plan</div>
+                    <div className="text-[10px] font-semibold text-(--p-text-3)">{fNum(t.yaEnPlan)} en plan</div>
                   )}
                   {t.stockUsado > 0 && (
-                    <div className="text-[10px] font-semibold text-gray-400">{fNum(t.stockUsado)} de stock</div>
+                    <div className="text-[10px] font-semibold text-(--p-text-3)">{fNum(t.stockUsado)} de stock</div>
                   )}
                 </td>
               ))}
@@ -459,18 +459,18 @@ export default function NecesidadMensual({
         </table>
 
         {filas.length === 0 && (
-          <p className="px-4 py-8 text-center text-sm text-gray-400">
+          <p className="px-4 py-8 text-center text-sm text-(--p-text-3)">
             {soloFaltantes ? 'Todo lo proyectado ya está cubierto por el plan.' : 'No hay productos proyectados con este filtro.'}
           </p>
         )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-gray-100 bg-gray-50/60 px-4 py-2.5 text-[11px] text-gray-500 lg:px-6">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-(--p-line-2) bg-(--p-card-2)/60 px-4 py-2.5 text-[11px] text-(--p-text-3) lg:px-6">
         <span className="flex items-center gap-1.5">
-          <TriangleAlert size={12} className="text-amber-500" />
+          <TriangleAlert size={12} className="text-(--p-warn)" />
           Al confirmar se crean las cocciones partidas según los tanques de esa línea.
         </span>
-        <span className="ml-auto">Pasá el cursor por una cantidad para ver las tres bases.</span>
+        <span className="ml-auto">Pasa el cursor por una cantidad para ver las tres bases.</span>
       </div>
     </div>
   )

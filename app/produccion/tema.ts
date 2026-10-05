@@ -1,20 +1,32 @@
 /* ────────────────────────────────────────────────────────────────────────
-   Paleta corporativa del módulo Producción.
+   Paleta del módulo Producción para lo que NO puede ir por clase CSS: trazos
+   y rellenos de Recharts y del Gantt (atributos SVG) y algún estilo inline.
 
-   Vive en su propio archivo —y no dentro de ProduccionClient.tsx— desde que
-   el menú lateral se extrajo a su propio componente: los dos la necesitan, y
-   dejarla en el cliente obligaría a que el menú importara del archivo que a
-   su vez importa el menú. Un ciclo que en ESM a veces funciona y a veces no,
-   según el orden en que el bundler resuelva.
+   Desde el rediseño del 4-oct-2026 sigue a Ventas: dorado de acción sobre
+   carbón, con un azul de contraste para la segunda serie de los gráficos.
+   Los valores son hex fijos (no var(--x)) porque Recharts los pasa como
+   atributos SVG; están elegidos para leerse en modo oscuro y en claro.
+   Las superficies, textos y avisos salen de los tokens --p-* de
+   globals.css, nunca de acá.
 
-   Estos colores van inline porque no existen como tokens del tema de
-   Tailwind; el resto de la paleta sale de las utilidades normales.
+   Vive en su propio archivo —y no dentro de ProduccionClient.tsx— porque lo
+   usan varios componentes, y dejarlo en el cliente obligaría a importar del
+   archivo que a su vez los importa a ellos.
    ──────────────────────────────────────────────────────────────────────── */
 export const COLORS = {
-  darkGreen: '#0F3D2E',
-  lightGreen: '#1A5441',
-  amber: '#E5A922',
-  lightAmber: '#FDE68A',
-  kombucha: '#B45309',
-  gray: '#9CA3AF',
+  /** Acción principal, proyección del modelo, cerveza. */
+  primario: '#D4AF37',
+  /** Variante apagada del dorado: tendencias y segundo nivel. */
+  primarioSuave: '#B8962E',
+  /** Segunda serie (venta real, ritmo) y formatos. */
+  contraste: '#60A5FA',
+  /** Fondo de la temporada alta en los gráficos. */
+  temporada: 'rgba(212,175,55,0.14)',
+  kombucha: '#F59E0B',
+  neutro: '#8A8378',
+  ok: '#22C55E',
+  bad: '#EF4444',
+  /** Rejilla y ejes de los gráficos. */
+  rejilla: 'rgba(138,131,120,0.22)',
+  eje: '#8A8378',
 }

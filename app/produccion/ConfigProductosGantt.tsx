@@ -96,34 +96,34 @@ export default function ConfigProductosGantt({ abierto, config, onCerrar, onGuar
 
   return createPortal(
     <div
-      className="animate-fade-in fixed inset-0 z-[80] flex items-end justify-center sm:items-center"
+      className="prod-root prod-scrim fixed inset-0 z-[80] flex items-end justify-center sm:items-center"
       style={{ background: 'rgba(17,19,22,.55)', backdropFilter: 'blur(2px)' }}
       onClick={onCerrar}
     >
       <div
         onClick={e => e.stopPropagation()}
-        className="animate-slide-up flex w-full flex-col overflow-hidden bg-white shadow-2xl sm:w-[min(880px,94vw)] sm:rounded-2xl"
+        className="prod-modal flex w-full flex-col overflow-hidden bg-(--p-card) shadow-2xl sm:w-[min(880px,94vw)] sm:rounded-2xl"
         style={{ maxHeight: '88vh' }}
       >
         {/* Cabecera */}
-        <div className="flex items-start justify-between gap-3 border-b border-gray-100"
+        <div className="flex items-start justify-between gap-3 border-b border-(--p-line-2)"
           style={{ padding: '18px 20px 14px' }}>
           <div className="flex flex-col" style={{ gap: 4 }}>
-            <h3 className="text-[15px] font-bold tracking-tight text-gray-900">Configuración de productos</h3>
-            <p className="text-[12px] leading-snug text-gray-500">
+            <h3 className="text-[15px] font-bold tracking-tight text-(--p-text)">Configuración de productos</h3>
+            <p className="text-[12px] leading-snug text-(--p-text-3)">
               Cuántos días ocupa el fermentador cada producto, con qué litraje se suele cocer
               y de qué color se pinta en el Gantt.
             </p>
           </div>
           <button type="button" onClick={onCerrar}
-            className="rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+            className="rounded-lg text-(--p-text-3) hover:bg-(--p-hover) hover:text-(--p-text-2)"
             style={{ padding: 6 }}>
             <X size={18} />
           </button>
         </div>
 
         {/* Aviso de días corridos — es la confusión que trae el Excel. */}
-        <div className="flex items-start border-b border-amber-100 bg-amber-50 text-[11.5px] leading-snug text-amber-900"
+        <div className="flex items-start border-b border-(--p-warn-line) bg-(--p-warn-soft) text-[11.5px] leading-snug text-(--p-warn)"
           style={{ padding: '10px 20px', gap: 8 }}>
           <AlertCircle size={15} className="shrink-0" style={{ marginTop: 1 }} />
           <span>
@@ -134,21 +134,21 @@ export default function ConfigProductosGantt({ abierto, config, onCerrar, onGuar
         </div>
 
         {/* Filtros */}
-        <div className="flex items-center border-b border-gray-100 bg-gray-50/60"
+        <div className="flex items-center border-b border-(--p-line-2) bg-(--p-card-2)/60"
           style={{ padding: '10px 20px', gap: 6 }}>
           {(['todos', 'cerveza', 'kombucha'] as const).map(f => (
             <button key={f} type="button" onClick={() => setFiltro(f)}
               className={`rounded-full border text-[11px] font-bold capitalize transition ${
-                filtro === f
-                  ? 'border-[#2F6B4F] bg-[#2F6B4F] text-white'
-                  : 'border-gray-200 bg-white text-gray-500 hover:bg-gray-50'
-              }`}
+ filtro === f
+ ? 'border-(--p-accent-line) prod-primario '
+ : 'border-(--p-line) bg-(--p-card) text-(--p-text-3) hover:bg-(--p-hover)'
+ }`}
               style={{ padding: '4px 12px' }}>
               {f}
             </button>
           ))}
           {error && (
-            <span className="ml-auto flex items-center text-[11px] font-bold text-red-600" style={{ gap: 5 }}>
+            <span className="ml-auto flex items-center text-[11px] font-bold text-(--p-bad)" style={{ gap: 5 }}>
               <AlertCircle size={13} /> {error}
             </span>
           )}
@@ -157,8 +157,8 @@ export default function ConfigProductosGantt({ abierto, config, onCerrar, onGuar
         {/* Tabla */}
         <div className="flex-1 overflow-y-auto">
           <table className="w-full border-collapse text-[12px]">
-            <thead className="sticky top-0 z-10 bg-white">
-              <tr className="border-b border-gray-200 text-[10px] uppercase tracking-wide text-gray-400">
+            <thead className="sticky top-0 z-10 bg-(--p-card)">
+              <tr className="border-b border-(--p-line) text-[10px] uppercase tracking-wide text-(--p-text-3)">
                 <th className="text-left font-bold" style={{ padding: '8px 20px' }}>Producto</th>
                 <th className="text-left font-bold" style={{ padding: '8px 10px', width: 120 }}>Días en tanque</th>
                 <th className="text-left font-bold" style={{ padding: '8px 10px', width: 130 }}>Litros habituales</th>
@@ -170,13 +170,13 @@ export default function ConfigProductosGantt({ abierto, config, onCerrar, onGuar
                 const c = valorDe(base)
                 const sucio = !!borrador[base.producto]
                 return (
-                  <tr key={base.producto} className="border-b border-gray-50 hover:bg-gray-50/50">
+                  <tr key={base.producto} className="border-b border-(--p-line-2) hover:bg-(--p-hover)">
                     <td style={{ padding: '8px 20px' }}>
                       <div className="flex items-center" style={{ gap: 8 }}>
                         <span className="inline-block rounded-sm transition-colors duration-300"
                           style={{ width: 10, height: 10, background: c.color }} />
-                        <span className="font-semibold text-gray-800">{base.producto}</span>
-                        {guardando === base.producto && <Loader2 size={12} className="animate-spin text-gray-400" />}
+                        <span className="font-semibold text-(--p-text)">{base.producto}</span>
+                        {guardando === base.producto && <Loader2 size={12} className="animate-spin text-(--p-text-3)" />}
                         {!sucio && guardando !== base.producto && <Check size={12} className="text-transparent" />}
                       </div>
                     </td>
@@ -189,7 +189,7 @@ export default function ConfigProductosGantt({ abierto, config, onCerrar, onGuar
                           ...b, [base.producto]: { ...b[base.producto], diasFermentacion: Number(e.target.value) },
                         }))}
                         onBlur={() => guardar(base.producto, {})}
-                        className="w-full rounded-lg border border-gray-200 text-[12px] font-semibold text-gray-800 focus:border-[#2F6B4F] focus:outline-none"
+                        className="w-full rounded-lg border border-(--p-line) text-[12px] font-semibold text-(--p-text) focus:border-(--p-accent-line) focus:outline-none"
                         style={{ padding: '5px 8px' }}
                       />
                     </td>
@@ -207,7 +207,7 @@ export default function ConfigProductosGantt({ abierto, config, onCerrar, onGuar
                           },
                         }))}
                         onBlur={() => guardar(base.producto, {})}
-                        className="w-full rounded-lg border border-gray-200 text-[12px] font-semibold text-gray-800 placeholder:font-normal placeholder:text-gray-300 focus:border-[#2F6B4F] focus:outline-none"
+                        className="w-full rounded-lg border border-(--p-line) text-[12px] font-semibold text-(--p-text) placeholder:font-normal placeholder:text-(--p-text-4) focus:border-(--p-accent-line) focus:outline-none"
                         style={{ padding: '5px 8px' }}
                       />
                     </td>
@@ -222,7 +222,7 @@ export default function ConfigProductosGantt({ abierto, config, onCerrar, onGuar
                               void guardar(base.producto, { color: hex })
                             }}
                             title={hex}
-                            className={`rounded-full transition-transform duration-150 ${c.color.toLowerCase() === hex.toLowerCase() ? 'ring-2 ring-gray-900 ring-offset-1' : 'hover:scale-125 active:scale-95'}`}
+                            className={`rounded-full transition-transform duration-150 ${c.color.toLowerCase() === hex.toLowerCase() ? 'ring-2 ring-(--p-text-4) ring-offset-1' : 'hover:scale-125 active:scale-95'}`}
                             style={{ width: 16, height: 16, background: hex }}
                           />
                         ))}
@@ -235,11 +235,11 @@ export default function ConfigProductosGantt({ abierto, config, onCerrar, onGuar
           </table>
         </div>
 
-        <div className="flex items-center justify-between border-t border-gray-100 bg-gray-50/60 text-[11px] text-gray-500"
+        <div className="flex items-center justify-between border-t border-(--p-line-2) bg-(--p-card-2)/60 text-[11px] text-(--p-text-3)"
           style={{ padding: '10px 20px' }}>
           <span>Los cambios se guardan solos al salir del campo.</span>
           <button type="button" onClick={onCerrar}
-            className="rounded-lg bg-[#2F6B4F] font-bold text-white hover:bg-[#255941]"
+            className="rounded-lg prod-primario font-bold "
             style={{ padding: '6px 16px' }}>
             Listo
           </button>

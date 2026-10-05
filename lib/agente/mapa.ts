@@ -140,7 +140,9 @@ export const AREAS: AreaMapa[] = [
       'forecast_produccion (Prophet en LITROS, mensual): nivel (general | producto | envase | producto_envase), clave (producto; envase: barril_30, barril_50, lata; producto_envase: "Fisura::lata"), mes, tipo (historico | forecast), litros, litros_min, litros_max',
       'forecast_validacion: mape/mae del forecast de litros por serie',
       'stock_seguridad: nivel (producto | producto_envase), producto, envase, mes, stock_seguridad_litros, punto_reorden_litros, demanda_mensual_proyectada, confianza',
-      'plan_produccion: lotes planificados · producto, litros_planificados, fecha_planificada, fermentador, dias_ocupacion, estado (planificado | cancelado), prioridad',
+      'plan_produccion: lotes · producto, litros_planificados, fecha_planificada, fermentador, dias_ocupacion, estado (planificado | en_curso | completado | cancelado), prioridad, y lo real: fecha_inicio_real, fecha_fin_real, litros_reales (desde 4-oct-2026)',
+      'produccion_envase: latas, etiquetas y tapas por unidad · clave (lata_473, lata_354, etiqueta_473, etiqueta_354, tapa), tipo, ml, por_lata, precio_unitario, stock_unidades',
+      'stock_productos_diario: una foto por día del stock de producto terminado (fecha, producto, tipo, camara, cantidad, litros), desde 4-oct-2026; sirve para contar días sin stock',
       'insumos (catálogo: nombre, categoria, unidad_base, precio_unitario) ← stock_insumos (fecha_informe, insumo_id, cantidad) y receta_insumos (receta_id, insumo_id, cantidad, uso) → recetas (producto, litros_base, abv, ibu, og, fg)',
     ],
     cruces: [
@@ -152,6 +154,7 @@ export const AREAS: AreaMapa[] = [
       'stock_productos guarda varias fechas: filtrar fecha_informe = (select max(fecha_informe) from stock_productos) o se suman fotos.',
       'stock_productos: las latas (tipo=envase) traen litros NULL y nombre "Lata (354 ml) de Kombucha Lemon Fresh"; los barriles "Kombucha Lemon (Fresh)"; tipo=tanque = aún sin envasar. Por eso un cruce por nombre exacto da quiebres falsos.',
       'Producción trabaja en litros; el $ neto de Producción se calcula en la app (litros × precio neto/L de 90 días).',
+      'Estado de cobertura (urgente / reponer / cubierto) y "a producir" salen de UN motor en la app (lib/produccion/cobertura.ts): disponible = stock + lo que fermenta; barril 30 y 50 se suman; la lata va aparte.',
     ],
   },
   {
@@ -287,15 +290,13 @@ export const MODULOS: ModuloApp[] = [
     ],
   },
   {
-    id: 'produccion', nombre: 'Producción', ruta: '/produccion', quienVe: 'Administradores y equipo de Producción', menu: 'Resumen, 1·Cuánto vamos a vender, 2·Cuánto producir, 3·Cuándo y dónde, Plan Maestro, Qué comprar, Presupuesto',
+    id: 'produccion', nombre: 'Producción', ruta: '/produccion', quienVe: 'Administradores y equipo de Producción', menu: 'Hoy, Demanda, Plan, Planta, Compras (pestañas arriba, rediseño 4-oct-2026)',
     secciones: [
-      'Resumen ("Cómo venimos"): productos en riesgo (forecast poco confiable), demanda del próximo mes, ocupación de fermentadores y alertas del modelo',
-      '1 · Cuánto vamos a vender (forecast por producto): proyección de litros a 8 meses por producto y envase, botón Litros | $ Neto, estacionalidad aprendida, Calculadora de Cobertura y detalle por producto y envase [produccion]',
-      '2 · Cuánto producir (litros por producto y mes): necesidad de producción anticipada, stock de seguridad y punto de reorden, inventario actual [produccion]',
-      '3 · Cuándo y dónde (carta Gantt de fermentadores): qué ocupa cada fermentador y proyección de carga a varios meses [produccion]',
-      'Plan Maestro (cocciones confirmadas): split de envasado, alarmas de quiebre de stock y la lista de cocciones con prioridad y estado [produccion]',
-      'Qué comprar (insumos, cuánto y cuándo): presupuesto de insumos del calendario, stock de insumos, MRP con compra sugerida y necesidad de insumos del plan [produccion]',
-      'Presupuesto (gasto proyectado): gasto proyectado en insumos productivos',
+      'Hoy: qué hacer ahora (lotes vencidos por confirmar, productos urgentes con botón Programar, insumos por pedir, lotes por terminar), líneas fijas en riesgo, cocciones de la semana, tanques ocupados, venta del ciclo, semáforo de las 12 líneas fijas (días de cobertura), si se cumple el plan y días sin stock [produccion]',
+      'Demanda: forecast de litros por producto y envase, botón Litros | $ Neto, estacionalidad aprendida y detalle por producto y envase [produccion]',
+      'Plan: tabla única de cobertura por producto (estado, días que alcanza, disponible en barril y lata, a producir hasta la fecha elegida, cocinar antes de, pedir insumos antes de, botón Programar), necesidad mensual para confirmar al plan e inventario por cámara [produccion]',
+      'Planta: lotes con fecha vencida, carta Gantt de fermentadores con proyección de carga, split de envasado, cola del plan maestro (Iniciar → Terminar con litros reales) y lotes cerrados plan vs. real [produccion]',
+      'Compras: compra de los próximos 3 ciclos (insumos + envase), plan por ciclo (litros cerveza/kombucha, latas, insumos, envase), envase con precio y stock editables, presupuesto de insumos del calendario con Excel, stock de insumos y compra sugerida (MRP) [produccion]',
     ],
   },
   {

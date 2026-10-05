@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { getServerUser } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { crearEventoLote } from '@/lib/google-calendar'
@@ -117,17 +117,21 @@ export async function POST(req: Request) {
 
   // Sincronización con Google Calendar: mejor esfuerzo — si falla (o no está
   // configurada la cuenta de servicio) el lote igual queda creado, sólo sin
-  // evento. Nunca debe tumbar el alta del lote.
-  const googleEventId = await crearEventoLote({
-    producto: data.producto, categoria: data.categoria,
-    litrosPlanificados: Number(data.litros_planificados), fechaPlanificada: String(data.fecha_planificada).slice(0, 10),
-    origen: data.origen, motivo: data.motivo,
-    necesidadCubrir: body.necesidadCubrir ?? null, cubreHasta: body.cubreHasta ?? null,
+  // evento. Corre después de responder (after) para que soltar una sugerencia
+  // en el Gantt no espere a Google.
+  after(async () => {
+    try {
+      const googleEventId = await crearEventoLote({
+        producto: data.producto, categoria: data.categoria,
+        litrosPlanificados: Number(data.litros_planificados), fechaPlanificada: String(data.fecha_planificada).slice(0, 10),
+        origen: data.origen, motivo: data.motivo,
+        necesidadCubrir: body.necesidadCubrir ?? null, cubreHasta: body.cubreHasta ?? null,
+      })
+      if (googleEventId) await admin.from('plan_produccion').update({ google_event_id: googleEventId }).eq('id', data.id)
+    } catch (e) {
+      console.error('[plan] creación del evento de Google Calendar falló', e)
+    }
   })
-  if (googleEventId) {
-    await admin.from('plan_produccion').update({ google_event_id: googleEventId }).eq('id', data.id)
-    data.google_event_id = googleEventId
-  }
 
   return NextResponse.json(data, { status: 201 })
 }
