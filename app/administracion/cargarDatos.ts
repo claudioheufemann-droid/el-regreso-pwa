@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { construirCajaCobrada, construirEscenarios } from '@/lib/administracion/cajaCobradaDatos'
 import { PARAMETROS_CAJA } from '@/lib/administracion/cajaCobrada'
 import { cicloEnCursoISO, inicioDeCiclo, finDeCiclo } from '@/lib/produccion/reglas'
+import type { FilaPagadoCiclo } from '@/lib/administracion/pagadoPorCiclo'
 import { armarDatosCalendario } from '@/lib/administracion/calendarioEntradas'
 import { resumenMensualForecast } from '@/lib/administracion/forecastMensual'
 import { esIngresoReal, normalizarNombreCliente, brutoDeFila, lunesDe, categoriaNormalizada, BANCOS, type FilaVentaFinanzas, type BancoId } from '@/lib/administracion/finanzas'
@@ -58,6 +59,26 @@ export async function cargarDatosAdministracion() {
     diasHabilesTranscurridos: contarDiasHabilesISO(inicioCiclo, hoyISO),
     diasHabilesEnCiclo: contarDiasHabilesISO(inicioCiclo, finCiclo),
   }
+
+  // ── ¿Qué parte de lo entregado ya se pagó? Ciclo en curso + 5 anteriores, por
+  // fecha de entrega. Arranca ya y se espera al final: no depende de nada más.
+  // ~200 filas por ciclo pasan las 1000 que corta PostgREST: se pide por páginas.
+  const pagadoPorCicloP = (async () => {
+    const [a, m] = ciclo.slice(0, 7).split('-').map(Number)
+    const hace5 = new Date(Date.UTC(a, m - 1 - 5, 1)).toISOString().slice(0, 10)
+    const filas: FilaPagadoCiclo[] = []
+    for (let offset = 0; ; offset += PAGE) {
+      const { data } = await admin.rpc('pagado_por_ciclo', { p_desde: inicioDeCiclo(hace5) })
+        .order('ciclo').order('vendedor').order('cliente').order('estado').range(offset, offset + PAGE - 1)
+      const lote = (data ?? []) as { ciclo: string; vendedor: string; cliente: string; estado: FilaPagadoCiclo['estado']; facturas: number; litros: number; neto: number }[]
+      filas.push(...lote.map(f => ({
+        ciclo: String(f.ciclo).slice(0, 10), vendedor: f.vendedor, cliente: f.cliente, estado: f.estado,
+        facturas: Number(f.facturas) || 0, litros: Number(f.litros) || 0, neto: Number(f.neto) || 0,
+      })))
+      if (lote.length < PAGE) break
+    }
+    return filas
+  })()
 
   // Ventana de ventas a traer: cubre el ciclo en curso (para el MTD) y, hacia
   // atrás, el plazo de pago más largo del maestro de clientes (90 días) más un
@@ -669,6 +690,7 @@ export async function cargarDatosAdministracion() {
     forecastClientes,
     forecastCompras,
     cobros: { ...cobros, calendario },
+    pagadoPorCiclo: await pagadoPorCicloP,
   }
 }
 

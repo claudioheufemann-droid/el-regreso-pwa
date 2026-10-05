@@ -61,3 +61,10 @@ El módulo sigue siendo **claro a propósito** (pedido del usuario, 10-sep-2026)
 - **Gráficos**: hex de `C` (Recharts usa atributos SVG); leyendas en `C.muted` (el color de la serie no se leía sobre blanco).
 - **Carga**: `loading.tsx` claro con la forma del módulo (el negro anterior destellaba).
 - **Datos**: la carga vive en `cargarDatos.ts` (`cargarDatosAdministracion`); `page.tsx` sólo verifica que sea administrador. El banco `/dev/administracion` (sólo desarrollo) muestra el módulo con datos reales sin login para revisar el diseño.
+
+## ¿Qué parte de lo entregado ya se pagó? (5-oct-2026)
+
+- **`PagadoPorVendedor.tsx`** (pestaña Cobranza, debajo de "A quién llamar"): lo entregado por ciclo 24→23 **por fecha de entrega**, a clientes con factura, separado en pagado / vencido / en plazo / sin plazo, por vendedor (`vendedor_actual`: quien cobra hoy). Se abre cada vendedor para ver sus clientes (lo vencido primero). Selector de ciclo (en curso + 5 anteriores; por defecto el último cerrado), Litros | $ neto y CSV con el detalle por cliente.
+- Datos: RPC `pagado_por_ciclo(p_desde)` (migración `finanzas_pagado_por_ciclo.sql`), una fila por ciclo · vendedor · cliente · estado; se pide paginado en `cargarDatos.ts`. Lógica pura en `lib/administracion/pagadoPorCiclo.ts` (con test).
+- Reglas: pagada = la factura tiene cualquier pago en `cobros_erp` (pocos parciales); vencida = entrega + `clientes.dias_pago` < hoy; sin `dias_pago` → "sin plazo". PDV, BaseCamp y cuentas internas fuera con `esClienteExcluido` (regla de Ventas: no son cobranza).
+- Validado contra SQL a mano para sep-26: 9.254 L, 3.668 L pagados (40%), 2.546 L vencidos en 64 clientes.

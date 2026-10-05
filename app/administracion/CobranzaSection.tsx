@@ -16,13 +16,15 @@ import IngresoRealSection from './IngresoRealSection'
 import DeudaClienteSection, { type DeudorRaw } from './DeudaClienteSection'
 import type { BarrilesFuera } from '@/lib/barrilesFuera'
 import { C, Card, Etiqueta, Franja } from './tema'
+import PagadoPorVendedor from './PagadoPorVendedor'
+import type { FilaPagadoCiclo } from '@/lib/administracion/pagadoPorCiclo'
 
 const fMoney = (n: number) => '$' + Math.round(n).toLocaleString('es-CL')
 
 const th: React.CSSProperties = { padding: '9px 12px', fontSize: 10.5, fontWeight: 800, letterSpacing: '.05em', textTransform: 'uppercase', color: C.muted, textAlign: 'right', whiteSpace: 'nowrap', background: C.bg, borderBottom: `1px solid ${C.line}` }
 const td: React.CSSProperties = { padding: '8px 12px', fontSize: 13, textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', borderBottom: `1px solid ${C.line}` }
 
-export default function CobranzaSection({ caja, deuda, cobros, deudoresDetalle, clientesPorVendedor, maquilaPorCliente, barrilesFuera, hoyISO }: {
+export default function CobranzaSection({ caja, deuda, cobros, deudoresDetalle, clientesPorVendedor, maquilaPorCliente, barrilesFuera, hoyISO, pagadoPorCiclo, cicloEnCurso }: {
   caja: DatosCajaCobrada
   deuda: ResumenDeuda
   cobros: DatosCobros
@@ -31,6 +33,8 @@ export default function CobranzaSection({ caja, deuda, cobros, deudoresDetalle, 
   maquilaPorCliente: Record<string, number>
   barrilesFuera: BarrilesFuera
   hoyISO: string
+  pagadoPorCiclo: FilaPagadoCiclo[]
+  cicloEnCurso: string
 }) {
   const [vendedor, setVendedor] = useState('todos')
   const [verTodos, setVerTodos] = useState(false)
@@ -130,6 +134,9 @@ export default function CobranzaSection({ caja, deuda, cobros, deudoresDetalle, 
           </button>
         )}
       </Card>
+
+      {/* ── Lo entregado por ciclo: cuánto ya se pagó, por vendedor ── */}
+      <PagadoPorVendedor filas={pagadoPorCiclo} cicloEnCurso={cicloEnCurso} hoyISO={hoyISO} />
 
       {/* ── Fichas por completar (datos que faltan) ── */}
       {caja.clientesSinPlazo.length > 0 && (

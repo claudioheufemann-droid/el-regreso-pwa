@@ -17,6 +17,7 @@ import { inicioDeCiclo, finDeCiclo } from '@/lib/produccion/reglas'
 import { NOMBRE_RESTAURANTE_FORECAST, NOMBRE_COMPRAS_TOTAL } from '@/lib/types'
 import type { DeudorRaw } from './DeudaClienteSection'
 import type { BarrilesFuera } from '@/lib/barrilesFuera'
+import type { FilaPagadoCiclo } from '@/lib/administracion/pagadoPorCiclo'
 import { C, Card, Etiqueta, CardAlerta, Franja } from './tema'
 
 interface Props {
@@ -51,6 +52,8 @@ interface Props {
    *  pago real por cliente. Es la única fuente de caja REAL del módulo: el
    *  resto trabaja con ventas despachadas y deuda, que son promesas. */
   cobros: DatosCobros
+  /** Lo entregado por ciclo, separado en pagado / vencido / en plazo (RPC pagado_por_ciclo). */
+  pagadoPorCiclo: FilaPagadoCiclo[]
 }
 
 
@@ -271,7 +274,7 @@ const PREGUNTA_TAB = {
 
 export default function AdministracionClient({
   series, avance, mtd, deuda, ultimaCorrida, cajaCobrada, escenariosCaja, saldoActual, hayCompras, frescura, hoyISO,
-  deudoresDetalle, clientesPorVendedor, maquilaPorCliente, barrilesFuera, forecastClientes, forecastCompras, cobros,
+  deudoresDetalle, clientesPorVendedor, maquilaPorCliente, barrilesFuera, forecastClientes, forecastCompras, cobros, pagadoPorCiclo,
 }: Props) {
   const router = useRouter()
   // Tres pestañas, una por pregunta (auditoría del 2-oct-2026; antes eran cinco con
@@ -412,6 +415,7 @@ export default function AdministracionClient({
           <CobranzaSection
             caja={cajaCobrada} deuda={deuda} cobros={cobros} deudoresDetalle={deudoresDetalle}
             clientesPorVendedor={clientesPorVendedor} maquilaPorCliente={maquilaPorCliente} barrilesFuera={barrilesFuera} hoyISO={hoyISO}
+            pagadoPorCiclo={pagadoPorCiclo} cicloEnCurso={avance.ciclo}
           />
         )}
 
