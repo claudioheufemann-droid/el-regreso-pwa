@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import {
   archivarConversacion, conversacionMasReciente, mensajesParaMostrar, obtenerConversacion,
 } from '@/lib/agente/memoria'
+import { correosDeConversacion } from '@/lib/agente/correos'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,10 +25,14 @@ export async function GET(req: NextRequest) {
   const conv = id ? await obtenerConversacion(admin, a.user.id, id) : await conversacionMasReciente(admin, a.user.id)
   if (!conv) return NextResponse.json({ conversacion_id: null, mensajes: [] })
 
-  const mensajes = await mensajesParaMostrar(admin, conv.id)
+  const [mensajes, correos] = await Promise.all([
+    mensajesParaMostrar(admin, conv.id),
+    correosDeConversacion(admin, conv.id, a.user.id),
+  ])
   return NextResponse.json({
     conversacion_id: conv.id,
     mensajes: mensajes.map(m => ({ rol: m.rol, texto: m.texto, herramientas: m.herramientas, error: m.error })),
+    correos,
   })
 }
 

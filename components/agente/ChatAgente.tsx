@@ -1,7 +1,8 @@
 'use client'
 
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
-import { Send, Bot, User, Database, Loader2 } from 'lucide-react'
+import { Send, Bot, User, Database, Loader2, Mail, Check, X } from 'lucide-react'
+import type { CorreoBorrador } from '@/lib/agente/correos'
 
 export interface Mensaje {
   rol: 'usuario' | 'agente'
@@ -33,6 +34,7 @@ export function useChatAgente() {
   const [mensajes, setMensajes] = useState<Mensaje[]>([])
   const [cargando, setCargando] = useState(false)
   const [conversacionId, setConversacionId] = useState<string | null>(null)
+  const [correos, setCorreos] = useState<CorreoBorrador[]>([])
 
   useEffect(() => {
     let vigente = true
@@ -43,6 +45,7 @@ export function useChatAgente() {
         setConversacionId(d.conversacion_id)
         // Si el usuario ya alcanzó a escribir algo mientras cargaba, no se lo pisamos.
         setMensajes(actuales => (actuales.length ? actuales : d.mensajes))
+        setCorreos(actuales => (actuales.length ? actuales : d.correos ?? []))
       })
       .catch(() => { /* sin historial: se parte en blanco */ })
     return () => { vigente = false }
@@ -66,6 +69,7 @@ export function useChatAgente() {
         rol: 'agente', texto: data.respuesta,
         herramientas: [...new Set<string>((data.herramientas ?? []).map((h: { nombre: string }) => h.nombre))],
       }])
+      if (Array.isArray(data.correos)) setCorreos(data.correos)
     } catch (e) {
       setMensajes(m => [...m, { rol: 'agente', texto: e instanceof Error ? e.message : 'Error de conexión.', error: true }])
     } finally {
@@ -82,6 +86,7 @@ export function useChatAgente() {
       if (d) {
         setConversacionId(d.conversacion_id ?? null)
         setMensajes(d.mensajes ?? [])
+        setCorreos(d.correos ?? [])
       }
     } catch { /* se queda con lo que hay */ }
   }, [cargando])
@@ -95,9 +100,30 @@ export function useChatAgente() {
     }
     setConversacionId(null)
     setMensajes([])
+    setCorreos([])
   }, [conversacionId])
 
-  return { mensajes, cargando, enviar, limpiar, recargar }
+  /** Enviar o descartar un borrador de correo. Lo decide la persona: el asistente sólo lo propone. */
+  const accionCorreo = useCallback(async (id: string, accion: 'enviar' | 'descartar', edicion?: { asunto: string; cuerpo: string }): Promise<string | null> => {
+    const previo = correos.find(c => c.id === id)
+    setCorreos(cs => cs.map(c => (c.id === id ? { ...c, ...(edicion ?? {}), estado: accion === 'enviar' ? 'enviando' : 'descartado' } : c)))
+    try {
+      const res = await fetch(`/api/agente/correos/${id}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accion, ...(edicion ?? {}) }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.error ?? 'No se pudo completar la acción.')
+      setCorreos(cs => cs.map(c => (c.id === id ? { ...c, estado: d.estado, enviado_at: d.enviado_at ?? c.enviado_at, error: null } : c)))
+      return null
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Error de conexión.'
+      setCorreos(cs => cs.map(c => (c.id === id ? { ...(previo ?? c), ...(edicion ?? {}), estado: 'error', error: msg } : c)))
+      return msg
+    }
+  }, [correos])
+
+  return { mensajes, cargando, enviar, limpiar, recargar, correos, accionCorreo }
 }
 
 /* ── Markdown mínimo (negrita, cursiva, listas) sin HTML crudo ─────────────── */
@@ -125,10 +151,87 @@ function TextoFormateado({ texto }: { texto: string }) {
   )
 }
 
+/* ── Borrador de correo: el asistente lo propone, la persona lo envía ───────── */
+
+type AccionCorreo = (id: string, accion: 'enviar' | 'descartar', edicion?: { asunto: string; cuerpo: string }) => Promise<string | null>
+
+function TarjetaCorreo({ correo, tema, onAccion }: { correo: CorreoBorrador; tema: TemaChat; onAccion?: AccionCorreo }) {
+  const T = TEMAS[tema]
+  const [asunto, setAsunto] = useState(correo.asunto)
+  const [cuerpo, setCuerpo] = useState(correo.cuerpo)
+  const editable = correo.estado === 'pendiente' || correo.estado === 'error'
+  const ocupado = correo.estado === 'enviando'
+  const vacio = !asunto.trim() || !cuerpo.trim()
+
+  // Enviado o descartado: una línea, sin el cuerpo (ya no queda nada que decidir).
+  if (correo.estado === 'enviado' || correo.estado === 'descartado') {
+    const enviado = correo.estado === 'enviado'
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: enviado ? T.texto : T.tenue, padding: '8px 12px', borderRadius: 10, border: `1px solid ${T.linea}` }}>
+        {enviado ? <Check size={13} color={T.acento} style={{ flexShrink: 0 }} /> : <X size={13} style={{ flexShrink: 0 }} />}
+        <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+          {enviado ? 'Correo enviado' : 'Correo descartado'} a <strong>{correo.destinatario_nombre}</strong>: {correo.asunto}
+        </span>
+      </div>
+    )
+  }
+
+  const campo: React.CSSProperties = {
+    width: '100%', padding: '8px 10px', borderRadius: 8, border: `1px solid ${T.linea}`, background: T.campo,
+    color: T.texto, fontSize: 16, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box',
+  }
+
+  return (
+    <div style={{ border: `1px solid ${T.acento}`, borderRadius: 12, padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <p style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', fontSize: 12, fontWeight: 700, color: T.texto }}>
+        <Mail size={13} color={T.acento} /> Borrador para {correo.destinatario_nombre}
+        <span style={{ fontWeight: 500, color: T.apagado }}>· revísalo antes de enviar</span>
+      </p>
+      <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11, color: T.apagado }}>
+        Asunto
+        <input value={asunto} onChange={e => setAsunto(e.target.value)} disabled={!editable} maxLength={200} style={campo} />
+      </label>
+      <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11, color: T.apagado }}>
+        Mensaje
+        <textarea
+          value={cuerpo} onChange={e => setCuerpo(e.target.value)} disabled={!editable} maxLength={5000}
+          rows={Math.min(12, Math.max(5, cuerpo.split('\n').length + 1))}
+          style={{ ...campo, lineHeight: 1.5, resize: 'vertical' }}
+        />
+      </label>
+      {correo.estado === 'error' && correo.error && (
+        <p style={{ fontSize: 12, color: T.error, background: T.errorFondo, padding: '6px 9px', borderRadius: 8 }}>{correo.error}</p>
+      )}
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <button
+          onClick={() => void onAccion?.(correo.id, 'descartar')} disabled={!editable || !onAccion}
+          style={{ padding: '7px 12px', borderRadius: 9, border: `1px solid ${T.linea}`, background: 'transparent', color: T.apagado, fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}
+        >
+          Descartar
+        </button>
+        <button
+          onClick={() => void onAccion?.(correo.id, 'enviar', { asunto, cuerpo })} disabled={!editable || ocupado || !onAccion || vacio}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 9, border: 'none',
+            background: T.acento, color: T.sobreAcento, fontSize: 12.5, fontWeight: 700, cursor: ocupado ? 'wait' : 'pointer',
+            opacity: !editable || vacio ? 0.6 : 1,
+          }}
+        >
+          {ocupado ? <Loader2 size={13} style={{ animation: 'agente-giro 1s linear infinite' }} /> : <Send size={13} />}
+          {ocupado ? 'Enviando…' : correo.estado === 'error' ? 'Reintentar envío' : 'Enviar'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 /* ── Vista del chat ───────────────────────────────────────────────────────── */
 
-export function VistaChat({ mensajes, cargando, enviar, tema, ejemplos, deshabilitado, maxAlto, idCampo }: {
+export function VistaChat({ mensajes, cargando, enviar, tema, ejemplos, deshabilitado, maxAlto, idCampo, correos = [], accionCorreo }: {
   mensajes: Mensaje[]
+  /** Borradores de correo que propuso el asistente en esta conversación. */
+  correos?: CorreoBorrador[]
+  accionCorreo?: AccionCorreo
   cargando: boolean
   enviar: (texto: string) => void | Promise<void>
   tema: TemaChat
@@ -142,7 +245,7 @@ export function VistaChat({ mensajes, cargando, enviar, tema, ejemplos, deshabil
   const [entrada, setEntrada] = useState('')
   const fin = useRef<HTMLDivElement>(null)
 
-  useEffect(() => { fin.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }) }, [mensajes, cargando])
+  useEffect(() => { fin.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }) }, [mensajes, cargando, correos.length])
 
   const mandar = () => {
     if (!entrada.trim() || cargando || deshabilitado) return
@@ -156,7 +259,7 @@ export function VistaChat({ mensajes, cargando, enviar, tema, ejemplos, deshabil
         {mensajes.length === 0 && (
           <div>
             <p style={{ fontSize: 13, fontWeight: 700, color: T.texto }}>Pregúntame lo que quieras de la base de datos.</p>
-            <p style={{ fontSize: 12, color: T.apagado, marginTop: 4, lineHeight: 1.5 }}>Clientes, ventas, deuda, cobros y stock. Solo leo datos: no modifico nada.</p>
+            <p style={{ fontSize: 12, color: T.apagado, marginTop: 4, lineHeight: 1.5 }}>Clientes, ventas, deuda, cobros y stock. Solo leo datos: no modifico nada. Si me lo pides, preparo correos para los vendedores y tú decides si se envían.</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginTop: 12 }}>
               {ejemplos.map(e => (
                 <button
@@ -195,6 +298,8 @@ export function VistaChat({ mensajes, cargando, enviar, tema, ejemplos, deshabil
             </div>
           </div>
         ))}
+
+        {correos.map(c => <TarjetaCorreo key={c.id} correo={c} tema={tema} onAccion={accionCorreo} />)}
 
         {cargando && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: T.apagado, fontSize: 12.5 }}>

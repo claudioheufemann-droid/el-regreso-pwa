@@ -15,6 +15,8 @@ export interface ContextoConsulta {
   hoyISO: string
   /** Quién pregunta: la memoria personal y las propuestas se atribuyen a este usuario. */
   usuarioId: string
+  /** Conversación en curso: los borradores de correo se cuelgan de ella para mostrarlos en el chat. */
+  conversacionId?: string
 }
 
 export interface Consulta {

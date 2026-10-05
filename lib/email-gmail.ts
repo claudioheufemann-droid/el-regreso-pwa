@@ -33,6 +33,8 @@ export async function enviarEmailGmail(params: {
   toEmail: string
   subject: string
   html: string
+  /** Opcional: a quién le llegan las respuestas (ej. el admin que envió desde el asistente). */
+  replyTo?: string
 }) {
   const transporter = getTransporter()
   if (!transporter) {
@@ -47,6 +49,7 @@ export async function enviarEmailGmail(params: {
       to: params.toEmail,
       subject: params.subject,
       html: params.html,
+      ...(params.replyTo ? { replyTo: params.replyTo } : {}),
     })
     console.log(`Email (Gmail) enviado a ${params.toEmail}: ${info.messageId}`)
     return { id: info.messageId, error: null }

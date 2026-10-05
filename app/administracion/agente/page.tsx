@@ -23,6 +23,7 @@ export default function AgentePage() {
       ['Alcance de datos', PARAMETROS.alcanceDatos],
       ['Acceso', PARAMETROS.acceso],
       ['Modo', PARAMETROS.soloLectura ? 'Solo lectura (no escribe en la base)' : 'Lectura y escritura'],
+      ['Acciones', PARAMETROS.acciones],
     ],
     reglas: [...REGLAS],
     glosario: [...GLOSARIO],

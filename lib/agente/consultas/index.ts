@@ -6,6 +6,7 @@ import { consultarSql, describirEsquema } from './sql'
 import { recordar } from './memoria'
 import { stockActual } from './stock'
 import { mapaDatos } from './mapa'
+import { clientesProximosAPedir, prepararCorreoVendedor } from './correos'
 
 /**
  * CATÁLOGO DE CONSULTAS DEL AGENTE — acá se "entrena".
@@ -28,6 +29,9 @@ export const CONSULTAS: Consulta[] = [
   comportamientoPagoCliente,
   cobrosResumen,
   stockActual,
+  clientesProximosAPedir,
+  // Única acción: deja un BORRADOR; enviarlo lo decide una persona en el chat (lib/agente/correos.ts).
+  prepararCorreoVendedor,
   // Lectura libre (rol de solo lectura en la base) para lo que las de arriba no cubren, y memoria de largo plazo.
   // mapa_datos primero: orienta sin tocar la base (lib/agente/mapa.ts).
   mapaDatos,

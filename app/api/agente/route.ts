@@ -8,6 +8,7 @@ import {
   resumirSiHaceFalta, sumarTokensConversacion,
 } from '@/lib/agente/memoria'
 import { PARAMETROS, construirContexto } from '@/lib/agente/sistema'
+import { correosDeConversacion } from '@/lib/agente/correos'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -66,7 +67,7 @@ export async function POST(req: NextRequest) {
       }).then(() => undefined, () => undefined)
 
     try {
-      const r = await responderPregunta({ historial, pregunta, contexto, apiKey, ctx: { admin, hoyISO, usuarioId: user.id } })
+      const r = await responderPregunta({ historial, pregunta, contexto, apiKey, ctx: { admin, hoyISO, usuarioId: user.id, conversacionId: conv.id } })
       const nombres = [...new Set(r.herramientas.map(h => h.nombre))]
       await Promise.all([
         guardarMensaje(admin, conv.id, { rol: 'agente', texto: r.respuesta, herramientas: nombres }),
@@ -75,7 +76,9 @@ export async function POST(req: NextRequest) {
       ])
       // Resumir lo viejo corre después de responder: no suma espera a esta pregunta.
       after(() => resumirSiHaceFalta(admin, apiKey, conv.id))
-      return NextResponse.json({ conversacion_id: conv.id, respuesta: r.respuesta, herramientas: r.herramientas, uso: r.uso })
+      // Borradores de correo de la conversación: el chat los muestra con "Enviar" / "Descartar".
+      const correos = r.herramientas.some(h => h.nombre === 'preparar_correo_vendedor') ? await correosDeConversacion(admin, conv.id, user.id) : undefined
+      return NextResponse.json({ conversacion_id: conv.id, respuesta: r.respuesta, herramientas: r.herramientas, uso: r.uso, correos })
     } catch (e) {
       const status = e instanceof ErrorAgente ? e.status : 500
       const mensaje = e instanceof ErrorAgente ? e.message : 'Error inesperado del asistente.'
