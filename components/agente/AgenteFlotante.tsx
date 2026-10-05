@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Bot, X, Maximize2, RotateCcw } from 'lucide-react'
 import { useUser } from '@/lib/userContext'
-import { SUGERENCIAS } from '@/lib/agente/sugerencias'
+import { SUGERENCIAS, SUGERENCIAS_VENDEDOR } from '@/lib/agente/sugerencias'
 import { VistaChat, useChatAgente } from './ChatAgente'
 
 // Pantallas donde la burbuja estorba o no tiene sentido (sin sesión, o la propia página del asistente).
@@ -13,9 +13,10 @@ const OCULTO_EN = ['/login', '/reset-password', '/auth', '/offline', '/instalar'
 
 /**
  * Burbuja flotante del Asistente de datos, abajo a la derecha, en todas las
- * pantallas. Sólo administradores: acá se oculta para el resto, pero el control
- * real está en /api/agente (403 si no es admin). En "Ver como vendedor" el
- * usuario deja de ser admin y la burbuja desaparece sola.
+ * pantallas. Admins: toda la base. Vendedores con cartera en el ERP: modo
+ * cartera (sólo sus clientes, sin SQL libre ni acciones). Acá sólo se oculta o
+ * cambia el texto; el control real está en /api/agente (lib/agente/alcance.ts).
+ * En "Ver como vendedor" el admin ve exactamente el modo del vendedor.
  */
 export default function AgenteFlotante() {
   const { user, isAdmin } = useUser()
@@ -30,7 +31,8 @@ export default function AgenteFlotante() {
     return () => window.removeEventListener('keydown', alTeclear)
   }, [abierto])
 
-  if (!user || !isAdmin) return null
+  const esVendedor = !isAdmin && (user?.vendedoresErp?.length ?? 0) > 0
+  if (!user || (!isAdmin && !esVendedor)) return null
   if (OCULTO_EN.some(ruta => pathname === ruta || pathname.startsWith(`${ruta}/`))) return null
 
   return (
@@ -61,15 +63,17 @@ export default function AgenteFlotante() {
             <Bot size={16} style={{ color: '#D4AF37' }} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <p style={{ fontSize: 13.5, fontWeight: 800 }}>Asistente de datos</p>
-              <p style={{ fontSize: 11, color: '#9A938B' }}>Solo administradores · solo lectura</p>
+              <p style={{ fontSize: 11, color: '#9A938B' }}>{esVendedor ? 'Tu cartera · solo lectura' : 'Administradores · lee la base, propone acciones'}</p>
             </div>
             {chat.mensajes.length > 0 && (
               <button className="agente-btn" onClick={chat.limpiar} aria-label="Nueva conversación" title="Nueva conversación"><RotateCcw size={15} /></button>
             )}
-            <Link className="agente-btn" href="/administracion/agente" onClick={() => setAbierto(false)} aria-label="Abrir en pantalla completa" title="Pantalla completa y ajustes"><Maximize2 size={15} /></Link>
+            {!esVendedor && (
+              <Link className="agente-btn" href="/administracion/agente" onClick={() => setAbierto(false)} aria-label="Abrir en pantalla completa" title="Pantalla completa y ajustes"><Maximize2 size={15} /></Link>
+            )}
             <button className="agente-btn" onClick={() => setAbierto(false)} aria-label="Cerrar"><X size={17} /></button>
           </header>
-          <VistaChat {...chat} tema="oscuro" ejemplos={SUGERENCIAS.slice(0, 4)} idCampo="pregunta-agente-flotante" />
+          <VistaChat {...chat} tema="oscuro" ejemplos={esVendedor ? SUGERENCIAS_VENDEDOR : SUGERENCIAS.slice(0, 4)} esVendedor={esVendedor} idCampo="pregunta-agente-flotante" />
         </section>
       )}
 

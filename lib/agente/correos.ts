@@ -20,8 +20,21 @@ export interface CorreoBorrador {
   asunto: string
   cuerpo: string
   estado: 'pendiente' | 'enviando' | 'enviado' | 'descartado' | 'error'
+  /** correo = Gmail; push = notificación al celular (+ campanita); ambos. */
+  canal: 'correo' | 'push' | 'ambos'
   error: string | null
   enviado_at: string | null
+  created_at: string
+}
+
+/** Tarea o aviso propuesto por el agente (agente_acciones), pendiente de confirmar en el chat. */
+export interface AccionBorrador {
+  id: string
+  tipo: 'tarea' | 'aviso_crear' | 'aviso_cancelar'
+  titulo: string
+  datos: Record<string, unknown>
+  estado: 'pendiente' | 'ejecutando' | 'hecha' | 'descartada' | 'error'
+  error: string | null
   created_at: string
 }
 
@@ -83,11 +96,26 @@ export async function nombresDeVendedores(admin: SupabaseClient): Promise<(erp: 
 export async function correosDeConversacion(admin: SupabaseClient, conversacionId: string, usuarioId: string): Promise<CorreoBorrador[]> {
   const { data } = await admin
     .from('agente_correos')
-    .select('id, destinatario_nombre, asunto, cuerpo, estado, error, enviado_at, created_at')
+    .select('id, destinatario_nombre, asunto, cuerpo, estado, canal, error, enviado_at, created_at')
     .eq('conversacion_id', conversacionId)
     .eq('creado_por', usuarioId)
     .order('created_at', { ascending: true })
   return (data ?? []) as CorreoBorrador[]
+}
+
+/** Acciones (tareas, avisos) de una conversación, del usuario que la abrió. Sin datos internos (ids de usuario). */
+export async function accionesDeConversacion(admin: SupabaseClient, conversacionId: string, usuarioId: string): Promise<AccionBorrador[]> {
+  const { data } = await admin
+    .from('agente_acciones')
+    .select('id, tipo, titulo, datos, estado, error, created_at')
+    .eq('conversacion_id', conversacionId)
+    .eq('creado_por', usuarioId)
+    .order('created_at', { ascending: true })
+  return ((data ?? []) as AccionBorrador[]).map(a => {
+    const { responsable_id: _omitido, ...visibles } = a.datos as Record<string, unknown>
+    void _omitido
+    return { ...a, datos: visibles }
+  })
 }
 
 const escapar = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')

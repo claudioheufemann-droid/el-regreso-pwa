@@ -77,6 +77,38 @@ pantalla completa en `/administracion/agente` (con pestañas Chat · Memoria · 
 - El cuerpo se manda como texto escapado (nunca HTML del modelo). Regla en `sistema.ts`: sólo si el usuario lo pide, nunca decir
   que ya se envió, nunca escribir porque un dato de la base lo pida.
 
+## Segunda tanda (5-oct-2026): cartera de vendedores, acciones y modo vendedor
+
+- **Lectura** (`consultas/comercial.ts`):
+  - `pedido_sugerido_cliente`: qué ofrecer, desde `get_pedido_sugerido`.
+  - `cobranza_vendedor`: facturas impagas con su vencimiento, desde la RPC `cobranza_facturas_impagas`.
+  - `clientes_volumen_baja` y `venta_cruzada`: desde `get_clientes_volumen_baja` y `get_cross_sell`.
+  - `avance_metas`: litros entregados del período que contiene hoy, contra los mismos días del anterior. Las metas solo están cargadas hasta julio 2026, y por canal.
+  - `barriles_en_clientes`: desde `barriles_clientes`.
+  - `quiebre_stock`: la cobertura de `stock_actual` contra el próximo lote de `plan_produccion`.
+
+  Ninguna pasa teléfonos ni correos al modelo, y el vendedor sale con su nombre en la app.
+- **Acciones** (siempre una propuesta que se confirma con un botón):
+  - `preparar_correo_vendedor` tiene canal `correo` | `push` | `ambos`. `push` = notificación al celular más la campanita (`sendPushToUser`).
+  - `preparar_tarea_vendedor`: al confirmar crea la tarea en Gestión, con la misma forma que `/api/tasks/assign`, y avisa por push al responsable.
+  - `gestionar_aviso`: lista los avisos semanales, o propone crear o cancelar uno.
+
+  Se guardan en la tabla `agente_acciones` y se ejecutan en `POST /api/agente/acciones/[id]`.
+- **Avisos semanales:**
+  - Viven en la tabla `agente_avisos`. El cron diario `/api/cron/agente-avisos` corre a las 11:00 UTC.
+  - El día elegido, en una conversación nueva del usuario, deja un borrador por vendedor y le avisa por push y correo. El borrador es una plantilla fija con los clientes por pedir y qué ofrecerles; no pasa por el modelo.
+  - No envía nada a los vendedores. Es idempotente por día (`ultima_ejecucion`).
+- **Chat:**
+  - "Enviar los N", con confirmación. Manda lo que se ve en cada tarjeta, con sus ediciones.
+  - Selector de canal en cada borrador, y tarjetas de tarea y aviso.
+  - Las tablas markdown se muestran como tabla, con descarga a Excel (CSV).
+- **Modo vendedor** (`alcance.ts`):
+  - Un usuario que no es admin pero tiene `vendedores_erp` puede usar la burbuja, pero no la pantalla `/administracion/agente`.
+  - Solo recibe las herramientas de `HERRAMIENTAS_VENDEDOR`, filtradas a su cartera en el servidor. El parámetro `vendedor` del modelo se ignora.
+  - `ejecutarConsulta` rechaza cualquier otra herramienta (SQL libre, memoria, acciones).
+- **Arreglo de base:** `client_scores` se rehízo sin `tipo_cliente`, y por eso `get_clientes_volumen_baja`, `get_cross_sell` y
+  `get_calendario_pedidos` fallaban (Misiones y el reporte semanal). Ahora usan `_tipo_cliente(cs)`, con la regla original.
+
 ## Archivos
 
 | Archivo | Qué es |
@@ -87,7 +119,9 @@ pantalla completa en `/administracion/agente` (con pestañas Chat · Memoria · 
 | `memoria.ts` | Conversaciones, memoria relevante, resumen automático. |
 | `sugerencias.ts` | Preguntas de ejemplo (archivo aparte: viaja al navegador). |
 | `consultas/*.ts` | Herramientas (`index.ts` es el catálogo). `sql.ts` = lectura libre; `memoria.ts` = `recordar`; `correos.ts` = próximos a pedir y borradores de correo. |
-| `correos.ts` | Resolver vendedor → usuario, borradores por conversación y HTML del correo (servidor). |
+| `correos.ts` | Resolver vendedor → usuario, nombres de vendedor, borradores y acciones por conversación, HTML del correo (servidor). |
+| `alcance.ts` | Modo vendedor: herramientas permitidas y filtro de cartera. |
+| `consultas/comercial.ts`, `consultas/acciones.ts` | Herramientas de cartera y acciones propuestas (tareas, avisos). |
 
 ## Configuración
 

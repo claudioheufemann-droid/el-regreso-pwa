@@ -1,6 +1,7 @@
 import { CONSULTAS, ejecutarConsulta } from './consultas'
 import type { ContextoConsulta } from './consultas/_base'
 import { PARAMETROS, construirSystemPrompt } from './sistema'
+import { HERRAMIENTAS_VENDEDOR } from './alcance'
 
 export interface MensajeChat {
   rol: 'usuario' | 'agente'
@@ -51,9 +52,9 @@ type RespuestaGemini = {
 
 const MAX_CHARS_RESULTADO = 20_000
 
-/** Declaraciones de herramientas: idénticas en cada llamada (parte del prefijo que Gemini puede cachear). */
-function declaraciones() {
-  return CONSULTAS.map(c => {
+/** Declaraciones de herramientas: idénticas en cada llamada (parte del prefijo que Gemini puede cachear). En modo vendedor, sólo las de su cartera. */
+function declaraciones(modoVendedor: boolean) {
+  return CONSULTAS.filter(c => !modoVendedor || HERRAMIENTAS_VENDEDOR.has(c.nombre)).map(c => {
     const requeridos = c.parametros.filter(p => p.requerido).map(p => p.nombre)
     return {
       name: c.nombre,
@@ -77,7 +78,7 @@ let modeloVigente: string | null = null
 
 async function llamarGemini(
   apiKey: string, system: string, contents: ContenidoGemini[],
-  opciones: { herramientas: boolean; maxTokens: number }
+  opciones: { herramientas: boolean; maxTokens: number; modoVendedor?: boolean }
 ): Promise<{ data: RespuestaGemini; modelo: string }> {
   const orden = modeloVigente
     ? [modeloVigente, ...PARAMETROS.modelos.filter(m => m !== modeloVigente)]
@@ -92,7 +93,7 @@ async function llamarGemini(
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },
         contents,
-        ...(opciones.herramientas ? { tools: [{ functionDeclarations: declaraciones() }] } : {}),
+        ...(opciones.herramientas ? { tools: [{ functionDeclarations: declaraciones(!!opciones.modoVendedor) }] } : {}),
         generationConfig: {
           temperature: PARAMETROS.temperatura,
           maxOutputTokens: opciones.maxTokens,
@@ -175,7 +176,7 @@ export async function responderPregunta(opts: {
   const devolver = (respuesta: string): RespuestaAgente => ({ respuesta, herramientas, uso })
 
   for (let ronda = 0; ronda <= PARAMETROS.maxRondasHerramientas; ronda++) {
-    const { data, modelo } = await llamarGemini(opts.apiKey, system, contents, { herramientas: true, maxTokens: PARAMETROS.maxTokensRespuesta })
+    const { data, modelo } = await llamarGemini(opts.apiKey, system, contents, { herramientas: true, maxTokens: PARAMETROS.maxTokensRespuesta, modoVendedor: !!opts.ctx.alcance })
     sumarUso(uso, data.usageMetadata, modelo)
     uso.rondas = ronda + 1
 

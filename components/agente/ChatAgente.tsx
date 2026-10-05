@@ -1,8 +1,8 @@
 'use client'
 
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
-import { Send, Bot, User, Database, Loader2, Mail, Check, X } from 'lucide-react'
-import type { CorreoBorrador } from '@/lib/agente/correos'
+import { Send, Bot, User, Database, Loader2, Mail, Check, X, ClipboardList, BellRing, FileDown } from 'lucide-react'
+import type { AccionBorrador, CorreoBorrador } from '@/lib/agente/correos'
 
 export interface Mensaje {
   rol: 'usuario' | 'agente'
@@ -35,6 +35,7 @@ export function useChatAgente() {
   const [cargando, setCargando] = useState(false)
   const [conversacionId, setConversacionId] = useState<string | null>(null)
   const [correos, setCorreos] = useState<CorreoBorrador[]>([])
+  const [acciones, setAcciones] = useState<AccionBorrador[]>([])
 
   useEffect(() => {
     let vigente = true
@@ -46,6 +47,7 @@ export function useChatAgente() {
         // Si el usuario ya alcanzó a escribir algo mientras cargaba, no se lo pisamos.
         setMensajes(actuales => (actuales.length ? actuales : d.mensajes))
         setCorreos(actuales => (actuales.length ? actuales : d.correos ?? []))
+        setAcciones(actuales => (actuales.length ? actuales : d.acciones ?? []))
       })
       .catch(() => { /* sin historial: se parte en blanco */ })
     return () => { vigente = false }
@@ -70,6 +72,7 @@ export function useChatAgente() {
         herramientas: [...new Set<string>((data.herramientas ?? []).map((h: { nombre: string }) => h.nombre))],
       }])
       if (Array.isArray(data.correos)) setCorreos(data.correos)
+      if (Array.isArray(data.acciones)) setAcciones(data.acciones)
     } catch (e) {
       setMensajes(m => [...m, { rol: 'agente', texto: e instanceof Error ? e.message : 'Error de conexión.', error: true }])
     } finally {
@@ -87,6 +90,7 @@ export function useChatAgente() {
         setConversacionId(d.conversacion_id ?? null)
         setMensajes(d.mensajes ?? [])
         setCorreos(d.correos ?? [])
+        setAcciones(d.acciones ?? [])
       }
     } catch { /* se queda con lo que hay */ }
   }, [cargando])
@@ -101,10 +105,11 @@ export function useChatAgente() {
     setConversacionId(null)
     setMensajes([])
     setCorreos([])
+    setAcciones([])
   }, [conversacionId])
 
   /** Enviar o descartar un borrador de correo. Lo decide la persona: el asistente sólo lo propone. */
-  const accionCorreo = useCallback(async (id: string, accion: 'enviar' | 'descartar', edicion?: { asunto: string; cuerpo: string }): Promise<string | null> => {
+  const accionCorreo = useCallback(async (id: string, accion: 'enviar' | 'descartar', edicion?: EdicionCorreo): Promise<string | null> => {
     const previo = correos.find(c => c.id === id)
     setCorreos(cs => cs.map(c => (c.id === id ? { ...c, ...(edicion ?? {}), estado: accion === 'enviar' ? 'enviando' : 'descartado' } : c)))
     try {
@@ -123,8 +128,27 @@ export function useChatAgente() {
     }
   }, [correos])
 
-  return { mensajes, cargando, enviar, limpiar, recargar, correos, accionCorreo }
+  /** Confirmar o descartar una tarea / aviso propuesto por el asistente. */
+  const accionAccion = useCallback(async (id: string, accion: 'confirmar' | 'descartar'): Promise<void> => {
+    setAcciones(as => as.map(a => (a.id === id ? { ...a, estado: accion === 'confirmar' ? 'ejecutando' : 'descartada' } : a)))
+    try {
+      const res = await fetch(`/api/agente/acciones/${id}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accion }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.error ?? 'No se pudo completar la acción.')
+      setAcciones(as => as.map(a => (a.id === id ? { ...a, estado: d.estado, error: null } : a)))
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Error de conexión.'
+      setAcciones(as => as.map(a => (a.id === id ? { ...a, estado: 'error', error: msg } : a)))
+    }
+  }, [])
+
+  return { mensajes, cargando, enviar, limpiar, recargar, correos, accionCorreo, acciones, accionAccion }
 }
+
+type Canal = CorreoBorrador['canal']
+interface EdicionCorreo { asunto: string; cuerpo: string; canal: Canal }
 
 /* ── Markdown mínimo (negrita, cursiva, listas) sin HTML crudo ─────────────── */
 
@@ -136,10 +160,66 @@ function enLinea(texto: string, clave: string) {
   })
 }
 
+/** Fila de tabla markdown ("| a | b |") → celdas. */
+const celdas = (linea: string) => linea.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim())
+const esSeparador = (linea: string) => /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(linea)
+
+function descargarCsv(filas: string[][]) {
+  const limpio = (v: string) => v.replace(/\*/g, '')
+  const txt = '﻿' + filas.map(f => f.map(v => `"${limpio(v).replace(/"/g, '""')}"`).join(';')).join('\n')
+  const url = URL.createObjectURL(new Blob([txt], { type: 'text/csv;charset=utf-8' }))
+  const el = document.createElement('a'); el.href = url; el.download = `asistente-${new Date().toISOString().slice(0, 10)}.csv`; el.click(); URL.revokeObjectURL(url)
+}
+
+/** Tabla markdown del asistente: se ve como tabla (con scroll horizontal) y se puede bajar a Excel. */
+function TablaChat({ filas, clave }: { filas: string[][]; clave: string }) {
+  const [cabecera, ...cuerpo] = filas
+  const esNumero = (v: string) => /\d/.test(v) && /^[-+$\d.,%\sL]+$/.test(v.replace(/\*/g, ''))
+  return (
+    <div style={{ margin: '6px 0' }}>
+      <div style={{ overflowX: 'auto', borderRadius: 8, border: '1px solid rgba(127,127,127,0.25)' }}>
+        <table style={{ borderCollapse: 'collapse', fontSize: 12, width: '100%' }}>
+          <thead><tr>{cabecera.map((c, j) => (
+            <th key={j} style={{ textAlign: 'left', padding: '6px 9px', fontWeight: 700, whiteSpace: 'nowrap', borderBottom: '1px solid rgba(127,127,127,0.25)' }}>{enLinea(c, `${clave}h${j}`)}</th>
+          ))}</tr></thead>
+          <tbody>
+            {cuerpo.map((f, i) => (
+              <tr key={i}>{f.map((c, j) => (
+                <td key={j} style={{ padding: '5px 9px', whiteSpace: 'nowrap', textAlign: esNumero(c) ? 'right' : 'left', fontVariantNumeric: 'tabular-nums', borderTop: i ? '1px solid rgba(127,127,127,0.15)' : undefined }}>
+                  {enLinea(c, `${clave}${i}-${j}`)}
+                </td>
+              ))}</tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <button onClick={() => descargarCsv(filas)} style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 4, background: 'none', border: 'none', padding: 0, fontSize: 11, color: 'inherit', opacity: 0.7, cursor: 'pointer' }}>
+        <FileDown size={11} /> Excel (CSV)
+      </button>
+    </div>
+  )
+}
+
+type Bloque = { tipo: 'linea'; linea: string } | { tipo: 'tabla'; filas: string[][] }
+
 function TextoFormateado({ texto }: { texto: string }) {
+  // Agrupa las líneas que forman una tabla markdown (cabecera + separador + filas).
+  const lineas = texto.split('\n')
+  const bloques: Bloque[] = []
+  for (let i = 0; i < lineas.length; i++) {
+    if (lineas[i].trim().startsWith('|') && i + 1 < lineas.length && esSeparador(lineas[i + 1])) {
+      const filas = [celdas(lineas[i])]
+      let j = i + 2
+      while (j < lineas.length && lineas[j].trim().startsWith('|')) { filas.push(celdas(lineas[j])); j++ }
+      bloques.push({ tipo: 'tabla', filas })
+      i = j - 1
+    } else bloques.push({ tipo: 'linea', linea: lineas[i] })
+  }
   return (
     <>
-      {texto.split('\n').map((linea, i) => {
+      {bloques.map((b, i) => {
+        if (b.tipo === 'tabla') return <TablaChat key={i} filas={b.filas} clave={`t${i}-`} />
+        const linea = b.linea
         const vineta = linea.match(/^\s*[*-]\s+(.*)$/)
         const numero = linea.match(/^\s*(\d+)[.)]\s+(.*)$/)
         if (vineta) return <div key={i} style={{ display: 'flex', gap: 7, paddingLeft: 4 }}><span style={{ flexShrink: 0 }}>•</span><span style={{ minWidth: 0 }}>{enLinea(vineta[1], `${i}-`)}</span></div>
@@ -153,12 +233,25 @@ function TextoFormateado({ texto }: { texto: string }) {
 
 /* ── Borrador de correo: el asistente lo propone, la persona lo envía ───────── */
 
-type AccionCorreo = (id: string, accion: 'enviar' | 'descartar', edicion?: { asunto: string; cuerpo: string }) => Promise<string | null>
+type AccionCorreo = (id: string, accion: 'enviar' | 'descartar', edicion?: EdicionCorreo) => Promise<string | null>
+type AccionAccion = (id: string, accion: 'confirmar' | 'descartar') => Promise<void>
 
-function TarjetaCorreo({ correo, tema, onAccion }: { correo: CorreoBorrador; tema: TemaChat; onAccion?: AccionCorreo }) {
+const CANALES: { valor: Canal; etiqueta: string }[] = [
+  { valor: 'correo', etiqueta: 'Correo' },
+  { valor: 'push', etiqueta: 'Notificación' },
+  { valor: 'ambos', etiqueta: 'Ambos' },
+]
+
+function TarjetaCorreo({ correo, tema, onAccion, onEdicion }: {
+  correo: CorreoBorrador; tema: TemaChat; onAccion?: AccionCorreo
+  /** Avisa las ediciones hacia arriba: "Enviar todos" manda lo que se ve en cada tarjeta. */
+  onEdicion?: (id: string, e: EdicionCorreo) => void
+}) {
   const T = TEMAS[tema]
   const [asunto, setAsunto] = useState(correo.asunto)
   const [cuerpo, setCuerpo] = useState(correo.cuerpo)
+  const [canal, setCanal] = useState<Canal>(correo.canal ?? 'correo')
+  useEffect(() => { onEdicion?.(correo.id, { asunto, cuerpo, canal }) }, [correo.id, asunto, cuerpo, canal, onEdicion])
   const editable = correo.estado === 'pendiente' || correo.estado === 'error'
   const ocupado = correo.estado === 'enviando'
   const vacio = !asunto.trim() || !cuerpo.trim()
@@ -170,7 +263,7 @@ function TarjetaCorreo({ correo, tema, onAccion }: { correo: CorreoBorrador; tem
       <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: enviado ? T.texto : T.tenue, padding: '8px 12px', borderRadius: 10, border: `1px solid ${T.linea}` }}>
         {enviado ? <Check size={13} color={T.acento} style={{ flexShrink: 0 }} /> : <X size={13} style={{ flexShrink: 0 }} />}
         <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
-          {enviado ? 'Correo enviado' : 'Correo descartado'} a <strong>{correo.destinatario_nombre}</strong>: {correo.asunto}
+          {enviado ? (correo.canal === 'push' ? 'Notificación enviada' : correo.canal === 'ambos' ? 'Correo y notificación enviados' : 'Correo enviado') : 'Borrador descartado'} a <strong>{correo.destinatario_nombre}</strong>: {correo.asunto}
         </span>
       </div>
     )
@@ -199,6 +292,21 @@ function TarjetaCorreo({ correo, tema, onAccion }: { correo: CorreoBorrador; tem
           style={{ ...campo, lineHeight: 1.5, resize: 'vertical' }}
         />
       </label>
+      <div role="group" aria-label="Enviar por" style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap', fontSize: 11, color: T.apagado }}>
+        Enviar por
+        {CANALES.map(c => (
+          <button
+            key={c.valor} onClick={() => setCanal(c.valor)} disabled={!editable} aria-pressed={canal === c.valor}
+            style={{
+              padding: '4px 9px', borderRadius: 99, fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
+              border: `1px solid ${canal === c.valor ? T.acento : T.linea}`, background: canal === c.valor ? T.campo : 'transparent',
+              color: canal === c.valor ? T.texto : T.apagado,
+            }}
+          >
+            {c.etiqueta}
+          </button>
+        ))}
+      </div>
       {correo.estado === 'error' && correo.error && (
         <p style={{ fontSize: 12, color: T.error, background: T.errorFondo, padding: '6px 9px', borderRadius: 8 }}>{correo.error}</p>
       )}
@@ -210,7 +318,7 @@ function TarjetaCorreo({ correo, tema, onAccion }: { correo: CorreoBorrador; tem
           Descartar
         </button>
         <button
-          onClick={() => void onAccion?.(correo.id, 'enviar', { asunto, cuerpo })} disabled={!editable || ocupado || !onAccion || vacio}
+          onClick={() => void onAccion?.(correo.id, 'enviar', { asunto, cuerpo, canal })} disabled={!editable || ocupado || !onAccion || vacio}
           style={{
             display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 9, border: 'none',
             background: T.acento, color: T.sobreAcento, fontSize: 12.5, fontWeight: 700, cursor: ocupado ? 'wait' : 'pointer',
@@ -225,13 +333,80 @@ function TarjetaCorreo({ correo, tema, onAccion }: { correo: CorreoBorrador; tem
   )
 }
 
+/* ── Tarea o aviso propuesto: la persona lo confirma ─────────────────────── */
+
+const DIAS = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo']
+
+function TarjetaAccion({ accion, tema, onAccion }: { accion: AccionBorrador; tema: TemaChat; onAccion?: AccionAccion }) {
+  const T = TEMAS[tema]
+  const d = accion.datos as Record<string, string | number | undefined>
+  const esTarea = accion.tipo === 'tarea'
+  const Icono = esTarea ? ClipboardList : BellRing
+  const etiquetaOk = esTarea ? 'Crear tarea' : accion.tipo === 'aviso_crear' ? 'Activar aviso' : 'Cancelar aviso'
+
+  if (accion.estado === 'hecha' || accion.estado === 'descartada') {
+    const hecha = accion.estado === 'hecha'
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: hecha ? T.texto : T.tenue, padding: '8px 12px', borderRadius: 10, border: `1px solid ${T.linea}` }}>
+        {hecha ? <Check size={13} color={T.acento} style={{ flexShrink: 0 }} /> : <X size={13} style={{ flexShrink: 0 }} />}
+        <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+          {hecha ? (esTarea ? 'Tarea creada' : accion.tipo === 'aviso_crear' ? 'Aviso activado' : 'Aviso cancelado') : 'Descartado'}: {accion.titulo}
+        </span>
+      </div>
+    )
+  }
+  const ocupado = accion.estado === 'ejecutando'
+  return (
+    <div style={{ border: `1px solid ${T.acento}`, borderRadius: 12, padding: 12, display: 'flex', flexDirection: 'column', gap: 7 }}>
+      <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700, color: T.texto }}>
+        <Icono size={13} color={T.acento} /> {esTarea ? `Tarea para ${d.responsable ?? ''}` : 'Aviso semanal'}
+        <span style={{ fontWeight: 500, color: T.apagado }}>· confirma para {esTarea ? 'crearla' : 'aplicarlo'}</span>
+      </p>
+      <p style={{ fontSize: 13, color: T.texto, fontWeight: 600, overflowWrap: 'anywhere' }}>{accion.titulo}</p>
+      {esTarea && (
+        <p style={{ fontSize: 12, color: T.apagado, lineHeight: 1.5, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+          {d.descripcion ? `${d.descripcion}\n` : ''}Plazo: {String(d.plazo ?? '')} · Área: {String(d.area ?? 'Ventas')}
+        </p>
+      )}
+      {accion.tipo === 'aviso_crear' && (
+        <p style={{ fontSize: 12, color: T.apagado, lineHeight: 1.5 }}>
+          Cada {DIAS[(Number(d.dia_semana) || 1) - 1]} te dejo un borrador por vendedor y te aviso. No se envía nada sin que lo apruebes.
+        </p>
+      )}
+      {accion.estado === 'error' && accion.error && (
+        <p style={{ fontSize: 12, color: T.error, background: T.errorFondo, padding: '6px 9px', borderRadius: 8 }}>{accion.error}</p>
+      )}
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <button
+          onClick={() => void onAccion?.(accion.id, 'descartar')} disabled={ocupado || !onAccion}
+          style={{ padding: '7px 12px', borderRadius: 9, border: `1px solid ${T.linea}`, background: 'transparent', color: T.apagado, fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}
+        >
+          Descartar
+        </button>
+        <button
+          onClick={() => void onAccion?.(accion.id, 'confirmar')} disabled={ocupado || !onAccion}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 9, border: 'none', background: T.acento, color: T.sobreAcento, fontSize: 12.5, fontWeight: 700, cursor: ocupado ? 'wait' : 'pointer' }}
+        >
+          {ocupado ? <Loader2 size={13} style={{ animation: 'agente-giro 1s linear infinite' }} /> : <Check size={13} />}
+          {ocupado ? 'Aplicando…' : accion.estado === 'error' ? 'Reintentar' : etiquetaOk}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 /* ── Vista del chat ───────────────────────────────────────────────────────── */
 
-export function VistaChat({ mensajes, cargando, enviar, tema, ejemplos, deshabilitado, maxAlto, idCampo, correos = [], accionCorreo }: {
+export function VistaChat({ mensajes, cargando, enviar, tema, ejemplos, deshabilitado, maxAlto, idCampo, correos = [], accionCorreo, acciones = [], accionAccion, esVendedor }: {
   mensajes: Mensaje[]
   /** Borradores de correo que propuso el asistente en esta conversación. */
   correos?: CorreoBorrador[]
   accionCorreo?: AccionCorreo
+  /** Tareas y avisos propuestos, pendientes de confirmar. */
+  acciones?: AccionBorrador[]
+  accionAccion?: AccionAccion
+  /** Vendedor (no admin): el asistente sólo ve su cartera. Cambia el texto de bienvenida. */
+  esVendedor?: boolean
   cargando: boolean
   enviar: (texto: string) => void | Promise<void>
   tema: TemaChat
@@ -245,7 +420,21 @@ export function VistaChat({ mensajes, cargando, enviar, tema, ejemplos, deshabil
   const [entrada, setEntrada] = useState('')
   const fin = useRef<HTMLDivElement>(null)
 
-  useEffect(() => { fin.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }) }, [mensajes, cargando, correos.length])
+  useEffect(() => { fin.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }) }, [mensajes, cargando, correos.length, acciones.length])
+
+  // "Enviar todos": manda cada borrador pendiente tal como se ve en su tarjeta (con sus ediciones).
+  const ediciones = useRef(new Map<string, EdicionCorreo>())
+  const registrarEdicion = useCallback((id: string, e: EdicionCorreo) => { ediciones.current.set(id, e) }, [])
+  const pendientes = correos.filter(c => c.estado === 'pendiente')
+  const [confirmarTodos, setConfirmarTodos] = useState(false)
+  const [enviandoTodos, setEnviandoTodos] = useState(false)
+  const enviarTodos = async () => {
+    if (!accionCorreo) return
+    setEnviandoTodos(true)
+    for (const c of pendientes) await accionCorreo(c.id, 'enviar', ediciones.current.get(c.id))
+    setEnviandoTodos(false)
+    setConfirmarTodos(false)
+  }
 
   const mandar = () => {
     if (!entrada.trim() || cargando || deshabilitado) return
@@ -258,8 +447,12 @@ export function VistaChat({ mensajes, cargando, enviar, tema, ejemplos, deshabil
       <div style={{ flex: '1 1 auto', minHeight: 0, padding: 16, display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto', ...(maxAlto ? { maxHeight: maxAlto } : {}) }}>
         {mensajes.length === 0 && (
           <div>
-            <p style={{ fontSize: 13, fontWeight: 700, color: T.texto }}>Pregúntame lo que quieras de la base de datos.</p>
-            <p style={{ fontSize: 12, color: T.apagado, marginTop: 4, lineHeight: 1.5 }}>Clientes, ventas, deuda, cobros y stock. Solo leo datos: no modifico nada. Si me lo pides, preparo correos para los vendedores y tú decides si se envían.</p>
+            <p style={{ fontSize: 13, fontWeight: 700, color: T.texto }}>{esVendedor ? 'Pregúntame por tu cartera.' : 'Pregúntame lo que quieras de la base de datos.'}</p>
+            <p style={{ fontSize: 12, color: T.apagado, marginTop: 4, lineHeight: 1.5 }}>
+              {esVendedor
+                ? 'Quiénes de tus clientes están por pedir, qué ofrecerles, qué tienes por cobrar, barriles en clientes y stock. Solo veo tu cartera.'
+                : 'Clientes, ventas, deuda, cobros y stock. Solo leo datos: no modifico nada. Si me lo pides, preparo correos, tareas y avisos para los vendedores, y tú decides si se envían.'}
+            </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginTop: 12 }}>
               {ejemplos.map(e => (
                 <button
@@ -299,7 +492,28 @@ export function VistaChat({ mensajes, cargando, enviar, tema, ejemplos, deshabil
           </div>
         ))}
 
-        {correos.map(c => <TarjetaCorreo key={c.id} correo={c} tema={tema} onAccion={accionCorreo} />)}
+        {pendientes.length >= 2 && accionCorreo && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', padding: '9px 12px', borderRadius: 10, background: T.campo, fontSize: 12, color: T.texto }}>
+            {confirmarTodos
+              ? <span style={{ minWidth: 0 }}>¿Enviar {pendientes.length} borradores a {pendientes.map(c => c.destinatario_nombre).join(', ')}?</span>
+              : <span>{pendientes.length} borradores sin enviar</span>}
+            <div style={{ display: 'flex', gap: 6 }}>
+              {confirmarTodos && (
+                <button onClick={() => setConfirmarTodos(false)} disabled={enviandoTodos}
+                  style={{ padding: '6px 10px', borderRadius: 8, border: `1px solid ${T.linea}`, background: 'transparent', color: T.apagado, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                  Cancelar
+                </button>
+              )}
+              <button onClick={() => (confirmarTodos ? void enviarTodos() : setConfirmarTodos(true))} disabled={enviandoTodos}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: 'none', background: T.acento, color: T.sobreAcento, fontSize: 12, fontWeight: 700, cursor: enviandoTodos ? 'wait' : 'pointer' }}>
+                {enviandoTodos ? <Loader2 size={12} style={{ animation: 'agente-giro 1s linear infinite' }} /> : <Send size={12} />}
+                {enviandoTodos ? 'Enviando…' : confirmarTodos ? 'Sí, enviar todos' : `Enviar los ${pendientes.length}`}
+              </button>
+            </div>
+          </div>
+        )}
+        {correos.map(c => <TarjetaCorreo key={c.id} correo={c} tema={tema} onAccion={accionCorreo} onEdicion={registrarEdicion} />)}
+        {acciones.map(a => <TarjetaAccion key={a.id} accion={a} tema={tema} onAccion={accionAccion} />)}
 
         {cargando && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: T.apagado, fontSize: 12.5 }}>

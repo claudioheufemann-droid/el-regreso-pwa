@@ -4,14 +4,15 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import {
   archivarConversacion, conversacionMasReciente, mensajesParaMostrar, obtenerConversacion,
 } from '@/lib/agente/memoria'
-import { correosDeConversacion } from '@/lib/agente/correos'
+import { accionesDeConversacion, correosDeConversacion } from '@/lib/agente/correos'
 
 export const dynamic = 'force-dynamic'
 
+/** Admins y vendedores con cartera (el asistente en modo cartera, ver lib/agente/alcance.ts). Cada uno ve sólo sus conversaciones. */
 async function adminActual() {
   const user = await getServerUser()
   if (!user) return { error: NextResponse.json({ error: 'No autenticado' }, { status: 401 }) } as const
-  if (!user.isAdmin) return { error: NextResponse.json({ error: 'Sin permiso' }, { status: 403 }) } as const
+  if (!user.isAdmin && user.vendedoresErp.length === 0) return { error: NextResponse.json({ error: 'Sin permiso' }, { status: 403 }) } as const
   return { user } as const
 }
 
@@ -25,14 +26,16 @@ export async function GET(req: NextRequest) {
   const conv = id ? await obtenerConversacion(admin, a.user.id, id) : await conversacionMasReciente(admin, a.user.id)
   if (!conv) return NextResponse.json({ conversacion_id: null, mensajes: [] })
 
-  const [mensajes, correos] = await Promise.all([
+  const [mensajes, correos, acciones] = await Promise.all([
     mensajesParaMostrar(admin, conv.id),
     correosDeConversacion(admin, conv.id, a.user.id),
+    accionesDeConversacion(admin, conv.id, a.user.id),
   ])
   return NextResponse.json({
     conversacion_id: conv.id,
     mensajes: mensajes.map(m => ({ rol: m.rol, texto: m.texto, herramientas: m.herramientas, error: m.error })),
     correos,
+    acciones,
   })
 }
 

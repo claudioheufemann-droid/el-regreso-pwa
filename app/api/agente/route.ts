@@ -8,7 +8,7 @@ import {
   resumirSiHaceFalta, sumarTokensConversacion,
 } from '@/lib/agente/memoria'
 import { PARAMETROS, construirContexto } from '@/lib/agente/sistema'
-import { correosDeConversacion } from '@/lib/agente/correos'
+import { accionesDeConversacion, correosDeConversacion } from '@/lib/agente/correos'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -25,7 +25,10 @@ export const maxDuration = 60
 export async function POST(req: NextRequest) {
   const user = await getServerUser()
   if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  if (!user.isAdmin) return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
+  // Admin: toda la base. Vendedor (con cartera en el ERP): sólo su cartera y sólo las
+  // herramientas de HERRAMIENTAS_VENDEDOR (lib/agente/alcance.ts). Nadie más.
+  const alcance = user.isAdmin ? null : user.vendedoresErp.length > 0 ? { nombre: user.nombre, vendedoresErp: user.vendedoresErp } : undefined
+  if (alcance === undefined) return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
 
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) {
@@ -54,7 +57,7 @@ export async function POST(req: NextRequest) {
     const ciclo = cicloEnCursoISO()
     const contexto = construirContexto({
       hoyISO, ciclo: { inicio: inicioDeCiclo(ciclo), fin: finDeCiclo(ciclo) },
-      usuario: user.nombre, memorias, resumen: conv.resumen,
+      usuario: user.nombre, memorias, resumen: conv.resumen, modoVendedor: !!alcance,
     })
 
     await guardarMensaje(admin, conv.id, { rol: 'usuario', texto: pregunta })
@@ -67,7 +70,7 @@ export async function POST(req: NextRequest) {
       }).then(() => undefined, () => undefined)
 
     try {
-      const r = await responderPregunta({ historial, pregunta, contexto, apiKey, ctx: { admin, hoyISO, usuarioId: user.id, conversacionId: conv.id } })
+      const r = await responderPregunta({ historial, pregunta, contexto, apiKey, ctx: { admin, hoyISO, usuarioId: user.id, conversacionId: conv.id, alcance } })
       const nombres = [...new Set(r.herramientas.map(h => h.nombre))]
       await Promise.all([
         guardarMensaje(admin, conv.id, { rol: 'agente', texto: r.respuesta, herramientas: nombres }),
@@ -77,8 +80,13 @@ export async function POST(req: NextRequest) {
       // Resumir lo viejo corre después de responder: no suma espera a esta pregunta.
       after(() => resumirSiHaceFalta(admin, apiKey, conv.id))
       // Borradores de correo de la conversación: el chat los muestra con "Enviar" / "Descartar".
-      const correos = r.herramientas.some(h => h.nombre === 'preparar_correo_vendedor') ? await correosDeConversacion(admin, conv.id, user.id) : undefined
-      return NextResponse.json({ conversacion_id: conv.id, respuesta: r.respuesta, herramientas: r.herramientas, uso: r.uso, correos })
+      const usoCorreo = r.herramientas.some(h => h.nombre === 'preparar_correo_vendedor')
+      const usoAccion = r.herramientas.some(h => h.nombre === 'preparar_tarea_vendedor' || h.nombre === 'gestionar_aviso')
+      const [correos, acciones] = await Promise.all([
+        usoCorreo ? correosDeConversacion(admin, conv.id, user.id) : undefined,
+        usoAccion ? accionesDeConversacion(admin, conv.id, user.id) : undefined,
+      ])
+      return NextResponse.json({ conversacion_id: conv.id, respuesta: r.respuesta, herramientas: r.herramientas, uso: r.uso, correos, acciones })
     } catch (e) {
       const status = e instanceof ErrorAgente ? e.status : 500
       const mensaje = e instanceof ErrorAgente ? e.message : 'Error inesperado del asistente.'

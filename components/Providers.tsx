@@ -40,7 +40,8 @@ export default function Providers({
         {initialUser && <NotifPrompt />}
         {initialUser && <OfflineBadge />}
         {initialUser && <GlobalSearch />}
-        {initialUser?.isAdmin && <AgenteFlotante />}
+        {/* Admins: toda la base. Vendedores con cartera: modo cartera (lib/agente/alcance.ts). */}
+        {(initialUser?.isAdmin || (initialUser?.vendedoresErp?.length ?? 0) > 0) && <AgenteFlotante />}
       </GlobalSearchProvider>
     </UserProvider>
   )

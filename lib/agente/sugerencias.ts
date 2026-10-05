@@ -3,6 +3,14 @@
  * sistema.ts a propósito: este SÍ viaja al navegador, y sistema.ts (reglas,
  * glosario, prompt) no debe terminar en el JavaScript público.
  */
+/** Para un vendedor (modo cartera): sólo preguntas sobre sus propios clientes. */
+export const SUGERENCIAS_VENDEDOR = [
+  '¿Cuáles de mis clientes están por pedir esta semana?',
+  '¿Qué le ofrezco a mis clientes que están por pedir?',
+  '¿Qué facturas vencidas tengo por cobrar?',
+  '¿Cómo voy en el período comparado con el anterior?',
+]
+
 export const SUGERENCIAS = [
   '¿Qué clientes están por pedir esta semana?',
   '¿Cuánto nos deben en total y quiénes son los que más deben?',

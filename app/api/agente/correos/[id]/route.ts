@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerUser } from '@/lib/auth'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { enviarEmailGmail } from '@/lib/email-gmail'
+import { sendPushToUser } from '@/lib/push'
 import { LIMITES_CORREO, htmlCorreo } from '@/lib/agente/correos'
 
 export const dynamic = 'force-dynamic'
 
 /**
- * POST /api/agente/correos/[id]  { accion: 'enviar' | 'descartar', asunto?, cuerpo? }
+ * POST /api/agente/correos/[id]  { accion: 'enviar' | 'descartar', asunto?, cuerpo?, canal? }
  *
  * El ÚNICO lugar donde sale un correo del Asistente de datos: lo dispara una
  * persona (admin) desde la tarjeta del borrador, nunca el modelo. Puede venir
@@ -22,13 +23,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!user.isAdmin) return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
 
   const { id } = await params
-  const body = await req.json().catch(() => null) as { accion?: unknown; asunto?: unknown; cuerpo?: unknown } | null
+  const body = await req.json().catch(() => null) as { accion?: unknown; asunto?: unknown; cuerpo?: unknown; canal?: unknown } | null
   const accion = body?.accion
   if (accion !== 'enviar' && accion !== 'descartar') return NextResponse.json({ error: 'Acción inválida.' }, { status: 400 })
 
   const admin = createAdminClient()
   const { data: borrador } = await admin.from('agente_correos')
-    .select('id, creado_por, destinatario_id, destinatario_nombre, asunto, cuerpo, estado')
+    .select('id, creado_por, destinatario_id, destinatario_nombre, asunto, cuerpo, estado, canal')
     .eq('id', id).maybeSingle()
   // Sólo quien lo pidió al asistente puede enviarlo o descartarlo.
   if (!borrador || borrador.creado_por !== user.id) return NextResponse.json({ error: 'Borrador no encontrado.' }, { status: 404 })
@@ -44,28 +45,40 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const asunto = (typeof body?.asunto === 'string' ? body.asunto : borrador.asunto).trim().slice(0, LIMITES_CORREO.asunto)
   const cuerpo = (typeof body?.cuerpo === 'string' ? body.cuerpo : borrador.cuerpo).trim().slice(0, LIMITES_CORREO.cuerpo)
   if (!asunto || !cuerpo) return NextResponse.json({ error: 'El asunto y el mensaje no pueden quedar vacíos.' }, { status: 400 })
+  const canal = (['correo', 'push', 'ambos'] as const).find(c => c === body?.canal) ?? (borrador.canal as 'correo' | 'push' | 'ambos')
+  const porCorreo = canal !== 'push', porPush = canal !== 'correo'
 
   // Reserva el envío: si otra pestaña o un doble clic ya lo tomó, no hay fila que actualizar.
   const { data: reservado } = await admin.from('agente_correos')
-    .update({ estado: 'enviando', asunto, cuerpo, error: null })
+    .update({ estado: 'enviando', asunto, cuerpo, canal, error: null })
     .eq('id', id).in('estado', ['pendiente', 'error'])
     .select('id').maybeSingle()
   if (!reservado) return NextResponse.json({ error: 'Este correo ya se está enviando.' }, { status: 409 })
 
-  const { data: destinatario } = await admin.from('users').select('email, nombre').eq('id', borrador.destinatario_id).maybeSingle()
-  const email = destinatario?.email?.trim()
-  if (!email) {
-    await admin.from('agente_correos').update({ estado: 'error', error: 'El vendedor no tiene correo registrado.' }).eq('id', id)
-    return NextResponse.json({ error: `${borrador.destinatario_nombre} no tiene correo registrado en la app.` }, { status: 422 })
+  if (porCorreo) {
+    const { data: destinatario } = await admin.from('users').select('email').eq('id', borrador.destinatario_id).maybeSingle()
+    const email = destinatario?.email?.trim()
+    if (!email) {
+      await admin.from('agente_correos').update({ estado: 'error', error: 'El vendedor no tiene correo registrado.' }).eq('id', id)
+      return NextResponse.json({ error: `${borrador.destinatario_nombre} no tiene correo registrado en la app.` }, { status: 422 })
+    }
+    const r = await enviarEmailGmail({ toEmail: email, subject: asunto, html: htmlCorreo(cuerpo, user.nombre), replyTo: user.email || undefined })
+    if (r.error) {
+      await admin.from('agente_correos').update({ estado: 'error', error: String(r.error).slice(0, 300) }).eq('id', id)
+      return NextResponse.json({ error: 'No se pudo enviar el correo. Puedes reintentar.' }, { status: 502 })
+    }
   }
-
-  const r = await enviarEmailGmail({ toEmail: email, subject: asunto, html: htmlCorreo(cuerpo, user.nombre), replyTo: user.email || undefined })
-  if (r.error) {
-    await admin.from('agente_correos').update({ estado: 'error', error: String(r.error).slice(0, 300) }).eq('id', id)
-    return NextResponse.json({ error: 'No se pudo enviar el correo. Puedes reintentar.' }, { status: 502 })
+  if (porPush) {
+    // Push al celular + registro en la campanita (sendPushToUser deja la notificación aunque el teléfono esté apagado).
+    await sendPushToUser(borrador.destinatario_id, {
+      title: asunto,
+      body: cuerpo.length > 240 ? `${cuerpo.slice(0, 237)}…` : cuerpo,
+      url: '/ventas',
+      tag: `agente-${id}`,
+    })
   }
 
   const enviadoAt = new Date().toISOString()
   await admin.from('agente_correos').update({ estado: 'enviado', enviado_por: user.id, enviado_at: enviadoAt }).eq('id', id)
-  return NextResponse.json({ ok: true, estado: 'enviado', enviado_at: enviadoAt })
+  return NextResponse.json({ ok: true, estado: 'enviado', enviado_at: enviadoAt, canal })
 }

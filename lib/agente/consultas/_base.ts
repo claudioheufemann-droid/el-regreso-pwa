@@ -17,6 +17,12 @@ export interface ContextoConsulta {
   usuarioId: string
   /** Conversación en curso: los borradores de correo se cuelgan de ella para mostrarlos en el chat. */
   conversacionId?: string
+  /**
+   * Modo vendedor: si viene, quien pregunta es un vendedor (no admin) y SOLO puede
+   * ver su cartera. Cada herramienta permitida filtra por `vendedoresErp` y
+   * descarta el parámetro `vendedor` que mande el modelo. Ver lib/agente/alcance.ts.
+   */
+  alcance?: { nombre: string; vendedoresErp: string[] } | null
 }
 
 export interface Consulta {

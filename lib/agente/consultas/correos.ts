@@ -1,6 +1,7 @@
 import { type Consulta, entero, redondear, sumarDiasISO, texto } from './_base'
 import { esClienteExcluido } from '@/lib/types'
 import { LIMITES_CORREO, nombresDeVendedores, resolverVendedor } from '../correos'
+import { filtroVendedor, notaAlcance } from '../alcance'
 
 /** Carteras que no son un vendedor al que avisar. */
 const CARTERA_SIN_VENDEDOR = /^(inactivo|no indica|incobrable|transici|equipo ventas|cervecer|online$)/i
@@ -34,7 +35,7 @@ export const clientesProximosAPedir: Consulta = {
   async ejecutar(args, ctx) {
     const dias = entero(args.dias, 7, 1, 30)
     const atrasados = entero(args.atrasados_dias, 0, 0, 30)
-    const filtroVendedor = texto(args.vendedor)?.toLowerCase() ?? null
+    const filtro = filtroVendedor(ctx, texto(args.vendedor))
     const desde = sumarDiasISO(ctx.hoyISO, -atrasados)
     const hasta = sumarDiasISO(ctx.hoyISO, dias)
 
@@ -49,7 +50,7 @@ export const clientesProximosAPedir: Consulta = {
       .filter(f => !esClienteExcluido(f.nombre_fantasia) && !CARTERA_SIN_VENDEDOR.test((f.vendedor_actual ?? '').trim()))
       // Vendedor como se llama en la app (une "nicol.delgado@…" con "Nicol Delgado"); se filtra por ambos nombres.
       .map(f => ({ ...f, vendedor: nombreVendedor(f.vendedor_actual) ?? 'Sin vendedor' }))
-      .filter(f => !filtroVendedor || f.vendedor.toLowerCase().includes(filtroVendedor) || (f.vendedor_actual ?? '').toLowerCase().includes(filtroVendedor))
+      .filter(f => filtro(f.vendedor_actual, f.vendedor))
       .sort((a, b) => a.siguiente_compra_estimada!.localeCompare(b.siguiente_compra_estimada!))
 
     const clientes = filas.slice(0, 60).map(f => {
@@ -80,6 +81,7 @@ export const clientesProximosAPedir: Consulta = {
       clientes,
       ...(filas.length > clientes.length ? { advertencia: `Se muestran ${clientes.length} de ${filas.length}; filtra por vendedor para ver el resto.` } : {}),
       nota: 'Estimación según el ciclo de compra histórico de cada cliente (no es un pedido confirmado). Sin cuentas internas.',
+      ...notaAlcance(ctx),
     }
   },
 }
@@ -92,6 +94,7 @@ export const prepararCorreoVendedor: Consulta = {
     { nombre: 'vendedor', tipo: 'string', requerido: true, descripcion: 'Vendedor destinatario tal como lo entregó clientes_proximos_a_pedir u otra herramienta (ej. "Marcelo D.").' },
     { nombre: 'asunto', tipo: 'string', requerido: true, descripcion: 'Asunto corto y concreto.' },
     { nombre: 'cuerpo', tipo: 'string', requerido: true, descripcion: 'Texto del correo en español, tuteo, cordial y breve: saludo, la lista de clientes con su fecha estimada y pedido típico, y una acción concreta. Sin HTML ni markdown.' },
+    { nombre: 'canal', tipo: 'string', enum: ['correo', 'push', 'ambos'], descripcion: 'Por defecto "correo". "push" = notificación al celular del vendedor (más inmediata en terreno). El usuario lo puede cambiar en la tarjeta.' },
   ],
   async ejecutar(args, ctx) {
     const vendedor = texto(args.vendedor)
@@ -116,6 +119,7 @@ export const prepararCorreoVendedor: Consulta = {
       destinatario_id: r.usuario.id,
       destinatario_nombre: r.usuario.nombre,
       asunto, cuerpo,
+      canal: ['correo', 'push', 'ambos'].includes(texto(args.canal) ?? '') ? texto(args.canal) : 'correo',
     }).select('id').single()
     if (error) throw new Error(error.message)
 

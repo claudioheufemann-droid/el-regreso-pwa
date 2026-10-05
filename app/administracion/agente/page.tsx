@@ -24,6 +24,7 @@ export default function AgentePage() {
       ['Acceso', PARAMETROS.acceso],
       ['Modo', PARAMETROS.soloLectura ? 'Solo lectura (no escribe en la base)' : 'Lectura y escritura'],
       ['Acciones', PARAMETROS.acciones],
+      ['Acceso de vendedores', PARAMETROS.accesoVendedores],
     ],
     reglas: [...REGLAS],
     glosario: [...GLOSARIO],

@@ -7,6 +7,9 @@ import { recordar } from './memoria'
 import { stockActual } from './stock'
 import { mapaDatos } from './mapa'
 import { clientesProximosAPedir, prepararCorreoVendedor } from './correos'
+import { pedidoSugeridoCliente, cobranzaVendedor, clientesVolumenBaja, ventaCruzada, avanceMetas, barrilesEnClientes, quiebreStock } from './comercial'
+import { prepararTareaVendedor, gestionarAviso } from './acciones'
+import { HERRAMIENTAS_VENDEDOR } from '../alcance'
 
 /**
  * CATÁLOGO DE CONSULTAS DEL AGENTE — acá se "entrena".
@@ -30,8 +33,18 @@ export const CONSULTAS: Consulta[] = [
   cobrosResumen,
   stockActual,
   clientesProximosAPedir,
-  // Única acción: deja un BORRADOR; enviarlo lo decide una persona en el chat (lib/agente/correos.ts).
+  // Comerciales (5-oct-2026): cartera de cada vendedor (lib/agente/consultas/comercial.ts).
+  pedidoSugeridoCliente,
+  cobranzaVendedor,
+  clientesVolumenBaja,
+  ventaCruzada,
+  avanceMetas,
+  barrilesEnClientes,
+  quiebreStock,
+  // Acciones: sólo dejan un BORRADOR; ejecutarlas lo decide una persona en el chat (lib/agente/correos.ts, acciones.ts).
   prepararCorreoVendedor,
+  prepararTareaVendedor,
+  gestionarAviso,
   // Lectura libre (rol de solo lectura en la base) para lo que las de arriba no cubren, y memoria de largo plazo.
   // mapa_datos primero: orienta sin tocar la base (lib/agente/mapa.ts).
   mapaDatos,
@@ -45,6 +58,8 @@ export async function ejecutarConsulta(
 ): Promise<{ ok: true; datos: unknown } | { ok: false; error: string }> {
   const consulta = CONSULTAS.find(c => c.nombre === nombre)
   if (!consulta) return { ok: false, error: `La consulta "${nombre}" no existe.` }
+  // Modo vendedor: aunque el modelo invente una llamada, sólo corren las de su cartera.
+  if (ctx.alcance && !HERRAMIENTAS_VENDEDOR.has(nombre)) return { ok: false, error: 'Esa consulta no está disponible para tu usuario.' }
   try {
     return { ok: true, datos: await consulta.ejecutar(args ?? {}, ctx) }
   } catch (e) {
