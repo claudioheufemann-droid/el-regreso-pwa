@@ -17,20 +17,15 @@
  */
 import { Fragment, useMemo, useState } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell, ResponsiveContainer } from 'recharts'
-import { ChevronDown, ChevronUp, ChevronsUpDown, ChevronRight, Search, FileDown, MessageCircle, Phone, Info, X, Users } from 'lucide-react'
+import { ChevronDown, ChevronUp, ChevronsUpDown, ChevronRight, Search, FileDown, MessageCircle, Phone, X, Users } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import { VENDEDORES_CARTERA_COBRANZA, vendedorCanonico, grupoCarteraDe, nombreCorto } from '@/lib/types'
 import { diasMoraDeudor, severidadMora, type SeveridadMora } from '@/lib/cobranza'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
 import PanelCobranza, { documentosParaWA, type DatosCobranza } from '@/components/deudores/PanelCobranza'
 import type { BarrilesFuera } from '@/lib/barrilesFuera'
+import { C, Card, Etiqueta, Franja } from './tema'
 
-const C = {
-  card: '#FFFFFF', bg: '#F1F5F9', text: '#0F172A', muted: '#64748B',
-  line: '#E2E8F0', gold: '#B45309', goldSoft: '#FFFBEB',
-  red: '#DC2626', redSoft: '#FEF2F2', green: '#059669', purple: '#7C3AED',
-  amber: '#D97706',
-}
 
 // Semáforo por crédito del cliente (ver severidadMora en lib/cobranza).
 const COLOR_MORA: Record<SeveridadMora, string> = { 'al-dia': C.green, vencida: C.amber, critica: C.red }
@@ -166,21 +161,6 @@ function exportarCSV(deudores: Deudor[]) {
   URL.revokeObjectURL(url)
 }
 
-function Card({ children, acento }: { children: React.ReactNode; acento?: string }) {
-  return (
-    <div style={{ background: C.card, border: `1px solid ${acento ?? C.line}`, borderRadius: 16, padding: 20 }}>
-      {children}
-    </div>
-  )
-}
-function Etiqueta({ children, title }: { children: React.ReactNode; title?: string }) {
-  return (
-    <p title={title} style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: C.muted, display: 'flex', alignItems: 'center', gap: 5 }}>
-      {children}
-      {title && <Info size={11} style={{ opacity: 0.5 }} />}
-    </p>
-  )
-}
 
 const inputStyle: React.CSSProperties = {
   width: '100%', padding: '9px 12px', background: C.card, border: `1px solid ${C.line}`,
@@ -188,7 +168,7 @@ const inputStyle: React.CSSProperties = {
 }
 const selectStyle: React.CSSProperties = {
   ...inputStyle, appearance: 'none',
-  backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'12\' height=\'12\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%2364748B\' stroke-width=\'2\'%3E%3Cpolyline points=\'6 9 12 15 18 9\'/%3E%3C/svg%3E")',
+  backgroundImage: 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'12\' height=\'12\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%236B6457\' stroke-width=\'2\'%3E%3Cpolyline points=\'6 9 12 15 18 9\'/%3E%3C/svg%3E")',
   backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center', paddingRight: 32,
 }
 const fCompact = (n: number) => {
@@ -203,6 +183,9 @@ export default function DeudaClienteSection({ initialDeudores, clientesPorVended
   const [estado, setEstado] = useState<'todos' | 'vencida' | 'sin-vencida'>('todos')
   const [searchText, setSearchText] = useState('')
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
+  /** La tabla muestra los 20 de mayor deuda; el resto, a un clic. Con 100
+   *  deudores la pestaña pasaba de los 12.000 px de alto. */
+  const [verTodosDeudores, setVerTodosDeudores] = useState(false)
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null)
   const [waTarget, setWaTarget] = useState<WATarget | null>(null)
   const [cobranza, setCobranza] = useState<DatosCobranza | null>(null)
@@ -308,10 +291,10 @@ export default function DeudaClienteSection({ initialDeudores, clientesPorVended
         internas — ni el co-packing a terceros (maquila), que se muestra aparte de la deuda comercial.
       </p>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+      <Franja min={220}>
         <Card>
           <Etiqueta>Total deudores</Etiqueta>
-          <p style={{ fontSize: 26, fontWeight: 900, color: C.text, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>
+          <p style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.035em', color: C.text, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>
             {totals.deudores}
             {clientesUniverso > 0 && (
               <span style={{ fontSize: 13, fontWeight: 500, color: C.muted }}> de {clientesUniverso} ({Math.round((totals.deudores / clientesUniverso) * 100)}%)</span>
@@ -323,12 +306,12 @@ export default function DeudaClienteSection({ initialDeudores, clientesPorVended
         </Card>
         <Card acento={totals.deuda_vencida > 0 ? '#FECACA' : undefined}>
           <Etiqueta title="Deuda ya vencida, sin la maquila (co-packing a terceros).">Deuda vencida</Etiqueta>
-          <p style={{ fontSize: 26, fontWeight: 900, color: C.red, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(totals.deuda_vencida)}</p>
+          <p style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.035em', color: C.red, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(totals.deuda_vencida)}</p>
           <p style={{ fontSize: 11.5, color: C.muted, marginTop: 6 }}>lo que persigue el área comercial</p>
         </Card>
         <Card>
           <Etiqueta title="Vencida + no vencida (plata dentro de plazo, todavía no exigible).">Saldo total</Etiqueta>
-          <p style={{ fontSize: 26, fontWeight: 900, color: C.gold, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(totals.saldo_total)}</p>
+          <p style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.035em', color: C.gold, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(totals.saldo_total)}</p>
           <button onClick={() => setVerSaldoNoVencido(v => !v)}
             style={{ display: 'flex', alignItems: 'center', gap: 3, marginTop: 6, padding: 0, background: 'none', border: 'none', cursor: 'pointer', color: C.muted, fontSize: 11.5, fontWeight: 600 }}>
             {formatCurrency(saldoNoVencido)} aún no vence
@@ -337,10 +320,10 @@ export default function DeudaClienteSection({ initialDeudores, clientesPorVended
         </Card>
         <Card>
           <Etiqueta>Barriles fuera</Etiqueta>
-          <p style={{ fontSize: 26, fontWeight: 900, color: C.purple, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>{barrilesKpi.toLocaleString('es-CL')}</p>
+          <p style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.035em', color: C.purple, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>{barrilesKpi.toLocaleString('es-CL')}</p>
           <p style={{ fontSize: 11.5, color: C.muted, marginTop: 6 }}>sin devolver, según informe Barriles en Cliente</p>
         </Card>
-      </div>
+      </Franja>
 
       {verSaldoNoVencido && (
         <Card>
@@ -397,7 +380,7 @@ export default function DeudaClienteSection({ initialDeudores, clientesPorVended
                 borderRadius: 12, padding: '13px 16px',
               }}>
               <p style={{ fontSize: 11, fontWeight: 700, color: activo ? C.gold : C.muted, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 6 }}>{f.nombre}</p>
-              <p style={{ fontSize: 17, fontWeight: 900, color: C.red }}>{formatCurrency(f.vencida)}</p>
+              <p style={{ fontSize: 17, fontWeight: 800, color: C.red }}>{formatCurrency(f.vencida)}</p>
               <p style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>{f.deudores} deudor{f.deudores === 1 ? '' : 'es'}{f.clientes > 0 ? ` de ${f.clientes}` : ''}</p>
             </button>
           )
@@ -474,7 +457,7 @@ export default function DeudaClienteSection({ initialDeudores, clientesPorVended
                 </tr>
               </thead>
               <tbody>
-                {filtradosOrdenados.map(d => {
+                {(verTodosDeudores || searchText ? filtradosOrdenados : filtradosOrdenados.slice(0, 20)).map(d => {
                   const abierto = expandedRow === d.id
                   // Estimado rápido salvo que esta fila esté desplegada y ya
                   // haya llegado el detalle real (fecha_pedido + dias_pago).
@@ -582,10 +565,18 @@ export default function DeudaClienteSection({ initialDeudores, clientesPorVended
                 })}
               </tbody>
             </table>
+            {!verTodosDeudores && !searchText && filtradosOrdenados.length > 20 && (
+              <button
+                onClick={() => setVerTodosDeudores(true)}
+                style={{ display: 'block', width: '100%', padding: '11px', border: 'none', borderTop: `1px solid ${C.line}`, background: C.bg, color: C.gold, fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}
+              >
+                Ver los {filtradosOrdenados.length} deudores
+              </button>
+            )}
           </div>
         )}
       </div>
-      <p style={{ fontSize: 11, color: C.muted, textAlign: 'right' }}>Mostrando {filtrados.length} de {universo.length} deudores</p>
+      <p style={{ fontSize: 11, color: C.muted, textAlign: 'right' }}>Mostrando {Math.min(filtrados.length, verTodosDeudores || searchText ? filtrados.length : 20)} de {filtrados.length} deudores{filtrados.length !== universo.length ? ` (de ${universo.length} en total)` : ''}</p>
 
       {waTarget && <WAModal target={waTarget} onClose={() => setWaTarget(null)} />}
     </div>

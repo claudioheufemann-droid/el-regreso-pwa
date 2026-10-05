@@ -48,3 +48,16 @@ graph TD
 - Nueva tabla **"Proyección por ciclo (mes)"** (`resumenMensualForecast`, `lib/administracion/forecastMensual.ts`): por cada ciclo proyectado (24→23) muestra proyectado, rango del 80%, el **mismo ciclo del año anterior** (real) y la variación. Solo lista ciclos proyectados: el último ciclo real puede venir incompleto (BaseCamp se carga a mano).
 - **Unidades:** Cliente PDV y Compras van en **neto**; Restaurante BaseCamp en **bruto** (boleta del Toteat con IVA incluido). Cada serie lo declara en `ForecastCliente.unidad` y la pantalla lo rotula (antes decía "montos netos" para todas, lo cual era falso para BaseCamp).
 - Valores medidos el 2-oct-2026 para el ciclo de diciembre 2026 (24-nov a 23-dic): Cliente PDV $13,4 M neto (+6% vs dic-2025), BaseCamp $81,9 M bruto (+22% vs dic-2025). Octubre-2026 de BaseCamp sale +45% sobre el año anterior ($89,1 M vs $61,6 M): es el valor más sospechoso del modelo.
+
+## Rediseño visual (5-oct-2026, skills de Emil Kowalski)
+
+El módulo sigue siendo **claro a propósito** (pedido del usuario, 10-sep-2026). Reglas vigentes:
+
+- **Una sola paleta y piezas comunes** en `app/administracion/tema.tsx`: `C` (papel cálido `#F5F2EC`, tinta `#1C1915`, acción en dorado oscuro `#87691A`; `blue` conserva el nombre pero es el color de acción), `Card`, `CardAlerta`, `Etiqueta`, `Cifra`, `Franja`. Antes había 8 copias de la paleta y 5 de Card/Etiqueta, distintas entre sí. No volver a definir `const C` en un archivo.
+- **CSS del módulo** en `globals.css`, bloque `.adm-root`: respuesta al presionar (`scale(0.97)`), hover sólo con mouse, foco visible, fundido de 140 ms al cambiar de pestaña, subrayado animado de pestañas, campos legibles (la regla global de inputs es del tema oscuro) y 16 px en pantallas táctiles.
+- **Encabezado compacto**: volver + "Administración y Finanzas" + la pregunta de la pestaña (`PREGUNTA_TAB`), chip de ciclo/modelo y Asistente; pestañas subrayadas.
+- **Cifras en franja** (`<Franja>`, flex con divisores: la última fila se estira, sin huecos).
+- **Deudores**: la tabla muestra los 20 de mayor deuda con "Ver los N deudores" (Cobranza pasó de 12.700 a 5.500 px).
+- **Gráficos**: hex de `C` (Recharts usa atributos SVG); leyendas en `C.muted` (el color de la serie no se leía sobre blanco).
+- **Carga**: `loading.tsx` claro con la forma del módulo (el negro anterior destellaba).
+- **Datos**: la carga vive en `cargarDatos.ts` (`cargarDatosAdministracion`); `page.tsx` sólo verifica que sea administrador. El banco `/dev/administracion` (sólo desarrollo) muestra el módulo con datos reales sin login para revisar el diseño.

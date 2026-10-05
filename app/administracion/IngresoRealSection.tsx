@@ -11,6 +11,7 @@ import {
 import type { DatosCobros, ComportamientoPago } from './page'
 import { LABEL_METODO, type MetodoPago } from '@/lib/administracion/movimientosCtaCte'
 import CalendarioSemana from './CalendarioSemana'
+import { C } from './tema'
 
 /**
  * "Plata que entró" — la pestaña que responde cuánto dinero llegó de verdad
@@ -23,12 +24,6 @@ import CalendarioSemana from './CalendarioSemana'
  * pestaña es la única que trabaja con plata efectivamente cobrada.
  */
 
-const C = {
-  bg: '#F1F5F9', card: '#FFFFFF', text: '#0F172A', muted: '#64748B', faint: '#94A3B8',
-  line: '#E2E8F0', blue: '#2563EB', blueSoft: '#EFF6FF', green: '#059669', greenSoft: '#ECFDF5',
-  purple: '#7C3AED', amber: '#D97706', amberSoft: '#FFFBEB', amberBorder: '#FDE68A',
-  red: '#DC2626', redSoft: '#FEF2F2', teal: '#0D9488',
-}
 
 const COLOR_METODO: Record<string, string> = {
   deposito: C.blue,
@@ -252,7 +247,7 @@ export default function IngresoRealSection({ datos, modo }: { datos: DatosCobros
       <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: 18 }}>
         <h3 style={{ fontSize: 15, fontWeight: 800, color: C.text }}>¿Cuánto se demoran en pagarnos?</h3>
         <p style={{ fontSize: 12.5, color: C.muted, marginTop: 3, lineHeight: 1.6, maxWidth: 720 }}>
-          Medido sobre {cartera.length} clientes con al menos 3 pagos registrados. Hacé clic en un grupo para
+          Medido sobre {cartera.length} clientes con al menos 3 pagos registrados. Haz clic en un grupo para
           ver quiénes son.
         </p>
 

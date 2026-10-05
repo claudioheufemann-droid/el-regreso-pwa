@@ -8,6 +8,7 @@ import {
   armarSemana, atrasadoEnEscenario, DIAS_CORTOS, lunesDisponibles,
   type BaseBasecamp, type Escenario,
 } from '@/lib/administracion/calendarioEntradas'
+import { C } from './tema'
 
 /**
  * "Calendario de entradas": qué día de la semana entra cuánta plata y de qué
@@ -16,11 +17,6 @@ import {
  * Acá sólo se elige semana/escenario y se dibuja.
  */
 
-const C = {
-  bg: '#F1F5F9', card: '#FFFFFF', text: '#0F172A', muted: '#64748B', faint: '#94A3B8', line: '#E2E8F0',
-  blue: '#2563EB', blueSoft: '#EFF6FF', green: '#059669', purple: '#7C3AED', amber: '#D97706',
-  amberSoft: '#FFFBEB', amberBorder: '#FDE68A', hoy: '#0F172A',
-}
 const CONCEPTOS = [
   { id: 'facturas', label: 'Cobranza de facturas', corto: 'Facturas', color: C.blue },
   { id: 'mostrador', label: 'Mostrador PDV', corto: 'Mostrador', color: C.green },
@@ -114,7 +110,7 @@ export default function CalendarioSemana({ datos }: { datos: DatosCobros }) {
       <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', alignItems: 'flex-end' }}>
         <div>
           <p style={{ fontSize: 11.5, fontWeight: 700, color: C.muted }}>Entra en la semana</p>
-          <p style={{ fontSize: 28, fontWeight: 900, color: C.text, fontVariantNumeric: 'tabular-nums' }}>{fMoney(semana.totales.total)}</p>
+          <p style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.035em', color: C.text, fontVariantNumeric: 'tabular-nums' }}>{fMoney(semana.totales.total)}</p>
           {hayPasados && (
             <p style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
               <CheckCircle2 size={12} style={{ color: C.green, verticalAlign: '-2px' }} /> ya entró <strong style={{ color: C.text }}>{fMoney(semana.yaEntro)}</strong>
@@ -156,7 +152,7 @@ export default function CalendarioSemana({ datos }: { datos: DatosCobros }) {
                 {esHoy && <span style={{ fontSize: 9.5, fontWeight: 800, color: '#fff', background: C.hoy, borderRadius: 100, padding: '2px 7px' }}>HOY</span>}
                 {d.estado === 'real' && <span style={{ fontSize: 10, fontWeight: 700, color: C.green }}>entró</span>}
               </span>
-              <span style={{ fontSize: 16, fontWeight: 900, color: d.total === 0 ? C.faint : C.text, fontVariantNumeric: 'tabular-nums' }}>{fCorto(d.total)}</span>
+              <span style={{ fontSize: 16, fontWeight: 800, color: d.total === 0 ? C.faint : C.text, fontVariantNumeric: 'tabular-nums' }}>{fCorto(d.total)}</span>
               {/* barra apilada por concepto, a la escala del día más fuerte de la semana */}
               <span style={{ display: 'flex', height: 6, borderRadius: 4, overflow: 'hidden', background: C.line, width: `${Math.max(6, (d.total / maxDia) * 100)}%` }}>
                 {CONCEPTOS.map(c => d.total > 0 && d[c.id] > 0 && <span key={c.id} style={{ width: `${(d[c.id] / d.total) * 100}%`, background: c.color }} />)}

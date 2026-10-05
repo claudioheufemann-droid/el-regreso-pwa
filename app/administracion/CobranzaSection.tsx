@@ -9,29 +9,16 @@
  */
 
 import { useMemo, useState } from 'react'
-import { FileDown, Info, PhoneCall, UserX, ClipboardList } from 'lucide-react'
+import { FileDown, PhoneCall, UserX, ClipboardList } from 'lucide-react'
 import type { DatosCajaCobrada } from '@/lib/administracion/cajaCobradaDatos'
 import type { DatosCobros, ResumenDeuda } from './page'
 import IngresoRealSection from './IngresoRealSection'
 import DeudaClienteSection, { type DeudorRaw } from './DeudaClienteSection'
 import type { BarrilesFuera } from '@/lib/barrilesFuera'
+import { C, Card, Etiqueta, Franja } from './tema'
 
-const C = {
-  card: '#FFFFFF', text: '#0F172A', muted: '#64748B', faint: '#94A3B8', line: '#E2E8F0', bg: '#F8FAFC',
-  blue: '#2563EB', amber: '#D97706', amberSoft: '#FFFBEB', amberBorder: '#FDE68A', red: '#DC2626', redBorder: '#FECACA',
-}
 const fMoney = (n: number) => '$' + Math.round(n).toLocaleString('es-CL')
 
-function Card({ children, acento, padding = 20 }: { children: React.ReactNode; acento?: string; padding?: number | string }) {
-  return <div style={{ background: C.card, border: `1px solid ${acento ?? C.line}`, borderRadius: 16, padding }}>{children}</div>
-}
-function Etiqueta({ children, title }: { children: React.ReactNode; title?: string }) {
-  return (
-    <p title={title} style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: C.muted, display: 'flex', alignItems: 'center', gap: 5 }}>
-      {children}{title && <Info size={11} style={{ opacity: 0.5 }} />}
-    </p>
-  )
-}
 const th: React.CSSProperties = { padding: '9px 12px', fontSize: 10.5, fontWeight: 800, letterSpacing: '.05em', textTransform: 'uppercase', color: C.muted, textAlign: 'right', whiteSpace: 'nowrap', background: C.bg, borderBottom: `1px solid ${C.line}` }
 const td: React.CSSProperties = { padding: '8px 12px', fontSize: 13, textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', borderBottom: `1px solid ${C.line}` }
 
@@ -68,12 +55,12 @@ export default function CobranzaSection({ caja, deuda, cobros, deudoresDetalle, 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       {/* ── Las 3 cifras ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 14 }}>
+      <Franja min={250}>
         <Card acento={total > 0 ? C.redBorder : undefined}>
           <Etiqueta title="Facturas cuya fecha de pago esperada (vencimiento + lo que suele demorarse ese cliente) ya pasó y siguen sin pago en el ERP. Es lo accionable: plata que debió entrar.">
             <PhoneCall size={12} /> Debió entrar y no entró
           </Etiqueta>
-          <p style={{ fontSize: 30, fontWeight: 900, color: C.red, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>{fMoney(total)}</p>
+          <p style={{ fontSize: 30, fontWeight: 800, letterSpacing: '-0.035em', color: C.red, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>{fMoney(total)}</p>
           <p style={{ fontSize: 11.5, color: C.muted }}>{filtrada.length} clientes · {filtrada.reduce((s, a) => s + a.facturas, 0)} facturas</p>
           {vendedor === 'todos' && atrasadoTotal > 0 && (
             <p style={{ fontSize: 11.5, color: C.text, marginTop: 6, lineHeight: 1.5 }}>
@@ -86,15 +73,15 @@ export default function CobranzaSection({ caja, deuda, cobros, deudoresDetalle, 
           <Etiqueta title="Del informe Deudores del ERP, sólo la cartera de venta (4 carteras + Claudio): sin cuentas internas, incobrables ni muestras.">
             <UserX size={12} /> Vencido según el ERP
           </Etiqueta>
-          <p style={{ fontSize: 30, fontWeight: 900, color: C.text, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>{fMoney(deuda.vencida)}</p>
+          <p style={{ fontSize: 30, fontWeight: 800, letterSpacing: '-0.035em', color: C.text, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>{fMoney(deuda.vencida)}</p>
           <p style={{ fontSize: 11.5, color: C.muted }}>{deuda.clientes} clientes{deuda.ultimaCarga ? ` · al ${deuda.ultimaCarga.slice(8, 10)}/${deuda.ultimaCarga.slice(5, 7)}` : ''}</p>
         </Card>
         <Card acento={mas30.length > 0 ? C.amberBorder : undefined}>
           <Etiqueta title="Clientes con al menos una factura más de 30 días después de cuando suelen pagar: prioridad de llamada.">Más de 30 días de atraso</Etiqueta>
-          <p style={{ fontSize: 30, fontWeight: 900, color: mas30.length ? C.amber : C.text, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>{mas30.length}</p>
+          <p style={{ fontSize: 30, fontWeight: 800, letterSpacing: '-0.035em', color: mas30.length ? C.amber : C.text, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>{mas30.length}</p>
           <p style={{ fontSize: 11.5, color: C.muted }}>{fMoney(mas30.reduce((s, a) => s + a.monto, 0))} en juego</p>
         </Card>
-      </div>
+      </Franja>
 
       {/* ── Lista única de atrasados ── */}
       <Card padding={0}>
@@ -108,7 +95,7 @@ export default function CobranzaSection({ caja, deuda, cobros, deudoresDetalle, 
               <option value="todos">Todos los vendedores</option>
               {vendedores.map(v => <option key={v} value={v}>{v}</option>)}
             </select>
-            <button onClick={csv} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 9, border: `1px solid ${C.line}`, background: C.card, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            <button onClick={csv} style={{ whiteSpace: 'nowrap', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 9, border: `1px solid ${C.line}`, background: C.card, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
               <FileDown size={13} /> Excel (CSV)
             </button>
           </div>

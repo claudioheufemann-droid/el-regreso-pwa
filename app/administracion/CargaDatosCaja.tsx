@@ -7,14 +7,14 @@
  */
 
 import { useState } from 'react'
-import { Plus, Check, Info } from 'lucide-react'
+import { Plus, Check } from 'lucide-react'
 import type { SaldoBanco } from './page'
 import { BANCOS, BANCO_LABEL, type BancoId } from '@/lib/administracion/finanzas'
+import { C, Card, Etiqueta } from './tema'
 
-const P = {
-  card: '#FFFFFF', text: '#0F172A', muted: '#64748B', faint: '#94A3B8', line: '#E2E8F0',
-  gold: '#2563EB', red: '#DC2626', redSoft: '#FEF2F2',
-}
+/** Alias de la paleta común (este archivo la llamaba P). */
+const P = C
+
 
 const fMoney = (n: number) => (n < 0 ? '−$' : '$') + Math.round(Math.abs(n)).toLocaleString('es-CL')
 const fDia = (iso: string) => {
@@ -22,18 +22,7 @@ const fDia = (iso: string) => {
   return `${d}/${m}`
 }
 
-function Card({ children }: { children: React.ReactNode }) {
-  return <div style={{ background: P.card, border: `1px solid ${P.line}`, borderRadius: 16, padding: 20 }}>{children}</div>
-}
 
-function Etiqueta({ children, title }: { children: React.ReactNode; title?: string }) {
-  return (
-    <p title={title} style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: P.muted, display: 'flex', alignItems: 'center', gap: 5 }}>
-      {children}
-      {title && <Info size={11} style={{ opacity: 0.5 }} />}
-    </p>
-  )
-}
 
 const inputStyle: React.CSSProperties = {
   width: '100%', padding: '9px 12px', borderRadius: 9, border: `1px solid ${P.line}`,
@@ -113,7 +102,7 @@ export default function CargaDatosCaja({ hayCompras, saldoActual, hoyISO }: {
               disabled={!saldo || guardando === 'saldo'}
               style={{
                 padding: '10px 0', borderRadius: 10, border: 'none',
-                background: !saldo ? P.line : P.gold, color: !saldo ? P.faint : '#fff',
+                background: !saldo ? P.line : P.gold, color: !saldo ? P.muted : '#fff',
                 fontSize: 13, fontWeight: 700, cursor: !saldo ? 'not-allowed' : 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
               }}
@@ -162,7 +151,7 @@ export default function CargaDatosCaja({ hayCompras, saldoActual, hoyISO }: {
               disabled={!proveedor || !monto || guardando === 'compra'}
               style={{
                 padding: '10px 0', borderRadius: 10, border: 'none',
-                background: !proveedor || !monto ? P.line : P.gold, color: !proveedor || !monto ? P.faint : '#fff',
+                background: !proveedor || !monto ? P.line : P.gold, color: !proveedor || !monto ? P.muted : '#fff',
                 fontSize: 13, fontWeight: 700, cursor: !proveedor || !monto ? 'not-allowed' : 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
               }}

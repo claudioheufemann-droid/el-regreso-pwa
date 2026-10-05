@@ -1404,6 +1404,125 @@ input[type="date"], input[type="time"], input[type="datetime-local"] {
 }
 
 /* ═══════════════════════════════════════════════════════════
+   ADMINISTRACIÓN Y FINANZAS (.adm-root), rediseño 5-oct-2026
+   Tema CLARO a propósito (pedido del usuario, 10-sep-2026). Los colores
+   viven en app/administracion/tema.tsx; acá sólo lo que el estilo en línea
+   no puede hacer: respuesta al presionar, hover, foco y transiciones.
+   ═══════════════════════════════════════════════════════════ */
+.adm-root {
+  --adm-ease: cubic-bezier(0.23, 1, 0.32, 1);
+  background: #F5F2EC;
+  color: #1C1915;
+  color-scheme: light;
+}
+.adm-root .adm-card {
+  background: #FFFFFF;
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(28, 25, 21, 0.04);
+}
+.adm-root .adm-eyebrow {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6B6457;
+}
+.adm-root .adm-cifra {
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+}
+/* Franja de cifras: una superficie con divisores finos. */
+.adm-root .adm-franja {
+  /* flex y no grid: la última fila se estira y no queda un hueco vacío del
+     color de los divisores cuando las cifras no llenan la fila. */
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1px;
+  overflow: hidden;
+  background: #E7E1D5;
+  border: 1px solid #E7E1D5;
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(28, 25, 21, 0.04);
+}
+.adm-root .adm-franja > * { flex: 1 1 var(--franja-min, 240px); min-width: 0; }
+.adm-root .adm-franja > .adm-card {
+  border: 0 !important;
+  border-radius: 0;
+  box-shadow: none;
+}
+/* Controles: ceden al presionar (al tocar, no al soltar), sin destello ni
+   selección de texto al mantener apretado, y con foco visible de teclado. */
+.adm-root button,
+.adm-root a,
+.adm-root select,
+.adm-root summary {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.adm-root button,
+.adm-root summary {
+  user-select: none;
+  -webkit-user-select: none;
+  transition: transform 140ms var(--adm-ease), filter 150ms ease, background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+.adm-root button:active:not(:disabled),
+.adm-root a.adm-boton:active {
+  transform: scale(0.97);
+}
+@media (hover: hover) and (pointer: fine) {
+  .adm-root button:not(:disabled):hover,
+  .adm-root a.adm-boton:hover { filter: brightness(0.96); }
+  .adm-root tbody tr:hover { background: #FAF8F3; }
+}
+.adm-root :focus-visible {
+  outline: 2px solid #87691A;
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+/* Campos: la regla global de inputs es para el tema oscuro (texto crema,
+   borde dorado translúcido) y en este módulo claro dejaba el texto casi
+   invisible sobre blanco. */
+.adm-root input:not([type="checkbox"]):not([type="radio"]),
+.adm-root select,
+.adm-root textarea {
+  background-color: #FFFFFF;
+  color: #1C1915;
+  border-color: #E7E1D5;
+}
+.adm-root input::placeholder { color: #9A9284; }
+.adm-root input:focus,
+.adm-root select:focus,
+.adm-root textarea:focus { border-color: #87691A; }
+/* iOS hace zoom a la página si un campo tiene menos de 16 px. */
+@media (pointer: coarse) {
+  .adm-root input:not([type="checkbox"]):not([type="radio"]),
+  .adm-root select,
+  .adm-root textarea { font-size: 16px !important; }
+}
+/* Cambio de pestaña: fundido corto, sin desplazamiento (navegación diaria). */
+@keyframes adm-enter { from { opacity: 0; } to { opacity: 1; } }
+.adm-root .adm-enter { animation: adm-enter 140ms var(--adm-ease) both; }
+/* Pestañas: el subrayado entra con la pestaña elegida. */
+.adm-root .adm-tab { position: relative; }
+.adm-root .adm-tab::after {
+  content: '';
+  position: absolute;
+  left: 10px; right: 10px; bottom: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: #87691A;
+  transform: scaleX(0);
+  transition: transform 200ms var(--adm-ease);
+}
+.adm-root .adm-tab[aria-current="page"]::after { transform: scaleX(1); }
+@media (prefers-reduced-motion: reduce) {
+  .adm-root .adm-enter { animation-duration: 1ms; }
+  .adm-root .adm-tab::after { transition: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════
    COLOR — módulo de Producción (.prod-root), rediseño 4-oct-2026
    Toma la paleta de Ventas (carbón + dorado + crema) y respeta el modo
    claro/oscuro de la app: todo color del módulo sale de estos --p-*, nunca

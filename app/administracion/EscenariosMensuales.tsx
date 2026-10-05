@@ -10,12 +10,8 @@
 import { useState } from 'react'
 import { FileDown } from 'lucide-react'
 import type { EscenariosCaja, EscenarioMes, EscenarioCaja } from '@/lib/administracion/cajaCobradaDatos'
+import { C } from './tema'
 
-const C = {
-  card: '#FFFFFF', text: '#0F172A', muted: '#64748B', faint: '#94A3B8', line: '#E2E8F0', bg: '#F8FAFC',
-  blue: '#2563EB', blueSoft: '#EFF6FF', amber: '#B45309', amberSoft: '#FFFBEB', green: '#047857', greenSoft: '#ECFDF5',
-  red: '#B91C1C', teal: '#0F766E', violet: '#6D28D9',
-}
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 const fMes = (yyyymm: string) => MESES[Number(yyyymm.split('-')[1]) - 1]
 const fMoney = (n: number) => '$' + Math.round(n).toLocaleString('es-CL')
@@ -48,7 +44,7 @@ const sumar = (ms: EscenarioMes[]): EscenarioMes => ms.reduce((a, m) => ({
 function CeldaTotal({ m, color, fuerte }: { m: EscenarioMes; color: string; fuerte?: boolean }) {
   return (
     <td style={{ ...td, background: fuerte ? C.bg : undefined }}>
-      <div style={{ fontSize: fuerte ? 15.5 : 14.5, fontWeight: 900, color }}>{fMoney(m.total)}</div>
+      <div style={{ fontSize: fuerte ? 15.5 : 14.5, fontWeight: 800, color }}>{fMoney(m.total)}</div>
       <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>may {fM(m.mayoristas)} · enl {fM(m.enlatado)}</div>
     </td>
   )
@@ -83,7 +79,7 @@ export default function EscenariosMensuales({ datos, hoyISO }: { datos: Escenari
             Facturas que quedan por pagar + venta proyectada, en tres escenarios. Bruto (lo que llega al banco). No incluye el mostrador PDV ni BaseCamp.
           </p>
         </div>
-        <button onClick={csv} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 9, border: `1px solid ${C.line}`, background: C.card, color: C.text, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+        <button onClick={csv} style={{ whiteSpace: 'nowrap', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 9, border: `1px solid ${C.line}`, background: C.card, color: C.text, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
           <FileDown size={13} /> Excel (CSV)
         </button>
       </div>
@@ -110,7 +106,7 @@ export default function EscenariosMensuales({ datos, hoyISO }: { datos: Escenari
               </tr>
             ))}
             <tr>
-              <td style={{ ...td, textAlign: 'left', fontWeight: 900, color: C.text, background: C.bg }}>Total</td>
+              <td style={{ ...td, textAlign: 'left', fontWeight: 800, color: C.text, background: C.bg }}>Total</td>
               {escenarios.map(e => <CeldaTotal key={e.id} m={sumar(e.meses)} color={ESTILO[e.id].color} fuerte />)}
               <CeldaTotal m={sumar(anioAnterior)} color={C.muted} fuerte />
             </tr>
@@ -149,7 +145,7 @@ export default function EscenariosMensuales({ datos, hoyISO }: { datos: Escenari
                   {PARTES.map(p => (
                     <td key={p.key} style={{ ...td, color: m[p.key] ? p.color : C.faint, fontWeight: esTotal ? 800 : 500, background: esTotal ? C.bg : undefined }}>{m[p.key] ? fMoney(m[p.key]) : '—'}</td>
                   ))}
-                  <td style={{ ...td, fontWeight: 900, color: ESTILO[esc.id].color, background: esTotal ? C.bg : undefined }}>{fMoney(m.total)}</td>
+                  <td style={{ ...td, fontWeight: 800, color: ESTILO[esc.id].color, background: esTotal ? C.bg : undefined }}>{fMoney(m.total)}</td>
                 </tr>
               )
             })}

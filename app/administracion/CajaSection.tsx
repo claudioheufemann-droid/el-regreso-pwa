@@ -15,20 +15,15 @@ import Link from 'next/link'
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine,
 } from 'recharts'
-import { Wallet, ArrowDownToLine, CalendarRange, FileDown, CheckCircle2, TriangleAlert, Info, ChevronDown, ChevronRight, Database } from 'lucide-react'
+import { Wallet, ArrowDownToLine, CalendarRange, FileDown, CheckCircle2, TriangleAlert, ChevronDown, ChevronRight, Database } from 'lucide-react'
 import type { DatosCajaCobrada, EscenariosCaja } from '@/lib/administracion/cajaCobradaDatos'
 import { CALIBRACION_BACKTEST } from '@/lib/administracion/cajaCobrada'
 import type { DatosCobros, SaldoBanco } from './page'
 import IngresoRealSection from './IngresoRealSection'
 import CargaDatosCaja from './CargaDatosCaja'
 import EscenariosMensuales from './EscenariosMensuales'
+import { C, Card, Etiqueta, Franja } from './tema'
 
-const C = {
-  card: '#FFFFFF', text: '#0F172A', muted: '#64748B', faint: '#94A3B8', line: '#E2E8F0', bg: '#F8FAFC',
-  blue: '#2563EB', blueSoft: '#EFF6FF', sky: '#93C5FD', teal: '#0D9488', green: '#059669', greenSoft: '#ECFDF5',
-  amber: '#D97706', amberSoft: '#FFFBEB', amberBorder: '#FDE68A', red: '#DC2626', redSoft: '#FEF2F2', redBorder: '#FECACA',
-  stone: '#A8A29E',
-}
 
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 const fMoney = (n: number) => (n < 0 ? '−$' : '$') + Math.round(Math.abs(n)).toLocaleString('es-CL')
@@ -55,22 +50,11 @@ function descargarCsv(nombre: string, filas: (string | number)[][]) {
   URL.revokeObjectURL(url)
 }
 
-function Card({ children, acento, padding = 20 }: { children: React.ReactNode; acento?: string; padding?: number | string }) {
-  return <div style={{ background: C.card, border: `1px solid ${acento ?? C.line}`, borderRadius: 16, padding }}>{children}</div>
-}
 
-function Etiqueta({ children, title }: { children: React.ReactNode; title?: string }) {
-  return (
-    <p title={title} style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: C.muted, display: 'flex', alignItems: 'center', gap: 5 }}>
-      {children}
-      {title && <Info size={11} style={{ opacity: 0.5 }} />}
-    </p>
-  )
-}
 
 function BotonCsv({ onClick }: { onClick: () => void }) {
   return (
-    <button onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 9, border: `1px solid ${C.line}`, background: C.card, color: C.text, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+    <button onClick={onClick} style={{ whiteSpace: 'nowrap', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 9, border: `1px solid ${C.line}`, background: C.card, color: C.text, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
       <FileDown size={13} /> Excel (CSV)
     </button>
   )
@@ -140,14 +124,14 @@ export default function CajaSection({ datos, escenarios, cobros, saldoActual, ha
       </Card>
 
       {/* ── Las 3 cifras ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 14 }}>
+      <Franja min={250}>
         <Card acento={!hayBanco ? C.amberBorder : undefined}>
           <Etiqueta title="Suma del último saldo cargado de cada cuenta (Chile, Santander, Itaú). El ERP no lo entrega: se carga a mano al pie de esta pestaña.">
             <Wallet size={12} /> Plata en bancos hoy
           </Etiqueta>
           {hayBanco && saldoActual ? (
             <>
-              <p style={{ fontSize: 30, fontWeight: 900, color: C.text, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>{fMoney(saldoActual.total)}</p>
+              <p style={{ fontSize: 30, fontWeight: 800, letterSpacing: '-0.035em', color: C.text, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>{fMoney(saldoActual.total)}</p>
               <p style={{ fontSize: 11.5, color: C.muted }}>al {fDia(saldoActual.fecha)} · {saldoActual.porBanco.length} de 3 cuentas</p>
             </>
           ) : (
@@ -161,19 +145,19 @@ export default function CajaSection({ datos, escenarios, cobros, saldoActual, ha
           <Etiqueta title="Entradas de esta semana y las 3 siguientes: facturas por cobrar (confirmado) + venta a crédito proyectada + venta al contado. En bruto: lo que llega al banco.">
             <ArrowDownToLine size={12} /> Entra en las próximas 4 semanas
           </Etiqueta>
-          <p style={{ fontSize: 30, fontWeight: 900, color: C.blue, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>{fMoney(entra4)}</p>
+          <p style={{ fontSize: 30, fontWeight: 800, letterSpacing: '-0.035em', color: C.blue, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>{fMoney(entra4)}</p>
           <p style={{ fontSize: 11.5, color: C.muted }}>{fM(conf4)} confirmado · {fM(proy4)} proyectado · {fM(atr4)} atrasadas · {fM(cont4)} contado</p>
         </Card>
         <Card acento={hayBanco && ultima && ultima.acumulado < 0 ? C.redBorder : undefined}>
           <Etiqueta title={hayBanco ? 'Saldo de bancos + todo lo que entra − todo lo que sale hasta la última semana del año.' : 'Sin saldo de bancos: es lo que entra menos lo que sale de aquí al 31-dic, partiendo de cero.'}>
             <CalendarRange size={12} /> {hayBanco ? 'Saldo proyectado al 31-dic' : 'Flujo neto de aquí al 31-dic'}
           </Etiqueta>
-          <p style={{ fontSize: 30, fontWeight: 900, color: ultima && ultima.acumulado < 0 ? C.red : C.green, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>{ultima ? fMoney(ultima.acumulado) : '—'}</p>
+          <p style={{ fontSize: 30, fontWeight: 800, letterSpacing: '-0.035em', color: ultima && ultima.acumulado < 0 ? C.red : C.green, marginTop: 6, fontVariantNumeric: 'tabular-nums' }}>{ultima ? fMoney(ultima.acumulado) : '—'}</p>
           <p style={{ fontSize: 11.5, color: C.muted }}>
             {hayBanco && peor ? `punto más bajo: ${fMoney(peor.acumulado)} en S${peor.semanaIso}` : 'salidas = sólo compras de insumos (sin sueldos ni arriendos)'}
           </p>
         </Card>
-      </div>
+      </Franja>
 
       {/* ── Por mes y escenario: mayoristas + enlatado ── */}
       <EscenariosMensuales datos={escenarios} hoyISO={hoyISO} />
@@ -188,7 +172,7 @@ export default function CajaSection({ datos, escenarios, cobros, saldoActual, ha
             <XAxis dataKey="semana" tick={{ fontSize: 11, fill: C.muted }} />
             <YAxis tickFormatter={v => fM(Number(v))} tick={{ fontSize: 11, fill: C.muted }} width={70} />
             <Tooltip formatter={(v) => fMoney(Number(v))} contentStyle={{ borderRadius: 10, border: `1px solid ${C.line}`, fontSize: 12 }} />
-            <Legend wrapperStyle={{ fontSize: 12 }} />
+            <Legend wrapperStyle={{ fontSize: 12 }} formatter={(v) => <span style={{ color: C.muted }}>{v}</span>} />
             <ReferenceLine y={0} stroke={C.faint} />
             <Bar dataKey="Confirmado" stackId="e" fill={C.blue} />
             <Bar dataKey="Proyectado" stackId="e" fill={C.sky} />
@@ -321,7 +305,8 @@ export default function CajaSection({ datos, escenarios, cobros, saldoActual, ha
         </Card>
         <Card>
           <Etiqueta title="Parado el 1.º de cada mes de ene a sep 2026, con lo que se sabía ese día, se proyectaron los 3 meses siguientes y se comparó con lo que entró (scripts/analisis/backtest-escenarios-caja.ts).">Backtest: qué tan bien proyecta</Etiqueta>
-          <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 8 }}>
+          <div style={{ overflowX: 'auto', marginTop: 8 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead><tr>
               <th style={{ ...th, textAlign: 'left', padding: '6px 8px' }}>Proyectando a</th>
               <th style={{ ...th, padding: '6px 8px' }}>Sin corregir</th>
@@ -339,6 +324,7 @@ export default function CajaSection({ datos, escenarios, cobros, saldoActual, ha
               ))}
             </tbody>
           </table>
+          </div>
           <p style={{ fontSize: 11.5, color: C.muted, marginTop: 8, lineHeight: 1.5 }}>
             Error medio por mes, medido fuera de muestra. El modelo sin corregir era optimista: los clientes pagan más lento de lo que su perfil supone y ~19% de lo que
             entra llega sin factura imputada. Factor = lo que de verdad entra por cada $1 proyectado. Recalibrar cada mes corriendo el script.
