@@ -6,12 +6,13 @@ import type { AppUser } from '@/lib/auth'
 import type { ReactNode } from 'react'
 import { useEffect } from 'react'
 import dynamic from 'next/dynamic'
+import { accesoAsistente } from '@/lib/agente/alcance'
 import InstallPWA from '@/components/ui/InstallPWA'
 import NotifPrompt from '@/components/ui/NotifPrompt'
 import OfflineBadge from '@/components/ui/OfflineBadge'
 import GlobalSearch from '@/components/ui/GlobalSearch'
 
-// Sólo administradores y sólo en el navegador (usa sessionStorage): el código del chat no se descarga para el resto.
+// Sólo quien tiene acceso al asistente (lib/agente/alcance.ts) y sólo en el navegador: el código del chat no se descarga para el resto.
 const AgenteFlotante = dynamic(() => import('@/components/agente/AgenteFlotante'), { ssr: false })
 
 export default function Providers({
@@ -40,8 +41,8 @@ export default function Providers({
         {initialUser && <NotifPrompt />}
         {initialUser && <OfflineBadge />}
         {initialUser && <GlobalSearch />}
-        {/* Admins: toda la base. Vendedores con cartera: modo cartera (lib/agente/alcance.ts). */}
-        {(initialUser?.isAdmin || (initialUser?.vendedoresErp?.length ?? 0) > 0) && <AgenteFlotante />}
+        {/* Admins y puede_usar_asistente: toda la base. Vendedores con cartera: modo cartera (lib/agente/alcance.ts). */}
+        {accesoAsistente(initialUser ?? null) && <AgenteFlotante />}
       </GlobalSearchProvider>
     </UserProvider>
   )

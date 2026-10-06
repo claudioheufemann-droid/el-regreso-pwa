@@ -49,8 +49,8 @@ export async function GET(req: Request) {
     if (!reservado) continue
 
     try {
-      const { data: usuario } = await admin.from('users').select('id, nombre, email, is_admin').eq('id', aviso.usuario_id).maybeSingle()
-      if (!usuario?.is_admin) { resultados.push({ aviso: aviso.id, borradores: 0, error: 'El usuario ya no es administrador.' }); continue }
+      const { data: usuario } = await admin.from('users').select('id, nombre, email, is_admin, puede_usar_asistente').eq('id', aviso.usuario_id).maybeSingle()
+      if (!usuario?.is_admin && !usuario?.puede_usar_asistente) { resultados.push({ aviso: aviso.id, borradores: 0, error: 'El usuario ya no tiene acceso al asistente.' }); continue }
       const ctx = { admin, hoyISO, usuarioId: usuario.id }
 
       const proximos = await clientesProximosAPedir.ejecutar({ dias: aviso.dias_ventana }, ctx) as Proximos

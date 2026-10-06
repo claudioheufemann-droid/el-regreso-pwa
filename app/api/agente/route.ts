@@ -9,6 +9,7 @@ import {
 } from '@/lib/agente/memoria'
 import { PARAMETROS, construirContexto } from '@/lib/agente/sistema'
 import { accionesDeConversacion, correosDeConversacion } from '@/lib/agente/correos'
+import { accesoAsistente } from '@/lib/agente/alcance'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -25,10 +26,11 @@ export const maxDuration = 60
 export async function POST(req: NextRequest) {
   const user = await getServerUser()
   if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  // Admin: toda la base. Vendedor (con cartera en el ERP): sólo su cartera y sólo las
-  // herramientas de HERRAMIENTAS_VENDEDOR (lib/agente/alcance.ts). Nadie más.
-  const alcance = user.isAdmin ? null : user.vendedoresErp.length > 0 ? { nombre: user.nombre, vendedoresErp: user.vendedoresErp } : undefined
-  if (alcance === undefined) return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
+  // Completo (admin o users.puede_usar_asistente): toda la base. Vendedor (con cartera en el
+  // ERP): sólo su cartera y sólo las herramientas de HERRAMIENTAS_VENDEDOR. Nadie más.
+  const acceso = accesoAsistente(user)
+  if (!acceso) return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
+  const alcance = acceso === 'vendedor' ? { nombre: user.nombre, vendedoresErp: user.vendedoresErp } : null
 
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) {

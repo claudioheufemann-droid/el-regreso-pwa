@@ -11,6 +11,20 @@
  */
 import type { ContextoConsulta } from './consultas/_base'
 
+/**
+ * Quién puede usar el asistente y con qué alcance (única regla, la usan todas las rutas):
+ *   · 'completo': admins y usuarios con users.puede_usar_asistente (acceso al chat como un
+ *     admin, sin serlo en el resto de la app);
+ *   · 'vendedor': vendedores con cartera en el ERP (sólo sus clientes);
+ *   · null: sin acceso.
+ */
+export function accesoAsistente(user: { isAdmin: boolean; puedeUsarAsistente?: boolean; vendedoresErp: string[] } | null): 'completo' | 'vendedor' | null {
+  if (!user) return null
+  if (user.isAdmin || user.puedeUsarAsistente) return 'completo'
+  if (user.vendedoresErp.length > 0) return 'vendedor'
+  return null
+}
+
 export const HERRAMIENTAS_VENDEDOR = new Set([
   'clientes_proximos_a_pedir',
   'pedido_sugerido_cliente',

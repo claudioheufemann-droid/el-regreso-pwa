@@ -7,6 +7,7 @@ import { Bot, X, Maximize2, RotateCcw } from 'lucide-react'
 import { useUser } from '@/lib/userContext'
 import { SUGERENCIAS, SUGERENCIAS_VENDEDOR } from '@/lib/agente/sugerencias'
 import { VistaChat, useChatAgente } from './ChatAgente'
+import { accesoAsistente } from '@/lib/agente/alcance'
 
 // Pantallas donde la burbuja estorba o no tiene sentido (sin sesión, o la propia página del asistente).
 const OCULTO_EN = ['/login', '/reset-password', '/auth', '/offline', '/instalar', '/administracion/agente']
@@ -19,7 +20,7 @@ const OCULTO_EN = ['/login', '/reset-password', '/auth', '/offline', '/instalar'
  * En "Ver como vendedor" el admin ve exactamente el modo del vendedor.
  */
 export default function AgenteFlotante() {
-  const { user, isAdmin } = useUser()
+  const { user } = useUser()
   const pathname = usePathname()
   const [abierto, setAbierto] = useState(false)
   const chat = useChatAgente()
@@ -31,8 +32,9 @@ export default function AgenteFlotante() {
     return () => window.removeEventListener('keydown', alTeclear)
   }, [abierto])
 
-  const esVendedor = !isAdmin && (user?.vendedoresErp?.length ?? 0) > 0
-  if (!user || (!isAdmin && !esVendedor)) return null
+  const acceso = accesoAsistente(user)
+  const esVendedor = acceso === 'vendedor'
+  if (!acceso) return null
   if (OCULTO_EN.some(ruta => pathname === ruta || pathname.startsWith(`${ruta}/`))) return null
 
   return (
@@ -63,12 +65,13 @@ export default function AgenteFlotante() {
             <Bot size={16} style={{ color: '#D4AF37' }} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <p style={{ fontSize: 13.5, fontWeight: 800 }}>Asistente de datos</p>
-              <p style={{ fontSize: 11, color: '#9A938B' }}>{esVendedor ? 'Tu cartera · solo lectura' : 'Administradores · lee la base, propone acciones'}</p>
+              <p style={{ fontSize: 11, color: '#9A938B' }}>{esVendedor ? 'Tu cartera · solo lectura' : 'Lee la base y propone acciones'}</p>
             </div>
             {chat.mensajes.length > 0 && (
               <button className="agente-btn" onClick={chat.limpiar} aria-label="Nueva conversación" title="Nueva conversación"><RotateCcw size={15} /></button>
             )}
-            {!esVendedor && (
+            {/* La pantalla completa (/administracion/agente) es sólo para admins. */}
+            {user?.isAdmin && (
               <Link className="agente-btn" href="/administracion/agente" onClick={() => setAbierto(false)} aria-label="Abrir en pantalla completa" title="Pantalla completa y ajustes"><Maximize2 size={15} /></Link>
             )}
             <button className="agente-btn" onClick={() => setAbierto(false)} aria-label="Cerrar"><X size={17} /></button>

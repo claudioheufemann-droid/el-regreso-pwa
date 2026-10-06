@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerUser } from '@/lib/auth'
+import { accesoAsistente } from '@/lib/agente/alcance'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { enviarEmailGmail } from '@/lib/email-gmail'
 import { sendPushToUser } from '@/lib/push'
@@ -20,7 +21,8 @@ export const dynamic = 'force-dynamic'
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const user = await getServerUser()
   if (!user) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  if (!user.isAdmin) return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
+  // Sólo acceso completo (admin o puede_usar_asistente): el modo vendedor no tiene acciones.
+  if (accesoAsistente(user) !== 'completo') return NextResponse.json({ error: 'Sin permiso' }, { status: 403 })
 
   const { id } = await params
   const body = await req.json().catch(() => null) as { accion?: unknown; asunto?: unknown; cuerpo?: unknown; canal?: unknown } | null

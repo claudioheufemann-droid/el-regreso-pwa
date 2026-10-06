@@ -137,7 +137,7 @@ export function construirContexto(o: {
 }): string {
   return [
     '[CONTEXTO DE LA SESIÓN — no es una pregunta]',
-    `Hoy es ${o.hoyISO}. El ciclo interno en curso va del ${o.ciclo.inicio} al ${o.ciclo.fin}. Hablas con ${o.usuario} (${o.modoVendedor ? 'vendedor' : 'administrador'}).`,
+    `Hoy es ${o.hoyISO}. El ciclo interno en curso va del ${o.ciclo.inicio} al ${o.ciclo.fin}. Hablas con ${o.usuario} (${o.modoVendedor ? 'vendedor' : 'acceso completo'}).`,
     o.modoVendedor
       ? `MODO VENDEDOR: ${o.usuario} sólo puede ver SU cartera (las herramientas ya filtran solas; no pidas el vendedor). No tienes SQL libre, ni datos de otros vendedores, ni puedes preparar correos, tareas o avisos: si lo pide, explícalo con amabilidad. Trátalo de tú, en tono de colega.`
       : '',
