@@ -103,6 +103,21 @@ export async function correosDeConversacion(admin: SupabaseClient, conversacionI
   return (data ?? []) as CorreoBorrador[]
 }
 
+/** Lista de chequeo del asistente (agente_listas), marcable desde el chat. */
+export interface ListaChequeo {
+  id: string
+  titulo: string
+  items: { id: string; texto: string; detalle: string | null; hecho: boolean; hecho_por?: string | null; hecho_at?: string | null }[]
+  created_at: string
+}
+
+/** Listas de una conversación, del usuario que la abrió. */
+export async function listasDeConversacion(admin: SupabaseClient, conversacionId: string, usuarioId: string): Promise<ListaChequeo[]> {
+  const { data } = await admin.from('agente_listas').select('id, titulo, items, created_at')
+    .eq('conversacion_id', conversacionId).eq('creado_por', usuarioId).order('created_at', { ascending: true })
+  return (data ?? []) as ListaChequeo[]
+}
+
 /** Acciones (tareas, avisos) de una conversación, del usuario que la abrió. Sin datos internos (ids de usuario). */
 export async function accionesDeConversacion(admin: SupabaseClient, conversacionId: string, usuarioId: string): Promise<AccionBorrador[]> {
   const { data } = await admin

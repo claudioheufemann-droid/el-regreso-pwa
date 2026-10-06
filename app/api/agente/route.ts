@@ -8,7 +8,7 @@ import {
   resumirSiHaceFalta, sumarTokensConversacion,
 } from '@/lib/agente/memoria'
 import { PARAMETROS, construirContexto } from '@/lib/agente/sistema'
-import { accionesDeConversacion, correosDeConversacion } from '@/lib/agente/correos'
+import { accionesDeConversacion, correosDeConversacion, listasDeConversacion } from '@/lib/agente/correos'
 import { accesoAsistente } from '@/lib/agente/alcance'
 
 export const dynamic = 'force-dynamic'
@@ -84,11 +84,13 @@ export async function POST(req: NextRequest) {
       // Borradores de correo de la conversación: el chat los muestra con "Enviar" / "Descartar".
       const usoCorreo = r.herramientas.some(h => h.nombre === 'preparar_correo_vendedor')
       const usoAccion = r.herramientas.some(h => h.nombre === 'preparar_tarea_vendedor' || h.nombre === 'gestionar_aviso')
-      const [correos, acciones] = await Promise.all([
+      const usoLista = r.herramientas.some(h => h.nombre === 'lista_pedidos_por_despachar' || h.nombre === 'crear_lista')
+      const [correos, acciones, listas] = await Promise.all([
         usoCorreo ? correosDeConversacion(admin, conv.id, user.id) : undefined,
         usoAccion ? accionesDeConversacion(admin, conv.id, user.id) : undefined,
+        usoLista ? listasDeConversacion(admin, conv.id, user.id) : undefined,
       ])
-      return NextResponse.json({ conversacion_id: conv.id, respuesta: r.respuesta, herramientas: r.herramientas, uso: r.uso, correos, acciones })
+      return NextResponse.json({ conversacion_id: conv.id, respuesta: r.respuesta, herramientas: r.herramientas, uso: r.uso, correos, acciones, listas })
     } catch (e) {
       const status = e instanceof ErrorAgente ? e.status : 500
       const mensaje = e instanceof ErrorAgente ? e.message : 'Error inesperado del asistente.'

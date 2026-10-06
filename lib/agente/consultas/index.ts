@@ -9,6 +9,7 @@ import { mapaDatos } from './mapa'
 import { clientesProximosAPedir, prepararCorreoVendedor } from './correos'
 import { pedidoSugeridoCliente, cobranzaVendedor, clientesVolumenBaja, ventaCruzada, avanceMetas, barrilesEnClientes, quiebreStock } from './comercial'
 import { prepararTareaVendedor, gestionarAviso } from './acciones'
+import { listaPedidosPorDespachar, crearLista } from './listas'
 import { HERRAMIENTAS_VENDEDOR } from '../alcance'
 
 /**
@@ -45,6 +46,9 @@ export const CONSULTAS: Consulta[] = [
   prepararCorreoVendedor,
   prepararTareaVendedor,
   gestionarAviso,
+  // Listas para marcar en el chat (sin efectos fuera del chat): lib/agente/consultas/listas.ts.
+  listaPedidosPorDespachar,
+  crearLista,
   // Lectura libre (rol de solo lectura en la base) para lo que las de arriba no cubren, y memoria de largo plazo.
   // mapa_datos primero: orienta sin tocar la base (lib/agente/mapa.ts).
   mapaDatos,

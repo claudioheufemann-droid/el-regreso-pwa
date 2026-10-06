@@ -109,6 +109,22 @@ pantalla completa en `/administracion/agente` (con pestañas Chat · Memoria · 
 - **Arreglo de base:** `client_scores` se rehízo sin `tipo_cliente`, y por eso `get_clientes_volumen_baja`, `get_cross_sell` y
   `get_calendario_pedidos` fallaban (Misiones y el reporte semanal). Ahora usan `_tipo_cliente(cs)`, con la regla original.
 
+## Listas para marcar (5-oct-2026)
+
+- **`lista_pedidos_por_despachar`:**
+  - Arma en el servidor una lista con los pedidos informados al ERP y aún no entregados, con entrega estimada hasta mañana (o la fecha que se pida); los atrasados siempre entran. Se puede filtrar por localidad o vendedor.
+  - Cada ítem es un pedido: cliente, localidad y qué llevar en unidades (latas de 354/473 ml, barriles de 30/50 L).
+  - El modelo no escribe los ítems, así que no puede inventar ni olvidar pedidos.
+- **`crear_lista`:** una lista libre, un ítem por línea (detalle opcional después de " | ").
+- **Tabla `agente_listas`:**
+  - `items` es un jsonb con `{id, texto, detalle, hecho, hecho_por, hecho_at}`.
+  - Se marca con `PATCH /api/agente/listas/[id]`, solo quien la creó.
+  - La función `agente_lista_marcar` actualiza en forma atómica, así dos marcas simultáneas no se pisan.
+- **En el chat:**
+  - Tarjeta con casillas grandes (pensadas para el celular), contador "N de M", barra de avance y quién marcó cada ítem y a qué hora.
+  - "Ocultar marcados" y descarga a Excel (CSV).
+- Ninguna de las dos herramientas tiene efectos fuera del chat, así que no piden confirmación.
+
 ## Archivos
 
 | Archivo | Qué es |

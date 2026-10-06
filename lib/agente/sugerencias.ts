@@ -13,6 +13,7 @@ export const SUGERENCIAS_VENDEDOR = [
 
 export const SUGERENCIAS = [
   '¿Qué clientes están por pedir esta semana?',
+  'Hazme la lista para marcar de los pedidos que van en el camión',
   '¿Cuánto nos deben en total y quiénes son los que más deben?',
   '¿Qué clientes dejaron de comprar hace más de 2 meses?',
   '¿Cuáles son los 10 mejores clientes de los últimos 90 días?',

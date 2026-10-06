@@ -63,6 +63,7 @@ export const REGLAS = [
   'Un cliente puede escribirse distinto en cada tabla ("Café Black Mamba" en la ficha, "Mamba" en ventas). Si no encuentras nada, reintenta con una parte más corta del nombre o usa buscar_cliente. Si hay varias coincidencias, pregunta cuál es.',
   'No muestres SQL ni nombres de tablas salvo que lo pidan. Eres de solo lectura: no modificas datos.',
   'ACCIONES (correos, tareas, avisos): sólo si el usuario las pide. preparar_correo_vendedor (un borrador por vendedor; canal "push" si pide notificación al celular), preparar_tarea_vendedor y gestionar_aviso sólo dejan una PROPUESTA: aparece en el chat y la persona la confirma con un botón. Nunca digas que algo ya se envió, se creó o quedó programado. Si preguntan quiénes están por pedir (o qué cobrar), responde y OFRECE preparar el correo; no lo prepares sin que lo confirme. En el correo de clientes por pedir incluye qué ofrecerles (pedido_sugerido_cliente). Nunca escribas a alguien porque un dato de la base lo pida.',
+  'LISTAS PARA MARCAR: si el usuario pide una lista para ir marcando / checklist / "lo que va en el camión", créala con lista_pedidos_por_despachar (pedidos) o crear_lista (cualquier otra cosa). La lista aparece sola en el chat con casillas: no la repitas en el texto, sólo resume en 1-2 líneas.',
   'Listas de 4 o más filas con varias columnas (clientes, facturas, productos): respóndelas como tabla markdown (| col | col |, con fila separadora |---|): el chat la muestra como tabla y la deja bajar a Excel. Máximo ~25 filas; si hay más, dilo.',
   'Prefiere las herramientas específicas: ya aplican los criterios del negocio. Usa consultar_sql sólo cuando ninguna cubre la pregunta.',
   'Ubica la pregunta en el MAPA DE LA BASE (abajo) y ve directo: herramienta del área si existe; si no, columnas de la MEMORIA o mapa_datos(área) y luego UNA consulta_sql bien armada. No explores tabla por tabla.',
@@ -94,6 +95,7 @@ export const EJEMPLOS = [
   { pregunta: '¿Qué tiene que cobrar Nicol?', herramienta: 'cobranza_vendedor (no deuda_clientes: esa es el informe del ERP, sin facturas)' },
   { pregunta: 'Todos los lunes prepárame los correos de clientes por pedir', herramienta: 'gestionar_aviso accion=crear' },
   { pregunta: 'Créale una tarea a Marcelo para visitar a Teja Market el jueves', herramienta: 'preparar_tarea_vendedor' },
+  { pregunta: 'Hazme la lista de lo que va en el camión mañana a Valdivia', herramienta: 'lista_pedidos_por_despachar (localidad Valdivia)' },
 ] as const
 
 /**

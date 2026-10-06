@@ -1,8 +1,8 @@
 'use client'
 
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
-import { Send, Bot, User, Database, Loader2, Mail, Check, X, ClipboardList, BellRing, FileDown } from 'lucide-react'
-import type { AccionBorrador, CorreoBorrador } from '@/lib/agente/correos'
+import { Send, Bot, User, Database, Loader2, Mail, Check, X, ClipboardList, BellRing, FileDown, ListChecks } from 'lucide-react'
+import type { AccionBorrador, CorreoBorrador, ListaChequeo } from '@/lib/agente/correos'
 
 export interface Mensaje {
   rol: 'usuario' | 'agente'
@@ -36,6 +36,7 @@ export function useChatAgente() {
   const [conversacionId, setConversacionId] = useState<string | null>(null)
   const [correos, setCorreos] = useState<CorreoBorrador[]>([])
   const [acciones, setAcciones] = useState<AccionBorrador[]>([])
+  const [listas, setListas] = useState<ListaChequeo[]>([])
 
   useEffect(() => {
     let vigente = true
@@ -48,6 +49,7 @@ export function useChatAgente() {
         setMensajes(actuales => (actuales.length ? actuales : d.mensajes))
         setCorreos(actuales => (actuales.length ? actuales : d.correos ?? []))
         setAcciones(actuales => (actuales.length ? actuales : d.acciones ?? []))
+        setListas(actuales => (actuales.length ? actuales : d.listas ?? []))
       })
       .catch(() => { /* sin historial: se parte en blanco */ })
     return () => { vigente = false }
@@ -73,6 +75,7 @@ export function useChatAgente() {
       }])
       if (Array.isArray(data.correos)) setCorreos(data.correos)
       if (Array.isArray(data.acciones)) setAcciones(data.acciones)
+      if (Array.isArray(data.listas)) setListas(data.listas)
     } catch (e) {
       setMensajes(m => [...m, { rol: 'agente', texto: e instanceof Error ? e.message : 'Error de conexión.', error: true }])
     } finally {
@@ -91,6 +94,7 @@ export function useChatAgente() {
         setMensajes(d.mensajes ?? [])
         setCorreos(d.correos ?? [])
         setAcciones(d.acciones ?? [])
+        setListas(d.listas ?? [])
       }
     } catch { /* se queda con lo que hay */ }
   }, [cargando])
@@ -106,7 +110,26 @@ export function useChatAgente() {
     setMensajes([])
     setCorreos([])
     setAcciones([])
+    setListas([])
   }, [conversacionId])
+
+  /** Marca/desmarca un ítem de una lista. Optimista: si el servidor falla, vuelve atrás. */
+  const marcarItem = useCallback(async (listaId: string, itemId: string, hecho: boolean): Promise<void> => {
+    const cambiar = (h: boolean) => setListas(ls => ls.map(l => (l.id !== listaId ? l : {
+      ...l, items: l.items.map(it => (it.id === itemId ? { ...it, hecho: h, hecho_at: h ? new Date().toISOString() : null } : it)),
+    })))
+    cambiar(hecho)
+    try {
+      const res = await fetch(`/api/agente/listas/${listaId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item: itemId, hecho }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.error)
+      if (Array.isArray(d.items)) setListas(ls => ls.map(l => (l.id === listaId ? { ...l, items: d.items } : l)))
+    } catch {
+      cambiar(!hecho)
+    }
+  }, [])
 
   /** Enviar o descartar un borrador de correo. Lo decide la persona: el asistente sólo lo propone. */
   const accionCorreo = useCallback(async (id: string, accion: 'enviar' | 'descartar', edicion?: EdicionCorreo): Promise<string | null> => {
@@ -144,7 +167,7 @@ export function useChatAgente() {
     }
   }, [])
 
-  return { mensajes, cargando, enviar, limpiar, recargar, correos, accionCorreo, acciones, accionAccion }
+  return { mensajes, cargando, enviar, limpiar, recargar, correos, accionCorreo, acciones, accionAccion, listas, marcarItem }
 }
 
 type Canal = CorreoBorrador['canal']
@@ -395,9 +418,72 @@ function TarjetaAccion({ accion, tema, onAccion }: { accion: AccionBorrador; tem
   )
 }
 
+/* ── Lista para marcar (ej. carga del camión) ──────────────────────────────── */
+
+type MarcarItem = (listaId: string, itemId: string, hecho: boolean) => Promise<void>
+
+// Zona fija: la misma hora en el servidor y en el navegador (y es la hora de la bodega).
+const horaCorta = (iso?: string | null) => (iso ? new Date(iso).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Santiago' }) : '')
+
+function TarjetaLista({ lista, tema, onMarcar }: { lista: ListaChequeo; tema: TemaChat; onMarcar?: MarcarItem }) {
+  const T = TEMAS[tema]
+  const [ocultarHechos, setOcultarHechos] = useState(false)
+  const hechos = lista.items.filter(i => i.hecho).length
+  const total = lista.items.length
+  const completa = total > 0 && hechos === total
+  const visibles = ocultarHechos ? lista.items.filter(i => !i.hecho) : lista.items
+
+  return (
+    <div style={{ border: `1px solid ${completa ? T.linea : T.acento}`, borderRadius: 12, padding: 12, display: 'flex', flexDirection: 'column', gap: 9 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+        <ListChecks size={14} color={T.acento} style={{ flexShrink: 0 }} />
+        <p style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 700, color: T.texto, overflowWrap: 'anywhere' }}>{lista.titulo}</p>
+        <span style={{ fontSize: 12, fontWeight: 700, color: completa ? T.acento : T.apagado, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{hechos} de {total}</span>
+      </div>
+      <div style={{ height: 5, borderRadius: 99, background: T.linea, overflow: 'hidden' }} aria-hidden>
+        <div style={{ width: `${total ? (hechos / total) * 100 : 0}%`, height: '100%', background: T.acento, transition: 'width 200ms cubic-bezier(0.23, 1, 0.32, 1)' }} />
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
+        {visibles.map(it => (
+          <label key={it.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '9px 2px', borderTop: `1px solid ${T.linea}`, cursor: onMarcar ? 'pointer' : 'default' }}>
+            <input
+              type="checkbox" checked={it.hecho} disabled={!onMarcar}
+              onChange={e => void onMarcar?.(lista.id, it.id, e.target.checked)}
+              style={{ width: 22, height: 22, marginTop: 1, flexShrink: 0, accentColor: T.acento, cursor: 'pointer' }}
+            />
+            <span style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <span style={{ fontSize: 13, color: it.hecho ? T.tenue : T.texto, textDecoration: it.hecho ? 'line-through' : 'none', overflowWrap: 'anywhere', lineHeight: 1.4 }}>{it.texto}</span>
+              {it.detalle && <span style={{ fontSize: 11.5, color: T.apagado, overflowWrap: 'anywhere', lineHeight: 1.45 }}>{it.detalle}</span>}
+              {it.hecho && (it.hecho_por || it.hecho_at) && (
+                <span style={{ fontSize: 11, color: T.tenue }}>✓ {it.hecho_por ?? ''}{it.hecho_at ? ` · ${horaCorta(it.hecho_at)}` : ''}</span>
+              )}
+            </span>
+          </label>
+        ))}
+        {visibles.length === 0 && <p style={{ fontSize: 12, color: T.apagado, padding: '8px 2px', borderTop: `1px solid ${T.linea}` }}>Todo marcado.</p>}
+      </div>
+
+      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+        {hechos > 0 && hechos < total && (
+          <button onClick={() => setOcultarHechos(o => !o)} style={{ background: 'none', border: 'none', padding: 0, fontSize: 11.5, fontWeight: 700, color: T.apagado, cursor: 'pointer' }}>
+            {ocultarHechos ? `Mostrar los ${hechos} marcados` : 'Ocultar marcados'}
+          </button>
+        )}
+        <button
+          onClick={() => descargarCsv([['Ítem', 'Detalle', 'Marcado', 'Por', 'Hora'], ...lista.items.map(i => [i.texto, i.detalle ?? '', i.hecho ? 'Sí' : 'No', i.hecho_por ?? '', horaCorta(i.hecho_at)])])}
+          style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'none', border: 'none', padding: 0, fontSize: 11.5, fontWeight: 700, color: T.apagado, cursor: 'pointer' }}
+        >
+          <FileDown size={12} /> Excel (CSV)
+        </button>
+      </div>
+    </div>
+  )
+}
+
 /* ── Vista del chat ───────────────────────────────────────────────────────── */
 
-export function VistaChat({ mensajes, cargando, enviar, tema, ejemplos, deshabilitado, maxAlto, idCampo, correos = [], accionCorreo, acciones = [], accionAccion, esVendedor }: {
+export function VistaChat({ mensajes, cargando, enviar, tema, ejemplos, deshabilitado, maxAlto, idCampo, correos = [], accionCorreo, acciones = [], accionAccion, listas = [], marcarItem, esVendedor }: {
   mensajes: Mensaje[]
   /** Borradores de correo que propuso el asistente en esta conversación. */
   correos?: CorreoBorrador[]
@@ -405,6 +491,9 @@ export function VistaChat({ mensajes, cargando, enviar, tema, ejemplos, deshabil
   /** Tareas y avisos propuestos, pendientes de confirmar. */
   acciones?: AccionBorrador[]
   accionAccion?: AccionAccion
+  /** Listas para marcar (checklists) creadas por el asistente. */
+  listas?: ListaChequeo[]
+  marcarItem?: MarcarItem
   /** Vendedor (no admin): el asistente sólo ve su cartera. Cambia el texto de bienvenida. */
   esVendedor?: boolean
   cargando: boolean
@@ -420,7 +509,7 @@ export function VistaChat({ mensajes, cargando, enviar, tema, ejemplos, deshabil
   const [entrada, setEntrada] = useState('')
   const fin = useRef<HTMLDivElement>(null)
 
-  useEffect(() => { fin.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }) }, [mensajes, cargando, correos.length, acciones.length])
+  useEffect(() => { fin.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }) }, [mensajes, cargando, correos.length, acciones.length, listas.length])
 
   // "Enviar todos": manda cada borrador pendiente tal como se ve en su tarjeta (con sus ediciones).
   const ediciones = useRef(new Map<string, EdicionCorreo>())
@@ -514,6 +603,7 @@ export function VistaChat({ mensajes, cargando, enviar, tema, ejemplos, deshabil
         )}
         {correos.map(c => <TarjetaCorreo key={c.id} correo={c} tema={tema} onAccion={accionCorreo} onEdicion={registrarEdicion} />)}
         {acciones.map(a => <TarjetaAccion key={a.id} accion={a} tema={tema} onAccion={accionAccion} />)}
+        {listas.map(l => <TarjetaLista key={l.id} lista={l} tema={tema} onMarcar={marcarItem} />)}
 
         {cargando && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: T.apagado, fontSize: 12.5 }}>
