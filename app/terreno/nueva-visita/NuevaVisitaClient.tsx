@@ -5,8 +5,6 @@ import { useRouter } from 'next/navigation'
 import { ChevronLeft, Check, CloudOff, MessageCircle, Image as ImageIcon } from 'lucide-react'
 import { notificar } from '@/lib/notificar'
 import { upsertOrQueue } from '@/lib/offlineQueue'
-import { uploadConTimeout } from '@/lib/offlinePhotoQueue'
-import { comprimirFotoLlegada } from '@/lib/terreno/comprimirFoto'
 import { hapticExito } from '@/lib/haptics'
 import { createClient } from '@/lib/supabase/client'
 import { catalogoParaVendedor, fmtPrecioCLP } from '@/lib/catalogo-productos'
@@ -19,8 +17,7 @@ import PasoVenta, { type CierrePayload } from './PasoVenta'
 import MarcarLlegada, { type EvidenciaCapturada } from './MarcarLlegada'
 import ConfirmarEvidencia, { type ResultadoLlegada } from './ConfirmarEvidencia'
 import FinalizarVisita, { type CierrePayloadLlegada } from './FinalizarVisita'
-import HojaFotosVisita from './HojaFotosVisita'
-import { SLOTS_FOTO, CAMPO_DE_SLOT, type SlotFoto } from '@/lib/fotosVisita'
+import { SLOTS_FOTO, type SlotFoto } from '@/lib/fotosVisita'
 import {
   setCatalogo, WhatsAppCatalogoModal, VentaImageModal,
   type ItemCarrito,
@@ -107,12 +104,9 @@ export default function NuevaVisitaClient({
   })
   const [showCatalogoWA, setShowCatalogoWA] = useState(false)
   const [showImagen, setShowImagen] = useState(false)
-  const [pendingFinal, setPendingFinal] = useState<{ payload: CierrePayloadLlegada; items: ItemCarrito[]; pago: PagoInfo | null } | null>(null)
 
-  const fileGaleriaRef = useRef<HTMLInputElement>(null)
-  const slotPendienteRef = useRef<SlotFoto>('interior')
   const jornadaIdRef = useRef<string | null>(null)
-  const referenciaCoordsRef = useRef<{ lat: number; lng: number } | null>(
+  const [referenciaCoords, setReferenciaCoords] = useState<{ lat: number; lng: number } | null>(
     visitaRetomada?.lat != null && visitaRetomada?.lng != null ? { lat: visitaRetomada.lat, lng: visitaRetomada.lng } : null
   )
   const visitaDraft = useRef<Record<string, unknown>>(
@@ -150,8 +144,8 @@ export default function NuevaVisitaClient({
     const id = crypto.randomUUID()
     setVisitaId(id)
 
-    referenciaCoordsRef.current = coords
-      ?? ((detalle?.lat != null && detalle?.lng != null) ? { lat: detalle.lat, lng: detalle.lng } : null)
+    setReferenciaCoords(coords
+      ?? ((detalle?.lat != null && detalle?.lng != null) ? { lat: detalle.lat, lng: detalle.lng } : null))
 
     let clienteTerrenoIdNuevo: string | null = null
     if (esNuevo && detalle) {
@@ -219,21 +213,17 @@ export default function NuevaVisitaClient({
 
   interface PagoInfo { metodoPago: CierrePayload['metodoPago']; diasCredito: number | null; fechaPagoEstimada: string | null }
 
-  const fotosFaltantes = SLOTS_FOTO.filter(s => !fotos[s.key]).map(s => s.key)
-
+  // "Guardar y finalizar" cierra la visita al tiro: ya no se abre la hoja de
+  // fotos del local (pedido de Claudio, 2026-10-06). Las fotos que falten se
+  // pueden subir después desde el Historial (fotos_status queda PENDIENTE).
   function onFinalizarIntentado(payload: CierrePayloadLlegada) {
     if (payload.resultado === 'pedido_confirmado') { setCierrePayloadGuardado(payload); setEtapa('venta'); return }
-    onCerrarIntentado(payload, [], null)
+    ejecutarCierre(payload, [], null)
   }
 
   function onVentaCerrada(p: CierrePayload) {
     if (!cierrePayloadGuardado) return
-    onCerrarIntentado(cierrePayloadGuardado, p.items, { metodoPago: p.metodoPago, diasCredito: p.diasCredito, fechaPagoEstimada: p.fechaPagoEstimada })
-  }
-
-  function onCerrarIntentado(payload: CierrePayloadLlegada, items: ItemCarrito[], pago: PagoInfo | null) {
-    if (fotosFaltantes.length > 0) { setPendingFinal({ payload, items, pago }); return }
-    ejecutarCierre(payload, items, pago)
+    ejecutarCierre(cierrePayloadGuardado, p.items, { metodoPago: p.metodoPago, diasCredito: p.diasCredito, fechaPagoEstimada: p.fechaPagoEstimada })
   }
 
   const RESULTADO_LABEL: Record<string, string> = {
@@ -243,8 +233,7 @@ export default function NuevaVisitaClient({
   }
 
   async function ejecutarCierre(payload: CierrePayloadLlegada, items: ItemCarrito[], pago: PagoInfo | null) {
-    if (!visitaId) return
-    setPendingFinal(null)
+    if (!visitaId || guardando) return
     setGuardando(true)
     try {
       const total = items.reduce((s, i) => s + i.cantidad * i.precio, 0)
@@ -343,36 +332,10 @@ export default function NuevaVisitaClient({
     router.push('/terreno')
   }
 
-  const [subiendoFotoExtra, setSubiendoFotoExtra] = useState<Partial<Record<SlotFoto, boolean>>>({})
-
-  async function subirFotoExtra(file: File, slot: SlotFoto) {
-    if (!visitaId) return
-    setFotos(prev => ({ ...prev, [slot]: URL.createObjectURL(file) }))
-    setSubiendoFotoExtra(prev => ({ ...prev, [slot]: true }))
-    const campo = CAMPO_DE_SLOT[slot]
-    const vId = visitaId
-    let blob: Blob = file
-    try { blob = await comprimirFotoLlegada(file) } catch { /* si falla la compresión, se sube el original igual */ }
-    const url = await uploadConTimeout(
-      supabase,
-      { bucket: 'terreno-fotos', path: `${vId}/${slot}.webp`, table: 'visitas_terreno', rowId: vId, campo },
-      new File([blob], `${slot}.webp`, { type: blob.type || 'image/webp' }),
-    )
-    setSubiendoFotoExtra(prev => ({ ...prev, [slot]: false }))
-    if (url) upsertOrQueue(supabase, 'visitas_terreno', { id: vId, [campo]: url })
-  }
-
-  function onFileElegido(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0]
-    if (f) subirFotoExtra(f, slotPendienteRef.current)
-    e.target.value = ''
-  }
-
   const items = Array.from(carrito.values())
 
   return (
     <div style={{ minHeight: '100vh', background: C.bg, paddingBottom: 'max(170px, calc(env(safe-area-inset-bottom, 0px) + 150px))' }}>
-      <input ref={fileGaleriaRef} type="file" accept="image/*" hidden onChange={onFileElegido} />
 
       <div style={{ maxWidth: 720, margin: '0 auto', padding: '0 16px' }}>
         {etapa === 'venta' && (
@@ -449,8 +412,8 @@ export default function NuevaVisitaClient({
               visitaId={visitaId}
               clienteNombre={cliente.nombre}
               direccionCliente={cliente.direccion}
-              clienteLat={referenciaCoordsRef.current?.lat}
-              clienteLng={referenciaCoordsRef.current?.lng}
+              clienteLat={referenciaCoords?.lat}
+              clienteLng={referenciaCoords?.lng}
               onListo={onLlegadaLista}
               onVolver={cancelar}
             />
@@ -463,8 +426,8 @@ export default function NuevaVisitaClient({
               visitaId={visitaId}
               evidencia={evidencia}
               clienteNombre={cliente.nombre}
-              clienteLat={referenciaCoordsRef.current?.lat}
-              clienteLng={referenciaCoordsRef.current?.lng}
+              clienteLat={referenciaCoords?.lat}
+              clienteLng={referenciaCoords?.lng}
               clienteErpId={clienteErpId}
               clienteTerrenoId={clienteTerrenoId}
               esAdmin={vendedor.isAdmin}
@@ -520,17 +483,6 @@ export default function NuevaVisitaClient({
             />
           )}
         </>
-      )}
-
-      {pendingFinal && (
-        <HojaFotosVisita
-          fotos={fotos}
-          subiendo={subiendoFotoExtra}
-          onTomarCamara={slot => { slotPendienteRef.current = slot; fileGaleriaRef.current?.click() }}
-          onSubirGaleria={slot => { slotPendienteRef.current = slot; fileGaleriaRef.current?.click() }}
-          onContinuar={() => ejecutarCierre(pendingFinal.payload, pendingFinal.items, pendingFinal.pago)}
-          onCancelar={() => setPendingFinal(null)}
-        />
       )}
 
       {syncPendiente && etapa !== 'cliente' && (
