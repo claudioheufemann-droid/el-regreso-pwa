@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/auth'
 import { provinciasDeRegion } from '@/lib/regiones'
 import { calcularUnRango, rangoRelativo, porEntregaPeriodo, iso, addDias } from '@/app/ventas/hoyData'
+import { escalarModoDemo } from '@/lib/ventas/modoDemo'
 import type { RangoKey } from '@/app/ventas/hoyTypes'
 
 export const dynamic = 'force-dynamic'
@@ -51,7 +52,7 @@ export async function GET(req: NextRequest) {
         { desde: r.prevDesde, hasta: r.prevHasta, porEntrega: r.porEntrega },
         r.etiqueta,
       )
-      return NextResponse.json({ key, datos })
+      return NextResponse.json({ key, datos: escalarModoDemo(datos, user.demoFactorLitros) })
     }
 
     if (tipo === 'periodo') {
@@ -114,7 +115,7 @@ export async function GET(req: NextRequest) {
         previo,
         etiqueta,
       )
-      return NextResponse.json({ id, metaLitros, datos })
+      return NextResponse.json(escalarModoDemo({ id, metaLitros, datos }, user.demoFactorLitros))
     }
 
     return NextResponse.json({ error: 'tipo inválido' }, { status: 400 })

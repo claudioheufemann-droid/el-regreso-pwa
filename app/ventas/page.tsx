@@ -2,6 +2,7 @@ import { getServerUser } from '@/lib/auth'
 import { provinciasDeRegion } from '@/lib/regiones'
 import { VENDEDORES_CONTRATO_TERCERA } from '@/lib/comisionesVendedor'
 import { getHoyData } from './hoyData'
+import { escalarModoDemo } from '@/lib/ventas/modoDemo'
 import VentasHoyClient from './VentasHoyClient'
 
 export const dynamic = 'force-dynamic'
@@ -41,7 +42,7 @@ export default async function VentasHoyPage({
 
   return (
     <VentasHoyClient
-      data={data}
+      data={escalarModoDemo(data, appUser?.demoFactorLitros)}
       veComision={!!appUser?.veComisionGerente}
       veComisionVendedor={veComisionVendedor}
     />

@@ -24,6 +24,8 @@ export interface AppUser {
   puedePagarPlanificacionTerreno: boolean
   /** Acceso completo al Asistente de datos sin ser admin del resto de la app (users.puede_usar_asistente). Ver lib/agente/alcance.ts. */
   puedeUsarAsistente: boolean
+  /** Modo demo de Ventas (videos): factor que escala las cifras mostradas. null = datos reales. Ver lib/ventas/modoDemo.ts. */
+  demoFactorLitros: number | null
   /**
    * Nombres con que este usuario aparece en el ERP (ventas.vendedor_actual /
    * misiones.vendedor). Vacío = no es vendedor de terreno.
@@ -118,7 +120,7 @@ export const getServerUser = cache(async (): Promise<AppUser | null> => {
     // Primary lookup: by auth UUID
     let { data: profile } = await supabase
       .from('users')
-      .select('id, nombre, iniciales, is_admin, email, macro_area, avatar_url, region, vendedores_erp, puede_ver_margenes, puede_ver_control_comercial, ve_comision_gerente, puede_aprobar_planificacion_terreno, puede_pagar_planificacion_terreno, puede_usar_asistente')
+      .select('id, nombre, iniciales, is_admin, email, macro_area, avatar_url, region, vendedores_erp, puede_ver_margenes, puede_ver_control_comercial, ve_comision_gerente, puede_aprobar_planificacion_terreno, puede_pagar_planificacion_terreno, puede_usar_asistente, demo_factor_litros')
       .eq('id', user.id)
       .maybeSingle()
 
@@ -130,7 +132,7 @@ export const getServerUser = cache(async (): Promise<AppUser | null> => {
     if (!profile && user.email) {
       const res = await supabase
         .from('users')
-        .select('id, nombre, iniciales, is_admin, email, macro_area, avatar_url, region, vendedores_erp, puede_ver_margenes, puede_ver_control_comercial, ve_comision_gerente, puede_aprobar_planificacion_terreno, puede_pagar_planificacion_terreno, puede_usar_asistente')
+        .select('id, nombre, iniciales, is_admin, email, macro_area, avatar_url, region, vendedores_erp, puede_ver_margenes, puede_ver_control_comercial, ve_comision_gerente, puede_aprobar_planificacion_terreno, puede_pagar_planificacion_terreno, puede_usar_asistente, demo_factor_litros')
         .eq('email', user.email)
         .maybeSingle()
       profile = res.data
@@ -165,6 +167,7 @@ export const getServerUser = cache(async (): Promise<AppUser | null> => {
       puedeAprobarPlanificacionTerreno: vistaComo ? false : !!profile.puede_aprobar_planificacion_terreno,
       puedePagarPlanificacionTerreno: vistaComo ? false : !!profile.puede_pagar_planificacion_terreno,
       puedeUsarAsistente: vistaComo ? false : !!profile.puede_usar_asistente,
+      demoFactorLitros: vistaComo ? null : (profile.demo_factor_litros != null ? Number(profile.demo_factor_litros) : null),
       esAdminReal,
       sesionReal: true,
       impersonando: vistaComo?.nombre ?? null,
