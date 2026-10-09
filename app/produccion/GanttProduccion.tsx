@@ -465,10 +465,20 @@ export default function GanttProduccion({
 
   const grupos = useMemo(() => {
     const esLab = (n: string) => /lavoratorio|laboratorio/i.test(n)
+    // Las filas van por número de tanque (K-1, K-2… / T1, T2…), como en la
+    // planta. `fermentadores` llega ordenado por ocupación (ocupacionPlanta),
+    // y eso dejaba K-4 entre K-1 y K-2. "Bright tank T4" cae entre T3 y T5.
+    const codigo = (n: string) => n.match(/([A-Za-z])-?(\d+)\s*$/)
+    const porNumero = (a: FermentadorGantt, b: FermentadorGantt) => {
+      const ca = codigo(a.nombre), cb = codigo(b.nombre)
+      if (ca && cb) return ca[1].localeCompare(cb[1]) || Number(ca[2]) - Number(cb[2])
+      return a.nombre.localeCompare(b.nombre, 'es', { numeric: true })
+    }
+    const tanquesDe = (f: (t: FermentadorGantt) => boolean) => fermentadores.filter(f).sort(porNumero)
     const crudos: { titulo: string; categoria: 'cerveza' | 'kombucha' | null; tanques: FermentadorGantt[] }[] = [
-      { titulo: 'Cervecería', categoria: 'cerveza' as const, tanques: fermentadores.filter(f => f.categoria === 'cerveza' && !esLab(f.nombre)) },
-      { titulo: 'Kombuchería', categoria: 'kombucha' as const, tanques: fermentadores.filter(f => f.categoria === 'kombucha') },
-      { titulo: 'Laboratorio', categoria: null, tanques: fermentadores.filter(f => esLab(f.nombre)) },
+      { titulo: 'Cervecería', categoria: 'cerveza' as const, tanques: tanquesDe(f => f.categoria === 'cerveza' && !esLab(f.nombre)) },
+      { titulo: 'Kombuchería', categoria: 'kombucha' as const, tanques: tanquesDe(f => f.categoria === 'kombucha') },
+      { titulo: 'Laboratorio', categoria: null, tanques: tanquesDe(f => esLab(f.nombre)) },
     ].filter(g => g.tanques.length > 0)
 
     // El resumen es lo que permite plegar sin perder nada: un encargado que
