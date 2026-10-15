@@ -1179,6 +1179,7 @@ function FilaVendedor({ v, pos, total, desde, hasta, porEntrega, mostrarAnio }: 
         <div style={{ paddingLeft: 58 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
             <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{fL(v.litros)}</span>
+            <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>· {fPesoFull(v.revenue)}</span>
             <span style={{ fontSize: 12, color: C.muted }}>{share.toFixed(1)}% del total</span>
           </div>
           {/* Dos bases de comparación: el tramo inmediatamente anterior
@@ -1196,7 +1197,6 @@ function FilaVendedor({ v, pos, total, desde, hasta, porEntrega, mostrarAnio }: 
               </span>
             )}
           </div>
-          <p style={{ fontSize: 12, fontWeight: 600, color: C.muted, marginBottom: 6 }}>{fPesoFull(v.revenue)}</p>
           <div style={{ height: 6, borderRadius: 3, background: C.line, overflow: 'hidden' }}>
             <div style={{ width: `${share}%`, height: '100%', background: color, borderRadius: 3, transition: 'width .4s' }} />
           </div>
