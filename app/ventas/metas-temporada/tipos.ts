@@ -160,17 +160,27 @@ export function dosRojasSeguidas(filas: FilaMeta[]) {
 }
 
 // ── Semáforo ─────────────────────────────────────────────────────────────────
+// Pantalla clara: tokens --cc-* de Control Comercial (globals.css,
+// .cc-root[data-theme="light"]), los mismos que usa el resto de vistas claras.
 
 export const SEMAFORO_COLOR: Record<Semaforo, string> = {
-  verde: 'var(--green)',
-  amarillo: 'var(--gold)',
-  rojo: 'var(--red)',
+  verde: 'var(--cc-green)',
+  amarillo: 'var(--cc-amber)',
+  rojo: 'var(--cc-red)',
 }
 
 export const SEMAFORO_FONDO: Record<Semaforo, string> = {
-  verde: 'rgba(74,222,128,0.12)',
-  amarillo: 'rgba(212,175,55,0.12)',
-  rojo: 'rgba(248,113,113,0.12)',
+  verde: 'var(--cc-green-soft)',
+  amarillo: 'var(--cc-amber-soft)',
+  rojo: 'var(--cc-red-soft)',
+}
+
+/**
+ * Color de un % que NO trae semáforo de la vista (clientes nuevos, totales del
+ * equipo). Mismos cortes que la vista: ≥95 verde, ≥80 ámbar, <80 rojo.
+ */
+export function colorPorPct(p: number) {
+  return p >= 95 ? 'var(--cc-green)' : p >= 80 ? 'var(--cc-amber)' : 'var(--cc-red)'
 }
 
 export const SEMAFORO_LABEL: Record<Semaforo, string> = {

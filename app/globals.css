@@ -170,6 +170,18 @@
   background: var(--cc-page);
 }
 
+/* Ventas › Metas temporada (/ventas/metas-temporada): pantalla clara con
+   fondo blanco puro (pedido explícito, 15-oct-2026). Reusa los tokens de
+   arriba vía .cc-root[data-theme="light"] en la página. El layout de /ventas
+   es Server Component y no sabe qué ruta pinta: :has() blanquea el <main>
+   (incluido su padding inferior bajo el NavPill) solo cuando la página
+   montada es la de Metas. El Sidebar de escritorio sigue oscuro. */
+.cc-root.metas-claro[data-theme="light"] {
+  --cc-page: #FFFFFF;
+  background: #FFFFFF;
+}
+main:has(> .metas-claro) { background: #FFFFFF; }
+
 .cc-tap { -webkit-tap-highlight-color: transparent; }
 .cc-scroll-x { overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
 .cc-scroll-x::-webkit-scrollbar { display: none; }

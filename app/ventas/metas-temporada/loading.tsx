@@ -1,32 +1,34 @@
-// Skeleton con las mismas alturas que la vista del vendedor (hero, acumulado,
-// lista de semanas) para que no haya saltos de layout al llegar los datos.
+// Skeleton claro con la misma composición que la pantalla (encabezado,
+// semana con tres indicadores, tabla de semanas) para que no haya saltos de
+// layout al llegar los datos.
 export default function MetasTemporadaLoading() {
   return (
-    <div className="tw-spacing mx-auto w-full max-w-[1100px] px-4 pt-1 lg:px-6 lg:pt-4">
-      <div className="mt-2 mb-1 h-9 w-24 rounded-full sk-metas" />
-      <div className="mb-3.5 flex items-start justify-between gap-3">
-        <div className="flex-1">
-          <div className="mb-2 h-2.5 w-1/2 max-w-[220px] rounded sk-metas" />
-          <div className="h-7 w-28 rounded-lg sk-metas" />
+    <div className="cc-root tw-spacing metas-claro w-full px-4 pt-1 md:px-6 lg:px-8 lg:pt-4" data-theme="light">
+      <div className="mx-auto w-full max-w-[1400px]">
+        <div className="pb-4">
+          <div className="my-2 h-4 w-16 rounded sk-metas" />
+          <div className="mt-1 flex items-end justify-between gap-4">
+            <div className="h-8 w-56 rounded-md sk-metas" />
+            <div className="hidden h-6 w-72 rounded sk-metas md:block" />
+          </div>
         </div>
-        <div className="size-11 shrink-0 rounded-full sk-metas" />
-      </div>
-
-      <div className="flex flex-col gap-3">
-        <div className="h-[318px] rounded-[18px] sk-metas lg:h-[210px]" />
-        <div className="h-[236px] rounded-[18px] sk-metas" />
-        <div className="mt-2 h-3 w-40 rounded sk-metas" />
-        <div className="flex flex-col gap-1.5">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="h-[54px] rounded-[14px] sk-metas" />
-          ))}
+        <div className="border-t border-[var(--cc-line)] pt-5">
+          <div className="mb-4 h-6 w-64 rounded sk-metas" />
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            {[0, 1, 2].map(i => <div key={i} className="h-[92px] rounded-lg sk-metas" />)}
+          </div>
+          <div className="mt-4 h-4 w-80 max-w-full rounded sk-metas" />
+          <div className="mt-6 border-t border-[var(--cc-line)] pt-5">
+            <div className="mb-3 h-5 w-52 rounded sk-metas" />
+            {Array.from({ length: 6 }).map((_, i) => <div key={i} className="mb-1.5 h-[38px] rounded sk-metas" />)}
+          </div>
         </div>
       </div>
 
       <style>{`
         @keyframes skmetas { 0% { background-position: -360px 0 } 100% { background-position: 360px 0 } }
         .sk-metas {
-          background: linear-gradient(90deg, #141414 25%, #1A1A1A 37%, #141414 63%);
+          background: linear-gradient(90deg, #F3F1EC 25%, #EAE7E1 37%, #F3F1EC 63%);
           background-size: 720px 100%;
           animation: skmetas 1.3s ease-in-out infinite;
         }
