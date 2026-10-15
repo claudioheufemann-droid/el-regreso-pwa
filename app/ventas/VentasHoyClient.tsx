@@ -985,9 +985,9 @@ function DetalleClientesVendedor({ vendedor, desde, hasta, porEntrega }: {
     : clientes
 
   return (
-    <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.line}`, display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <p style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: '.06em' }}>
-        LOCALES · {q ? `${visibles.length} de ${clientes.length}` : clientes.length}
+        LOCALES ·{q ? `${visibles.length} de ${clientes.length}` : clientes.length}
       </p>
       <div style={{ position: 'relative' }}>
         <Search size={14} color={C.faint} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
@@ -1144,6 +1144,128 @@ function DetalleClientesProducto({ producto, envase, desde, hasta, porEntrega }:
  * Se toca para desplegar los locales de esa cartera (antes navegaba a
  * /ventas/ranking; ahora es in-situ, igual que "Clientes que compraron").
  */
+/** Productos que vendió UN vendedor, de más a menos vendido. Sólo lo
+ *  entregado (mismo criterio que su fila del ranking, por eso los litros
+ *  suman exacto lo mismo); lo por entregar aún no tiene producto despachado. */
+function DetalleProductosVendedor({ vendedor, desde, hasta, porEntrega }: {
+  vendedor: string; desde: string; hasta: string; porEntrega: boolean
+}) {
+  const [productos, setProductos] = useState<FilaProducto[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [reintento, setReintento] = useState(0)
+  const [orden, setOrden] = useState<'litros' | 'revenue'>('litros')
+
+  useEffect(() => {
+    let vivo = true
+    setError(null)
+    const qs = `tipo=productos-vendedor&vendedor=${encodeURIComponent(vendedor)}&desde=${desde}&hasta=${hasta}&porEntrega=${porEntrega}`
+    fetch(`/api/ventas/detalle?${qs}`)
+      .then(r => r.ok ? r.json() : r.json().then(j => Promise.reject(j.error ?? 'Error')))
+      .then(d => { if (vivo) setProductos(Array.isArray(d) ? d : []) })
+      .catch(e => { if (vivo) setError(String(e)) })
+    return () => { vivo = false }
+  }, [vendedor, desde, hasta, porEntrega, reintento])
+
+  if (error) return (
+    <p style={{ fontSize: 12, color: C.red, padding: '8px 0 2px' }}>
+      No se pudo cargar: {error}{' '}
+      <button onClick={() => { setError(null); setReintento(n => n + 1) }} style={{ color: C.blue, background: 'none', border: 'none', padding: 0, font: 'inherit', cursor: 'pointer', textDecoration: 'underline' }}>Reintentar</button>
+    </p>
+  )
+  if (!productos) return <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>{[0, 1, 2].map(i => <Skeleton key={i} height={48} radius={10} />)}</div>
+  if (productos.length === 0) return <p style={{ fontSize: 12, color: C.muted, padding: '8px 0 2px' }}>Sin productos entregados en este rango.</p>
+
+  const lista = [...productos].sort((a, b) => b[orden] - a[orden])
+  const totalOrden = lista.reduce((s, p) => s + p[orden], 0)
+  const chip = (k: 'litros' | 'revenue', txt: string) => (
+    <button
+      onClick={() => setOrden(k)}
+      style={{
+        padding: '4px 10px', borderRadius: 999, cursor: 'pointer', fontSize: 11, fontWeight: 700,
+        border: `1px solid ${orden === k ? C.blue : C.line}`,
+        background: orden === k ? C.blue : 'transparent', color: orden === k ? '#fff' : C.muted,
+      }}
+    >
+      {txt}
+    </button>
+  )
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+        <p style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: '.06em' }}>PRODUCTOS · {lista.length}</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 11, color: C.faint }}>Ordenar por</span>
+          {chip('litros', 'Litros')}
+          {chip('revenue', 'Venta $')}
+        </div>
+      </div>
+      {lista.map((p, i) => {
+        const share = totalOrden > 0 ? (p[orden] / totalOrden) * 100 : 0
+        const tint = p.categoria === 'Kombucha' ? C.green : p.categoria === 'Cerveza' ? C.hero : C.purple
+        return (
+          <div key={`${p.producto}|${p.envase}`} style={{ background: C.bg, border: `1px solid ${C.line}`, borderRadius: 10, padding: '9px 11px' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+              <span style={{ width: 18, fontSize: 12, fontWeight: 700, color: i === 0 ? C.text : C.faint, flexShrink: 0, marginTop: 1 }}>{i + 1}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 13, fontWeight: 600, color: C.text, lineHeight: 1.3, wordBreak: 'break-word' }}>{p.producto}</p>
+                <p style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>
+                  {[p.envase !== '—' ? p.envase : null, p.categoria,
+                    p.unidades > 0 ? `${fNum(p.unidades)} un.` : null,
+                    `${p.clientes} ${p.clientes === 1 ? 'local' : 'locales'}`].filter(Boolean).join(' · ')}
+                </p>
+              </div>
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <p style={{ fontSize: 13, fontWeight: 700, color: orden === 'litros' ? C.text : C.muted, whiteSpace: 'nowrap' }}>{fL(p.litros)}</p>
+                <p style={{ fontSize: orden === 'revenue' ? 13 : 11, fontWeight: orden === 'revenue' ? 700 : 400, color: orden === 'revenue' ? C.text : C.muted, whiteSpace: 'nowrap' }}>{fPesoFull(p.revenue)}</p>
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 7, paddingLeft: 28 }}>
+              <div style={{ flex: 1, height: 5, borderRadius: 3, background: C.line, overflow: 'hidden' }}>
+                <div style={{ width: `${share}%`, height: '100%', background: tint, borderRadius: 3 }} />
+              </div>
+              <span style={{ fontSize: 11, fontWeight: 600, color: C.muted, width: 40, textAlign: 'right', flexShrink: 0 }}>{share.toFixed(1)}%</span>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+/** Lo que se ve al desplegar un vendedor: sus locales o sus productos. */
+function DetalleVendedor({ vendedor, desde, hasta, porEntrega }: {
+  vendedor: string; desde: string; hasta: string; porEntrega: boolean
+}) {
+  const [vista, setVista] = useState<'clientes' | 'productos'>('clientes')
+  const tab = (k: 'clientes' | 'productos', txt: string) => {
+    const on = vista === k
+    return (
+      <button
+        onClick={() => setVista(k)}
+        style={{
+          flex: 1, minHeight: 36, borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700,
+          border: 'none', background: on ? C.card : 'transparent', color: on ? C.text : C.muted,
+          boxShadow: on ? '0 1px 2px rgba(15,23,42,.12)' : 'none',
+        }}
+      >
+        {txt}
+      </button>
+    )
+  }
+  return (
+    <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.line}`, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', gap: 4, padding: 3, borderRadius: 10, background: C.line, maxWidth: 360 }}>
+        {tab('clientes', 'Por cliente')}
+        {tab('productos', 'Por producto')}
+      </div>
+      {vista === 'clientes'
+        ? <DetalleClientesVendedor vendedor={vendedor} desde={desde} hasta={hasta} porEntrega={porEntrega} />
+        : <DetalleProductosVendedor vendedor={vendedor} desde={desde} hasta={hasta} porEntrega={porEntrega} />}
+    </div>
+  )
+}
+
 /** Columnas de la fila ancha (desktop) — compartidas con el encabezado del
  *  ranking para que los títulos queden alineados con los datos. */
 const GRID_VEND_ANCHO = '22px 32px minmax(150px, 1.2fr) minmax(110px, 0.8fr) minmax(130px, 0.9fr) minmax(120px, 0.8fr) minmax(160px, 1.6fr) 16px'
@@ -1234,7 +1356,7 @@ function FilaVendedor({ v, pos, total, desde, hasta, porEntrega, mostrarAnio, an
         </button>
         {abierto && (
           <div style={{ paddingLeft: 68 }}>
-            <DetalleClientesVendedor vendedor={v.vendedor} desde={desde} hasta={hasta} porEntrega={porEntrega} />
+            <DetalleVendedor vendedor={v.vendedor} desde={desde} hasta={hasta} porEntrega={porEntrega} />
           </div>
         )}
       </div>
@@ -1300,7 +1422,7 @@ function FilaVendedor({ v, pos, total, desde, hasta, porEntrega, mostrarAnio, an
       </button>
       {abierto && (
         <div style={{ paddingLeft: 58 }}>
-          <DetalleClientesVendedor vendedor={v.vendedor} desde={desde} hasta={hasta} porEntrega={porEntrega} />
+          <DetalleVendedor vendedor={v.vendedor} desde={desde} hasta={hasta} porEntrega={porEntrega} />
         </div>
       )}
     </div>

@@ -32,6 +32,7 @@ function claseEnvase(envase: string, categoria: string): string {
  *   más reciente primero. Es la vista "Pedidos" de "Venta área comercial"
  * tipo=cliente-productos requiere &cliente=<nombre_fantasia> — qué se le vendió
  * tipo=clientes-vendedor requiere &vendedor=<nombre vigente, ej "Los Ríos"> — qué locales le compraron
+ * tipo=productos-vendedor requiere &vendedor= — qué productos vendió, de más a menos litros
  * tipo=pedido-productos requiere &pedido=<número> — qué contiene ese pedido (no usa desde/hasta)
  * tipo=clientes-producto requiere &producto=&envase= — qué locales compraron ese producto
  * tipo=clientes-por-entregar — clientes con pedidos tomados en el rango aún sin despachar
@@ -72,7 +73,7 @@ export async function GET(req: Request) {
   const tiposValidos = ['productos', 'clientes', 'envase', 'pedidos-origen', 'cliente-productos',
     'clientes-vendedor', 'pedido-productos', 'clientes-producto', 'clientes-por-entregar',
     'pedidos-pendientes-cliente', 'pedidos-entregados-cliente', 'pedidos-sin-informar-cliente',
-    'pedidos-periodo']
+    'pedidos-periodo', 'productos-vendedor']
   if (!tipo || !tiposValidos.includes(tipo))
     return NextResponse.json({ error: `tipo debe ser uno de: ${tiposValidos.join(', ')}` }, { status: 400 })
   if (tipo === 'envase' && !bucket)
@@ -81,8 +82,8 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'pedidos-origen requiere origen=backlog|mismo-periodo' }, { status: 400 })
   if ((tipo === 'cliente-productos' || tipo === 'pedidos-pendientes-cliente' || tipo === 'pedidos-entregados-cliente' || tipo === 'pedidos-sin-informar-cliente') && !cliente)
     return NextResponse.json({ error: `${tipo} requiere cliente` }, { status: 400 })
-  if (tipo === 'clientes-vendedor' && !vendedor)
-    return NextResponse.json({ error: 'clientes-vendedor requiere vendedor' }, { status: 400 })
+  if ((tipo === 'clientes-vendedor' || tipo === 'productos-vendedor') && !vendedor)
+    return NextResponse.json({ error: `${tipo} requiere vendedor` }, { status: 400 })
   if (tipo === 'pedido-productos' && !pedidoNum)
     return NextResponse.json({ error: 'pedido-productos requiere pedido' }, { status: 400 })
   if (tipo === 'clientes-producto' && (!producto || !envaseProducto))
@@ -267,16 +268,18 @@ export async function GET(req: Request) {
   }
 
   const fn = tipo === 'clientes' ? 'ventas_detalle_clientes' : 'ventas_detalle_productos'
+  // productos-vendedor = la misma función del mix, acotada a la cartera de
+  // un vendedor: así sus litros cuadran con los de su fila en el ranking.
   const { data, error } = await supabase.rpc(fn, {
     p_ini: desde, p_fin: hasta, p_provincias, p_por_entrega: porEntrega,
-    p_vendedores: VENDEDORES_AREA_VENTAS_ERP,
+    p_vendedores: tipo === 'productos-vendedor' ? nombresErpDe(vendedor) : VENDEDORES_AREA_VENTAS_ERP,
   })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   const filas = (data ?? []) as Record<string, unknown>[]
 
-  if (tipo === 'productos' || tipo === 'envase') {
+  if (tipo === 'productos' || tipo === 'envase' || tipo === 'productos-vendedor') {
     let productos = filas.map(r => ({
       producto: String(r.producto ?? ''),
       envase: String(r.envase ?? ''),
