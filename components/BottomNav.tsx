@@ -1,7 +1,7 @@
 'use client'
 
 import { usePathname } from 'next/navigation'
-import { BarChart2, Users, Package, FileText, TrendingUp, Wallet, CircleDollarSign, Layers } from 'lucide-react'
+import { BarChart2, Users, Package, FileText, TrendingUp, Wallet, CircleDollarSign, Layers, Target } from 'lucide-react'
 import { useUser } from '@/lib/userContext'
 import { NavPill, type NavItem } from '@/components/ui/NavPill'
 
@@ -16,17 +16,23 @@ import { NavPill, type NavItem } from '@/components/ui/NavPill'
 // MAX_VISIBLE=5) y Marion no lo encontraba. Deudores pasa a ser visible
 // directo, Cotizaciones se corre a "Más" (pedido explícito del usuario).
 // 01-sep-2026: se sacó Agenda (módulo dado de baja, incluyendo el cron de push diario).
+// 15-oct-2026: se agregó Metas (plan de venta temporada oct 2026 – mar 2027,
+// ver app/ventas/metas-temporada) justo después de Ventas, porque es lo que
+// el vendedor más mira en el celular. Para el vendedor, Clientes se corre
+// detrás de Deudores: así Deudores sigue visible sin pasar por "Más".
 const VENDEDOR_ITEMS: NavItem[] = [
   { href: '/ventas',              icon: BarChart2,        label: 'Ventas',       exact: true },
+  { href: '/ventas/metas-temporada', icon: Target,           label: 'Metas'                     },
   { href: '/ventas/stock',        icon: Package,          label: 'Stock'                     },
-  { href: '/ventas/clientes',     icon: Users,            label: 'Clientes'                  },
   { href: '/ventas/deudores',     icon: CircleDollarSign, label: 'Deudores'                  },
+  { href: '/ventas/clientes',     icon: Users,            label: 'Clientes'                  },
   { href: '/ventas/cotizaciones', icon: FileText,         label: 'Cotizaciones'              },
   { href: '/ventas/barriles',     icon: Layers,           label: 'Barriles'                  },
 ]
 
 const ADMIN_ITEMS: NavItem[] = [
   { href: '/ventas',                      icon: BarChart2,        label: 'Ventas',       exact: true },
+  { href: '/ventas/metas-temporada', icon: Target,           label: 'Metas'                     },
   { href: '/ventas/stock',                icon: Package,          label: 'Stock'                     },
   { href: '/ventas/clientes',             icon: Users,            label: 'Clientes'                  },
   { href: '/ventas/deudores',             icon: CircleDollarSign, label: 'Deudores'                  },

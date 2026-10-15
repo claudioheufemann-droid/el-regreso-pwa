@@ -534,8 +534,12 @@ input.buscador-cliente-input.buscador-cliente-input:-webkit-autofill {
  * excluye el módulo de Producción (`.prod-root`), que se diseñó asumiendo que
  * Tailwind funciona. Cuando se quiera arreglar de raíz: mover este bloque a
  * `@layer base`, borrar la excepción, y revisar pantalla por pantalla.
+ *
+ * `.tw-spacing` (15-oct-2026) es la misma excepción pero opt-in y genérica:
+ * cualquier pantalla nueva diseñada con el spacing de Tailwind (p-4, px-3,
+ * mt-2…) la pone en su contenedor raíz. Primera: /ventas/metas-temporada.
  */
-*:not(.prod-root):not(.prod-root *) {
+*:not(.prod-root):not(.prod-root *):not(.tw-spacing):not(.tw-spacing *) {
   -webkit-tap-highlight-color: transparent;
   box-sizing: border-box;
   margin: 0;
@@ -547,7 +551,9 @@ input.buscador-cliente-input.buscador-cliente-input:-webkit-autofill {
  * espera: base < components < utilities). */
 @layer base {
   .prod-root,
-  .prod-root * {
+  .prod-root *,
+  .tw-spacing,
+  .tw-spacing * {
     -webkit-tap-highlight-color: transparent;
     box-sizing: border-box;
     margin: 0;
