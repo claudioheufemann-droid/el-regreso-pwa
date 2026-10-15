@@ -1144,12 +1144,102 @@ function DetalleClientesProducto({ producto, envase, desde, hasta, porEntrega }:
  * Se toca para desplegar los locales de esa cartera (antes navegaba a
  * /ventas/ranking; ahora es in-situ, igual que "Clientes que compraron").
  */
-function FilaVendedor({ v, pos, total, desde, hasta, porEntrega, mostrarAnio }: {
+/** Columnas de la fila ancha (desktop) — compartidas con el encabezado del
+ *  ranking para que los títulos queden alineados con los datos. */
+const GRID_VEND_ANCHO = '22px 32px minmax(150px, 1.2fr) minmax(110px, 0.8fr) minmax(130px, 0.9fr) minmax(120px, 0.8fr) minmax(160px, 1.6fr) 16px'
+
+function EncabezadoVendedoresAncho({ mostrarAnio }: { mostrarAnio: boolean }) {
+  const th = { fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: '0.05em' } as const
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: GRID_VEND_ANCHO, columnGap: 14, padding: '10px 0 8px', borderBottom: `1px solid ${C.line}` }}>
+      <span /><span />
+      <span style={th}>VENDEDOR</span>
+      <span style={{ ...th, textAlign: 'right' }}>LITROS</span>
+      <span style={{ ...th, textAlign: 'right' }}>VENTA</span>
+      <span style={th}>{mostrarAnio ? 'VARIACIÓN MES · AÑO' : 'VARIACIÓN'}</span>
+      <span style={th}>PARTICIPACIÓN</span>
+      <span />
+    </div>
+  )
+}
+
+function FilaVendedor({ v, pos, total, desde, hasta, porEntrega, mostrarAnio, ancho = false }: {
   v: VendedorRango; pos: number; total: number; desde: string; hasta: string; porEntrega: boolean; mostrarAnio: boolean
+  /** Desktop: una sola fila en columnas (litros · venta · variación · barra)
+   *  en vez de apilar todo a la izquierda y dejar media tarjeta vacía. */
+  ancho?: boolean
 }) {
   const [abierto, setAbierto] = useState(false)
   const share = total > 0 ? (v.litros / total) * 100 : 0
   const color = COLOR_VEND[pos % COLOR_VEND.length]
+  if (ancho) {
+    const hayPorEntregar = v.litrosPorEntregar > 0
+    return (
+      <div style={{ borderTop: pos === 0 ? 'none' : `1px solid ${C.line}`, padding: '12px 0' }}>
+        <button
+          onClick={() => setAbierto(a => !a)}
+          style={{
+            display: 'grid', gridTemplateColumns: GRID_VEND_ANCHO, columnGap: 14, alignItems: 'center',
+            width: '100%', textAlign: 'left', background: 'transparent', border: 'none', padding: 0, font: 'inherit', color: 'inherit', cursor: 'pointer',
+          }}
+        >
+          <span style={{ fontSize: 13, fontWeight: 700, color: pos === 0 ? C.text : C.faint }}>{pos + 1}</span>
+          <span style={{
+            width: 32, height: 32, borderRadius: '50%', background: color, color: '#fff',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700,
+          }}>
+            {iniciales(v.vendedor)}
+          </span>
+          <span style={{ minWidth: 0 }}>
+            <span style={{ display: 'block', fontSize: 14, fontWeight: 600, color: C.text, lineHeight: 1.3, wordBreak: 'break-word' }}>{v.vendedor}</span>
+            {hayPorEntregar && (
+              <span style={{ display: 'block', fontSize: 11, color: C.muted, marginTop: 2 }}>
+                {fL(v.litros + v.litrosPorEntregar)} total con lo por entregar
+              </span>
+            )}
+          </span>
+          <span style={{ textAlign: 'right', minWidth: 0 }}>
+            <span style={{ display: 'block', fontSize: 16, fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>{fL(v.litros)}</span>
+            {hayPorEntregar && (
+              <span style={{ display: 'block', fontSize: 11, color: C.amber, whiteSpace: 'nowrap', marginTop: 2 }}>+ {fL(v.litrosPorEntregar)}</span>
+            )}
+          </span>
+          <span style={{ textAlign: 'right', minWidth: 0 }}>
+            <span style={{ display: 'block', fontSize: 16, fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>{fPesoFull(v.revenue)}</span>
+            {hayPorEntregar && (
+              <span style={{ display: 'block', fontSize: 11, color: C.amber, whiteSpace: 'nowrap', marginTop: 2 }}>+ {fPesoFull(v.revenuePorEntregar)} por entregar</span>
+            )}
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', minWidth: 0 }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: '0.03em' }}>MES</span>
+              <Delta pct={variacion(v.litros, v.litrosPrev)} size={15} />
+            </span>
+            {mostrarAnio && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: C.faint, letterSpacing: '0.03em' }}>AÑO</span>
+                <Delta pct={variacion(v.litros, v.litrosPrevAnio)} size={15} />
+              </span>
+            )}
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+            <span style={{ flex: 1, height: 8, borderRadius: 4, background: C.line, overflow: 'hidden' }}>
+              <span style={{ display: 'block', width: `${share}%`, height: '100%', background: color, borderRadius: 4, transition: 'width .4s' }} />
+            </span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: C.muted, width: 42, textAlign: 'right', flexShrink: 0 }}>{share.toFixed(1)}%</span>
+          </span>
+          <ChevronDown size={15} color={abierto ? C.blue : C.faint} style={{
+            transform: abierto ? 'rotate(180deg)' : undefined, transition: 'transform .15s',
+          }} />
+        </button>
+        {abierto && (
+          <div style={{ paddingLeft: 68 }}>
+            <DetalleClientesVendedor vendedor={v.vendedor} desde={desde} hasta={hasta} porEntrega={porEntrega} />
+          </div>
+        )}
+      </div>
+    )
+  }
   return (
     <div style={{ borderTop: pos === 0 ? 'none' : `1px solid ${C.line}`, padding: '12px 0' }}>
       <button
@@ -1231,6 +1321,16 @@ export default function VentasHoyClient({ data, veComision = false, veComisionVe
     check()
     window.addEventListener('resize', check)
     return () => window.removeEventListener('resize', check)
+  }, [])
+  // El ranking pasa a columnas según el ancho REAL de su tarjeta (no de la
+  // ventana): con sidebar + columna derecha, una pantalla de 1100px deja la
+  // tarjeta angosta y las columnas no cabrían.
+  const [rankingAncho, setRankingAncho] = useState(false)
+  const refRanking = useCallback((el: HTMLDivElement | null) => {
+    if (!el) return
+    const ro = new ResizeObserver(([e]) => setRankingAncho(e.contentRect.width >= 860))
+    ro.observe(el)
+    return () => ro.disconnect()
   }, [])
   // Si la URL trae un rango a mano, se entra directo en esa vista
   const [rango, setRango] = useState<RangoKey>(data.custom ? 'custom' : 'periodo')
@@ -2072,7 +2172,7 @@ export default function VentasHoyClient({ data, veComision = false, veComisionVe
         })()}
 
         {/* Ranking */}
-        <div style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.line}`, padding: '16px 16px 6px' }}>
+        <div ref={refRanking} style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.line}`, padding: '16px 16px 6px' }}>
           <div style={{ marginBottom: 6 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <p style={{ fontSize: 12, fontWeight: 700, color: C.text, letterSpacing: '0.04em' }}>RANKING DE VENDEDORES</p>
@@ -2088,8 +2188,9 @@ export default function VentasHoyClient({ data, veComision = false, veComisionVe
               {rango !== 'anio' && ` · AÑO = vs mismo tramo ${d.anioComparacion}`}
             </p>
           </div>
+          {rankingAncho && <EncabezadoVendedoresAncho mostrarAnio={rango !== 'anio'} />}
           {d.vendedores.map((v, i) => (
-            <FilaVendedor key={v.vendedor} v={v} pos={i} total={actual.litros}
+            <FilaVendedor key={v.vendedor} v={v} pos={i} total={actual.litros} ancho={rankingAncho}
               desde={d.desde} hasta={d.hasta} porEntrega={d.porEntrega} mostrarAnio={rango !== 'anio'} />
           ))}
         </div>
