@@ -5,12 +5,11 @@ import { AlertTriangle, Target } from 'lucide-react'
 import {
   type FilaMeta,
   rangoFechas, diasHabilesRestantes,
-  semanaEnCurso, acumuladoTemporada, acumular, dosRojasSeguidas,
-  SEMAFORO_COLOR,
+  semanaEnCurso, acumuladoTemporada, acumular, dosRojasSeguidas, nivelDeSemana,
 } from './tipos'
 import {
   EncabezadoSemana, Indicadores, indicadoresDe, LineaRitmo, TablaSemanas,
-  FranjaAcumulado, PieTemporada, Titulo, ORO,
+  FranjaAcumulado, PieTemporada, Titulo,
 } from './ui'
 
 /**
@@ -53,11 +52,10 @@ function SemanaActual({ fila, hoy }: { fila: FilaMeta; hoy: string }) {
   // La vista decide "en curso" con CURRENT_DATE del servidor (UTC); de noche en
   // Chile ya puede ser el día siguiente allá. Nunca contar antes del inicio.
   const dias = diasHabilesRestantes(hoy > fila.fechaInicio ? hoy : fila.fechaInicio, fila.fechaFin)
-  const colorNeto = fila.semaforo ? SEMAFORO_COLOR[fila.semaforo] : ORO
   return (
     <section className="pb-5">
-      <EncabezadoSemana fila={fila} />
-      <Indicadores items={indicadoresDe(acumular([fila]), colorNeto)} />
+      <EncabezadoSemana fila={fila} nivel={nivelDeSemana(fila)} />
+      <Indicadores items={indicadoresDe(acumular([fila]))} />
       <LineaRitmo falta={fila.metaNeto - fila.realNeto} dias={dias} />
     </section>
   )
@@ -68,11 +66,11 @@ function AlertaRojas() {
     <div
       role="alert"
       className="mb-5 flex items-start gap-3 rounded-[10px] border px-4 py-3"
-      style={{ background: 'var(--cc-red-soft)', borderColor: 'rgba(220,38,38,0.25)' }}
+      style={{ background: 'var(--m-rojo-suave)', borderColor: 'rgba(200,30,30,0.35)' }}
     >
-      <AlertTriangle size={17} className="mt-0.5 shrink-0 text-[var(--cc-red)]" />
-      <p className="text-[13px] leading-snug text-[var(--cc-ink)]">
-        <strong className="font-semibold">Dos semanas cerradas seguidas en rojo.</strong>{' '}
+      <AlertTriangle size={18} className="mt-0.5 shrink-0 text-[var(--m-rojo)]" />
+      <p className="text-[14px] font-medium leading-snug text-[var(--cc-ink)]">
+        <strong className="font-bold">Dos semanas cerradas seguidas bajo el 80% de la meta.</strong>{' '}
         Coordina una llamada con la gerencia comercial para ajustar el plan.
       </p>
     </div>
@@ -84,7 +82,7 @@ function SinSemanaEnCurso({ filas }: { filas: FilaMeta[] }) {
   return (
     <section className="pb-5">
       <p className="text-[20px] font-bold tracking-[-0.02em] text-[var(--cc-ink)]">Sin semana en curso</p>
-      <p className="mt-1 text-[13px] text-[var(--cc-ink-2)]">
+      <p className="mt-1 text-[14px] font-medium text-[var(--cc-ink-2)]">
         {todasFuturas
           ? `La temporada parte el ${rangoFechas(filas[0].fechaInicio, filas[0].fechaInicio)}.`
           : 'La temporada terminó. Este es el resultado final.'}
@@ -100,7 +98,7 @@ export function SinMetas() {
         <Target size={20} className="text-[var(--cc-gold)]" />
       </div>
       <p className="text-[15px] font-semibold text-[var(--cc-ink)]">No hay metas cargadas para esta temporada</p>
-      <p className="mt-1 max-w-[320px] text-[13px] text-[var(--cc-ink-2)]">
+      <p className="mt-1 max-w-[340px] text-[14px] font-medium text-[var(--cc-ink-2)]">
         El plan de venta oct 2026 – mar 2027 se asigna por vendedor. Si crees que es un error, avísale a la gerencia comercial.
       </p>
     </div>

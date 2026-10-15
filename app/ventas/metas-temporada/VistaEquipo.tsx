@@ -4,12 +4,12 @@ import { useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp, ChevronRight, Download } from 'lucide-react'
 import {
   type FilaMeta, type Acumulado,
-  clp, entero, pctTxt, pct, diasHabilesRestantes, colorPorPct,
+  clp, entero, pctTxt, pct, diasHabilesRestantes,
   semanaEnCurso, semanaTope, acumular, acumuladoTemporada,
-  SEMAFORO_COLOR, SEMAFORO_LABEL,
+  nivelPorPct, nivelDeSemana, NIVEL_COLOR, NIVEL_BARRA, NIVEL_LABEL,
 } from './tipos'
 import {
-  Barra, EncabezadoSemana, Indicadores, indicadoresDe, LineaRitmo,
+  BarraNivel, PctNivel, EncabezadoSemana, Indicadores, indicadoresDe, LineaRitmo,
   FranjaAcumulado, PieTemporada, Titulo,
 } from './ui'
 
@@ -61,9 +61,9 @@ export default function VistaEquipo({
     <div className="flex flex-col">
       {semanaRef && (
         <section className="pb-5">
-          {/* El equipo no tiene semáforo propio en la vista: sin chip, % con los mismos cortes. */}
-          <EncabezadoSemana prefijo="Equipo · " fila={{ ...semanaRef, semaforo: null }} />
-          <Indicadores items={indicadoresDe(semanaEquipo, colorPorPct(pct(semanaEquipo.realNeto, semanaEquipo.metaNeto)))} />
+          {/* Nivel del equipo: mismos cortes (<50 / 50–80 / ≥80) sobre la suma de las semanas en curso. */}
+          <EncabezadoSemana prefijo="Equipo · " fila={semanaRef} nivel={nivelPorPct(pct(semanaEquipo.realNeto, semanaEquipo.metaNeto))} />
+          <Indicadores items={indicadoresDe(semanaEquipo)} />
           <LineaRitmo
             falta={semanaEquipo.metaNeto - semanaEquipo.realNeto}
             dias={diasHabilesRestantes(hoy > semanaRef.fechaInicio ? hoy : semanaRef.fechaInicio, semanaRef.fechaFin)}
@@ -80,7 +80,7 @@ export default function VistaEquipo({
               <button
                 type="button"
                 onClick={() => exportarCsv(ordenado)}
-                className="ml-1 inline-flex min-h-[34px] items-center gap-1.5 rounded-[8px] border border-[var(--cc-line)] px-3 text-[12px] font-semibold text-[var(--cc-ink)] hover:bg-[var(--cc-card-2)]"
+                className="ml-1 inline-flex min-h-[34px] items-center gap-1.5 rounded-[8px] border border-[var(--cc-line)] px-3 text-[13px] font-bold text-[var(--cc-ink)] hover:bg-[var(--cc-card-2)]"
               >
                 <Download size={13} className="text-[var(--cc-gold)]" /> CSV
               </button>
@@ -107,10 +107,10 @@ function BotonOrden({ activo, desc, onClick, children }: { activo: boolean; desc
       type="button"
       onClick={onClick}
       aria-pressed={activo}
-      className="inline-flex min-h-[34px] items-center gap-1 rounded-[8px] px-2.5 text-[12px] font-semibold transition-colors"
+      className="inline-flex min-h-[34px] items-center gap-1 rounded-[8px] px-2.5 text-[13px] font-bold transition-colors"
       style={{
         background: activo ? 'var(--cc-gold-soft)' : 'transparent',
-        color: activo ? 'var(--cc-gold-deep)' : 'var(--cc-ink-2)',
+        color: activo ? 'var(--m-oro-texto)' : 'var(--cc-ink-2)',
       }}
     >
       {children}
@@ -122,64 +122,64 @@ function BotonOrden({ activo, desc, onClick, children }: { activo: boolean; desc
 // ── Ranking ──────────────────────────────────────────────────────────────────
 
 const COLS_RANKING =
-  'grid-cols-[20px_minmax(0,1fr)_auto_16px] md:grid-cols-[24px_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,0.8fr)_72px_minmax(0,1.1fr)_64px_20px]'
+  'grid-cols-[20px_minmax(0,1fr)_auto_16px] lg:grid-cols-[24px_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,0.8fr)_72px_minmax(0,1.1fr)_64px_20px]'
 
 function TablaRanking({ ranking, onElegir }: { ranking: FilaRanking[]; onElegir: (id: string) => void }) {
   return (
     <div>
-      <div className={`hidden ${COLS_RANKING} gap-x-4 border-b border-[var(--cc-line)] px-3 pb-2 text-[11px] text-[var(--cc-ink-3)] md:grid`}>
+      <div className={`hidden ${COLS_RANKING} gap-x-4 border-b border-[var(--cc-line)] px-3 pb-2 text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--cc-ink-3)] lg:grid`}>
         <span>#</span><span>Vendedor</span><span>Semana · Ventas / Meta</span><span /><span>Avance</span>
         <span>Acumulado temporada</span><span className="text-right">Clientes</span><span />
       </div>
       {ranking.map((r, i) => {
         const a = r.actual
-        const sem = a?.semaforo ?? null
+        const nivel = a ? nivelDeSemana(a) : null
         const pAcum = pct(r.acum.realNeto, r.acum.metaNeto)
         return (
           <button
             key={r.userId}
             type="button"
             onClick={() => onElegir(r.userId)}
-            className={`grid w-full ${COLS_RANKING} min-h-[56px] items-center gap-x-4 border-b border-[var(--cc-line-soft)] px-3 py-2 text-left hover:bg-[var(--cc-card-2)] md:min-h-[44px] md:py-1.5`}
+            className={`grid w-full ${COLS_RANKING} min-h-[60px] items-center gap-x-4 border-b border-[var(--cc-line-soft)] px-3 py-2.5 text-left hover:bg-[var(--cc-card-2)] lg:min-h-[52px] lg:py-2`}
           >
-            <span className="text-[13px] font-semibold tabular-nums text-[var(--cc-ink-3)]">{i + 1}</span>
+            <span className="text-[14px] font-bold tabular-nums text-[var(--cc-ink-3)]">{i + 1}</span>
 
-            <span className="flex min-w-0 flex-col md:contents">
+            <span className="flex min-w-0 flex-col lg:contents">
               <span className="min-w-0">
-                <span className="block truncate text-[14px] font-semibold text-[var(--cc-ink)]">{r.vendedor}</span>
-                <span className="block truncate text-[12px] text-[var(--cc-ink-2)]">{r.territorio}</span>
+                <span className="block truncate text-[15px] font-bold text-[var(--cc-ink)]">{r.vendedor}</span>
+                <span className="block truncate text-[13px] font-medium text-[var(--cc-ink-2)]">{r.territorio}</span>
               </span>
-              <span className="truncate text-[13px] tabular-nums text-[var(--cc-ink-2)]">
-                {a ? <><strong className="font-semibold text-[var(--cc-ink)]">{clp(a.realNeto)}</strong> / {clp(a.metaNeto)}</> : '—'}
+              <span className="truncate text-[13px] font-medium tabular-nums text-[var(--cc-ink-2)] sm:text-[14px]">
+                {a ? <><strong className="font-bold text-[var(--cc-ink)]">{clp(a.realNeto)}</strong> / {clp(a.metaNeto)}</> : '—'}
               </span>
-              <span className="hidden md:block">{a && <Barra valor={a.pctNeto} alto={6} />}</span>
+              <span className="hidden lg:block">{a && <BarraNivel valor={a.pctNeto} alto={7} />}</span>
               {/* En móvil, el acumulado va en una tercera línea */}
-              <span className="truncate text-[11px] tabular-nums text-[var(--cc-ink-3)] md:hidden">
-                Acum. {clp(r.acum.realNeto)} · {pctTxt(pAcum)}
+              <span className="truncate text-[12px] font-medium tabular-nums text-[var(--cc-ink-2)] lg:hidden">
+                Acum. {clp(r.acum.realNeto)} · <PctNivel valor={pAcum} />
               </span>
             </span>
 
-            <span className="flex flex-col items-end gap-0.5 md:items-start">
+            <span className="flex flex-col items-end gap-0.5 lg:items-start">
               <span
-                className="flex items-center gap-1.5 text-[13px] font-semibold tabular-nums"
-                style={{ color: sem ? SEMAFORO_COLOR[sem] : 'var(--cc-ink-3)' }}
-                title={sem ? SEMAFORO_LABEL[sem] : undefined}
+                className="flex items-center gap-1.5 text-[15px] font-bold tabular-nums"
+                style={{ color: nivel ? NIVEL_COLOR[nivel] : 'var(--cc-ink-3)' }}
+                title={nivel ? NIVEL_LABEL[nivel] : undefined}
               >
-                <span className="size-2 rounded-full" style={{ background: sem ? SEMAFORO_COLOR[sem] : 'var(--cc-neutral)' }} />
+                <span className="size-2.5 rounded-full" style={{ background: nivel ? NIVEL_BARRA[nivel] : 'var(--cc-neutral)' }} />
                 {a ? pctTxt(a.pctNeto) : '—'}
               </span>
-              <span className="text-[11px] tabular-nums text-[var(--cc-ink-3)] md:hidden">
+              <span className="text-[12px] font-medium tabular-nums text-[var(--cc-ink-2)] lg:hidden">
                 {a ? `${entero(a.realClientes)}/${entero(a.metaClientes)} nuevos` : ''}
               </span>
             </span>
 
-            <span className="hidden truncate text-[13px] tabular-nums text-[var(--cc-ink-2)] md:block">
-              <strong className="font-semibold text-[var(--cc-ink)]">{clp(r.acum.realNeto)}</strong> · {pctTxt(pAcum)}
+            <span className="hidden truncate text-[14px] font-medium tabular-nums text-[var(--cc-ink-2)] lg:block">
+              <strong className="font-bold text-[var(--cc-ink)]">{clp(r.acum.realNeto)}</strong> · <PctNivel valor={pAcum} />
             </span>
-            <span className="hidden text-right text-[13px] tabular-nums text-[var(--cc-ink)] md:block">
-              {a ? <>{entero(a.realClientes)}<span className="text-[var(--cc-ink-3)]">/{entero(a.metaClientes)}</span></> : '—'}
+            <span className="hidden text-right text-[14px] font-bold tabular-nums text-[var(--cc-ink)] lg:block">
+              {a ? <>{entero(a.realClientes)}<span className="font-medium text-[var(--cc-ink-2)]">/{entero(a.metaClientes)}</span></> : '—'}
             </span>
-            <ChevronRight size={16} className="justify-self-end text-[var(--cc-ink-3)]" />
+            <ChevronRight size={17} className="justify-self-end text-[var(--cc-ink-2)]" />
           </button>
         )
       })}
@@ -204,15 +204,15 @@ function MatrizSemaforos({
     <section className="border-t border-[var(--cc-line)] pb-5 pt-5">
       <Titulo
         extra={
-          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-[var(--cc-ink-2)]">
-            {(['verde', 'amarillo', 'rojo'] as const).map(s => (
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[12px] font-medium text-[var(--cc-ink-2)]">
+            {(['verde', 'naranjo', 'rojo'] as const).map(s => (
               <span key={s} className="inline-flex items-center gap-1.5">
-                <span className="size-2.5 rounded-[2px]" style={{ background: SEMAFORO_COLOR[s] }} />
-                {s === 'verde' ? '≥95%' : s === 'amarillo' ? '80–95%' : '<80%'}
+                <span className="size-3 rounded-[3px]" style={{ background: NIVEL_BARRA[s] }} />
+                {s === 'verde' ? '≥80%' : s === 'naranjo' ? '50–80%' : '<50%'}
               </span>
             ))}
             <span className="inline-flex items-center gap-1.5">
-              <span className="size-2.5 rounded-[2px] bg-[var(--cc-neutral-soft)]" /> Futura
+              <span className="size-3 rounded-[3px] bg-[var(--cc-neutral-soft)]" /> Futura
             </span>
           </div>
         }
@@ -225,8 +225,8 @@ function MatrizSemaforos({
         {semanas.map(s => (
           <span
             key={s}
-            className="flex justify-center overflow-visible whitespace-nowrap text-[10px] tabular-nums"
-            style={{ color: s === semanaActual ? 'var(--cc-gold-deep)' : 'var(--cc-ink-3)', fontWeight: s === semanaActual ? 700 : 400 }}
+            className="flex justify-center overflow-visible whitespace-nowrap text-[11px] tabular-nums"
+            style={{ color: s === semanaActual ? 'var(--m-oro-texto)' : 'var(--cc-ink-2)', fontWeight: s === semanaActual ? 800 : 500 }}
           >
             {s === semanaActual || (MARCAS.has(s) && (semanaActual === null || Math.abs(s - semanaActual) > 2)) ? s : ''}
           </span>
@@ -238,14 +238,14 @@ function MatrizSemaforos({
             <FilaMatriz key={r.userId} r={r} onElegir={onElegir}>
               {semanas.map(s => {
                 const f = porSemana.get(s)
-                const sem = f?.semaforo ?? null
+                const nivel = f ? nivelDeSemana(f) : null
                 return (
                   <span
                     key={s}
-                    title={f ? `S${s} · ${sem ? `${pctTxt(f.pctNeto)} · ${SEMAFORO_LABEL[sem]}` : 'futura'}` : `S${s} · sin meta`}
+                    title={f ? `S${s} · ${nivel ? `${pctTxt(f.pctNeto)} · ${NIVEL_LABEL[nivel]}` : 'futura'}` : `S${s} · sin meta`}
                     className="h-5 rounded-[3px] md:h-6"
                     style={{
-                      background: sem ? SEMAFORO_COLOR[sem] : 'var(--cc-neutral-soft)',
+                      background: nivel ? NIVEL_BARRA[nivel] : 'var(--cc-neutral-soft)',
                       outline: s === semanaActual ? '1.5px solid var(--cc-gold)' : undefined,
                       outlineOffset: 1,
                     }}
@@ -266,7 +266,7 @@ function FilaMatriz({ r, onElegir, children }: { r: FilaRanking; onElegir: (user
       <button
         type="button"
         onClick={() => onElegir(r.userId)}
-        className="min-h-[32px] truncate pr-2 text-left text-[12px] font-semibold text-[var(--cc-ink)] md:text-[13px]"
+        className="min-h-[32px] truncate pr-2 text-left text-[13px] font-bold text-[var(--cc-ink)] md:text-[14px]"
         title={`${r.vendedor} · ${r.territorio}`}
       >
         {r.vendedor.split(' ')[0]}
@@ -284,7 +284,7 @@ function exportarCsv(ranking: FilaRanking[]) {
   const encabezado = [
     'Territorio', 'Vendedor', 'Semana', 'Desde', 'Hasta',
     'Meta neto', 'Real neto', '% neto', 'Meta litros', 'Real litros', '% litros',
-    'Meta clientes nuevos', 'Real clientes nuevos', 'Semaforo',
+    'Meta clientes nuevos', 'Real clientes nuevos', 'Nivel',
     'Acum meta neto', 'Acum real neto', 'Acum % neto',
   ]
   const filas = ranking.map(r => {
@@ -293,7 +293,7 @@ function exportarCsv(ranking: FilaRanking[]) {
       r.territorio, r.vendedor, a ? `S${a.semana}` : '', a?.fechaInicio ?? '', a?.fechaFin ?? '',
       a ? Math.round(a.metaNeto) : '', a ? Math.round(a.realNeto) : '', a ? dec(a.pctNeto) : '',
       a ? dec(a.metaLitros) : '', a ? dec(a.realLitros) : '', a ? dec(a.pctLitros) : '',
-      a?.metaClientes ?? '', a?.realClientes ?? '', a?.semaforo ?? '',
+      a?.metaClientes ?? '', a?.realClientes ?? '', a ? NIVEL_LABEL[nivelPorPct(a.pctNeto)] : '',
       Math.round(r.acum.metaNeto), Math.round(r.acum.realNeto), dec(pct(r.acum.realNeto, r.acum.metaNeto)),
     ]
   })

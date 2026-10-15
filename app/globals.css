@@ -179,6 +179,31 @@
 .cc-root.metas-claro[data-theme="light"] {
   --cc-page: #FFFFFF;
   background: #FFFFFF;
+
+  /* Más contraste que Control Comercial (pedido: "no se contrasta bien"):
+     grises secundarios más oscuros, líneas y fondos de barra más marcados. */
+  --cc-ink: #110D09;
+  --cc-ink-2: #3B352D;
+  --cc-ink-3: #5F584E;
+  --cc-line: rgba(17, 13, 9, 0.14);
+  --cc-line-soft: rgba(17, 13, 9, 0.09);
+  --cc-neutral-soft: #E3DED5;
+
+  /* Alertas por % de avance: <50 rojo, 50–80 naranjo, ≥80 verde.
+     Tonos 700 para que el texto sobre blanco pase contraste AA. */
+  --m-rojo: #C81E1E;
+  --m-rojo-suave: #FDE8E8;
+  --m-naranjo: #C2410C;
+  --m-naranjo-suave: #FFEDD5;
+  --m-verde: #15803D;
+  --m-verde-suave: #DCFCE7;
+  /* Mismos niveles en tono vivo para barras, puntos y matriz (sin texto
+     encima): el naranjo de texto se confundía con el rojo en las barras. */
+  --m-rojo-barra: #DC2626;
+  --m-naranjo-barra: #F97316;
+  --m-verde-barra: #16A34A;
+  /* Dorado para TEXTO (el --cc-gold-deep no llega a AA en letra chica). */
+  --m-oro-texto: #85600C;
 }
 main:has(> .metas-claro) { background: #FFFFFF; }
 

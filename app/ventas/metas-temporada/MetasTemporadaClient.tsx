@@ -81,35 +81,36 @@ export default function MetasTemporadaClient({
           <button
             type="button"
             onClick={() => router.push('/')}
-            className="-ml-1 inline-flex min-h-[36px] items-center gap-1.5 px-1 text-[13px] text-[var(--cc-ink-2)] hover:text-[var(--cc-ink)]"
+            className="-ml-1 inline-flex min-h-[40px] items-center gap-1.5 px-1 text-[14px] font-semibold text-[var(--cc-ink-2)] hover:text-[var(--cc-ink)]"
           >
             <ArrowLeft size={15} /> Volver
           </button>
 
-          <div className="mt-1 flex flex-col gap-3 md:flex-row md:items-end md:justify-between md:gap-6">
-            <h1 className="flex min-w-0 items-baseline gap-3">
-              <span className="text-[30px] font-bold leading-none tracking-[-0.03em] text-[var(--cc-ink)] md:text-[32px]">Metas</span>
-              <span className="truncate text-[15px] text-[var(--cc-ink-2)]">Temporada 2026–27</span>
-            </h1>
+          <h1 className="mt-1 flex min-w-0 items-baseline gap-3">
+            <span className="text-[30px] font-bold leading-none tracking-[-0.03em] text-[var(--cc-ink)] md:text-[34px]">Metas</span>
+            <span className="truncate text-[16px] font-medium text-[var(--cc-ink-2)]">Temporada 2026–27</span>
+          </h1>
 
-            <div className="min-w-0 md:text-right">
-              {esAdmin && vendedores.length > 0 && (
-                <div
-                  role="tablist"
-                  aria-label="Ver metas de"
-                  className="flex flex-wrap justify-between border-b border-[var(--cc-line)] md:justify-end md:gap-2 md:border-b-0"
-                >
-                  <Pestana activa={!seleccionado} onClick={() => elegir(EQUIPO)}>Equipo</Pestana>
-                  {vendedores.map(v => (
-                    <Pestana key={v.userId} activa={seleccionado?.userId === v.userId} onClick={() => elegir(v.userId)}>
-                      {v.vendedor.split(' ')[0]}
-                    </Pestana>
-                  ))}
-                </div>
-              )}
-              {contexto && <p className="mt-2 truncate text-[12px] text-[var(--cc-ink-2)]">{contexto}</p>}
+          {/* Selector centrado y protagonista (pedido: arriba a la derecha quedaba escondido) */}
+          {esAdmin && vendedores.length > 0 && (
+            <div className="mt-5 flex justify-center">
+              <div
+                role="tablist"
+                aria-label="Ver metas de"
+                className="flex w-full gap-0.5 rounded-[14px] bg-[#EEEAE2] p-1 md:w-auto md:gap-1"
+              >
+                <Pestana activa={!seleccionado} onClick={() => elegir(EQUIPO)}>Equipo</Pestana>
+                {vendedores.map(v => (
+                  <Pestana key={v.userId} activa={seleccionado?.userId === v.userId} onClick={() => elegir(v.userId)}>
+                    {v.vendedor.split(' ')[0]}
+                  </Pestana>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
+          {contexto && (
+            <p className={`mt-3 truncate text-[14px] font-medium text-[var(--cc-ink-2)] ${esAdmin ? 'text-center' : ''}`}>{contexto}</p>
+          )}
         </header>
 
         <div className="border-t border-[var(--cc-line)] pt-5">{contenido}</div>
@@ -125,12 +126,14 @@ function Pestana({ activa, onClick, children }: { activa: boolean; onClick: () =
       role="tab"
       aria-selected={activa}
       onClick={onClick}
-      className="-mb-px min-h-[40px] border-b-2 px-2 text-[13px] transition-colors md:px-3"
-      style={{
-        borderColor: activa ? 'var(--cc-gold)' : 'transparent',
-        color: activa ? 'var(--cc-gold-deep)' : 'var(--cc-ink-2)',
-        fontWeight: activa ? 600 : 400,
-      }}
+      // Colores por clase, no inline: las reglas de contraste de [data-theme="light"]
+      // (globals.css) reescriben cualquier `color:#FFFFFF` inline y el texto activo
+      // quedaba oscuro sobre fondo oscuro.
+      className={`min-h-[44px] min-w-0 flex-1 truncate rounded-[10px] px-1 text-[13px] font-bold tracking-[-0.01em] sm:px-3 sm:text-[14px] md:min-w-[112px] md:flex-none md:px-5 md:text-[16px] ${
+        activa
+          ? 'bg-[var(--cc-ink)] text-[var(--cc-on-gold)] shadow-[0_1px_3px_rgba(17,13,9,0.25)]'
+          : 'text-[var(--cc-ink-2)] hover:bg-white/60 hover:text-[var(--cc-ink)]'
+      }`}
     >
       {children}
     </button>

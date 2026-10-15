@@ -159,32 +159,43 @@ export function dosRojasSeguidas(filas: FilaMeta[]) {
   return cerradas.slice(-2).every(f => f.semaforo === 'rojo')
 }
 
-// ── Semáforo ─────────────────────────────────────────────────────────────────
-// Pantalla clara: tokens --cc-* de Control Comercial (globals.css,
-// .cc-root[data-theme="light"]), los mismos que usa el resto de vistas claras.
+// ── Alertas por color ────────────────────────────────────────────────────────
+// Pedido de Claudio (15-oct-2026): todo % de avance se pinta con estos cortes,
+// en números, barras y matriz: <50% rojo, 50–80% naranjo, ≥80% verde.
+// Ojo: NO son los cortes del campo `semaforo` de la vista (95/80); ese campo se
+// sigue usando solo para la alerta de "dos semanas cerradas bajo 80%".
+// Colores: tokens --m-* definidos en globals.css (.metas-claro).
 
-export const SEMAFORO_COLOR: Record<Semaforo, string> = {
-  verde: 'var(--cc-green)',
-  amarillo: 'var(--cc-amber)',
-  rojo: 'var(--cc-red)',
+export type Nivel = 'verde' | 'naranjo' | 'rojo'
+
+export const nivelPorPct = (p: number): Nivel => (p < 50 ? 'rojo' : p < 80 ? 'naranjo' : 'verde')
+
+export const NIVEL_COLOR: Record<Nivel, string> = {
+  verde: 'var(--m-verde)',
+  naranjo: 'var(--m-naranjo)',
+  rojo: 'var(--m-rojo)',
 }
 
-export const SEMAFORO_FONDO: Record<Semaforo, string> = {
-  verde: 'var(--cc-green-soft)',
-  amarillo: 'var(--cc-amber-soft)',
-  rojo: 'var(--cc-red-soft)',
+/** Tono vivo para barras, puntos y celdas de la matriz (no lleva texto encima). */
+export const NIVEL_BARRA: Record<Nivel, string> = {
+  verde: 'var(--m-verde-barra)',
+  naranjo: 'var(--m-naranjo-barra)',
+  rojo: 'var(--m-rojo-barra)',
 }
 
-/**
- * Color de un % que NO trae semáforo de la vista (clientes nuevos, totales del
- * equipo). Mismos cortes que la vista: ≥95 verde, ≥80 ámbar, <80 rojo.
- */
-export function colorPorPct(p: number) {
-  return p >= 95 ? 'var(--cc-green)' : p >= 80 ? 'var(--cc-amber)' : 'var(--cc-red)'
+export const NIVEL_FONDO: Record<Nivel, string> = {
+  verde: 'var(--m-verde-suave)',
+  naranjo: 'var(--m-naranjo-suave)',
+  rojo: 'var(--m-rojo-suave)',
 }
 
-export const SEMAFORO_LABEL: Record<Semaforo, string> = {
-  verde: 'En meta',
-  amarillo: 'En riesgo',
-  rojo: 'Bajo meta',
+export const NIVEL_LABEL: Record<Nivel, string> = {
+  verde: 'Buen avance',
+  naranjo: 'En riesgo',
+  rojo: 'Crítico',
 }
+
+export const colorPorPct = (p: number) => NIVEL_COLOR[nivelPorPct(p)]
+
+/** Semana futura = sin nivel (todavía no hay nada que medir). */
+export const nivelDeSemana = (f: FilaMeta): Nivel | null => (f.estado === 'futura' ? null : nivelPorPct(f.pctNeto))

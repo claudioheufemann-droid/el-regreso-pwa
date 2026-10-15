@@ -7,10 +7,10 @@ export default function MetasTemporadaLoading() {
       <div className="mx-auto w-full max-w-[1400px]">
         <div className="pb-4">
           <div className="my-2 h-4 w-16 rounded sk-metas" />
-          <div className="mt-1 flex items-end justify-between gap-4">
-            <div className="h-8 w-56 rounded-md sk-metas" />
-            <div className="hidden h-6 w-72 rounded sk-metas md:block" />
-          </div>
+          <div className="mt-1 h-8 w-56 rounded-md sk-metas" />
+          {/* Selector centrado (mismo alto que el real: 44px + padding) */}
+          <div className="mx-auto mt-5 h-[52px] w-full rounded-[14px] sk-metas md:w-[584px]" />
+          <div className="mx-auto mt-3 h-4 w-64 rounded sk-metas" />
         </div>
         <div className="border-t border-[var(--cc-line)] pt-5">
           <div className="mb-4 h-6 w-64 rounded sk-metas" />
