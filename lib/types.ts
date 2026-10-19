@@ -186,8 +186,83 @@ export function grupoCarteraDe(vendedor: string | null | undefined): GrupoCarter
   return (VENDEDORES_CARTERA_COBRANZA as readonly string[]).includes(canonico) ? 'vendedor' : 'otros'
 }
 
-/** Nombre corto para chips y tarjetas ("Nicol Delgado" → "Nicol"). */
-export const nombreCorto = (v: string) => v.split(' ')[0]
+/**
+ * Etiqueta con que la app MUESTRA cada cartera de venta — decisión de
+ * Claudio, 2026-10-19: en pantalla se ve la zona/canal, no el nombre de la
+ * persona. Es SÓLO display: los datos, filtros, queries, permisos y
+ * comisiones siguen usando el nombre canónico (clave de este mapa).
+ * Para cambiar una etiqueta, se edita acá y nada más.
+ */
+export const ETIQUETA_CARTERA: Record<string, { larga: string; corta: string; ini: string }> = {
+  'Yadro Fabijancic':  { larga: 'Región Metropolitana',   corta: 'Metropolitana', ini: 'RM' },
+  'Marion Meza':       { larga: 'Región de los Lagos',    corta: 'Los Lagos',     ini: 'LL' },
+  'Nicol Delgado':     { larga: 'Región de los Ríos',     corta: 'Los Ríos',      ini: 'LR' },
+  'Marcelo Diaz':      { larga: 'Región de la Araucanía', corta: 'Araucanía',     ini: 'AR' },
+  'Claudio Heufemann': { larga: 'Retail',                 corta: 'Retail',        ini: 'RE' },
+}
+
+/** Otros nombres con que aparece la misma persona (login de la app, nombre
+ *  de región crudo del ERP) → nombre canónico de ETIQUETA_CARTERA. */
+const NOMBRE_A_CARTERA: Record<string, string> = {
+  // Primer nombre: así los guarda territorios_responsables (Control comercial)
+  'Yadro':                  'Yadro Fabijancic',
+  'Nicol':                  'Nicol Delgado',
+  'Marcelo':                'Marcelo Diaz',
+  'Claudio':                'Claudio Heufemann',
+  'Claudio H.':             'Claudio Heufemann',
+  'Marcelo D.':             'Marcelo Diaz',
+  'Región Metropolitana':   'Yadro Fabijancic',
+  'Región de la Araucanía': 'Marcelo Diaz',
+  'Región de los Ríos':     'Nicol Delgado',
+  'R. de los Ríos':         'Nicol Delgado',
+  'Región de los Lagos':    'Marion Meza',
+  'R. de los Lagos':        'Marion Meza',
+}
+
+// La etiqueta misma también resuelve, así aplicar el helper dos veces no rompe nada
+const ETIQUETA_A_CARTERA: Record<string, string> = Object.fromEntries(
+  Object.entries(ETIQUETA_CARTERA).map(([canonico, e]) => [e.larga, canonico]),
+)
+
+function carteraDe(nombre: string): string | null {
+  const n = nombre.trim()
+  const c = NOMBRE_A_CARTERA[n] ?? ETIQUETA_A_CARTERA[n] ?? vendedorCanonico(n)
+  if (ETIQUETA_CARTERA[c]) return c
+  // El ERP a veces trae el correo con otra capitalización
+  const lower = vendedorCanonico(n.toLowerCase())
+  return ETIQUETA_CARTERA[lower] ? lower : null
+}
+
+/** Nombre a MOSTRAR de un vendedor ("Nicol Delgado" → "Región de los Ríos").
+ *  Acepta cualquier variante (ERP, alias, login). Si no es una cartera con
+ *  etiqueta, devuelve el nombre tal cual. */
+export function etiquetaVendedor(nombre: string | null | undefined): string {
+  if (!nombre) return ''
+  const c = carteraDe(nombre)
+  return c ? ETIQUETA_CARTERA[c].larga : nombre
+}
+
+/** Igual que etiquetaVendedor pero, si no es una cartera con etiqueta, cae al
+ *  grupo de VENDEDOR_DISPLAY (ex-vendedores → "Equipo Ventas") y a '—'. */
+export function dspVendedor(v: string | null | undefined): string {
+  if (!v) return '—'
+  return carteraDe(v) ? etiquetaVendedor(v) : (VENDEDOR_DISPLAY[v] ?? v)
+}
+
+/** Iniciales para avatares: la de la zona si es cartera ("RM"), si no las
+ *  del nombre ("Douglas Koenig" → "DK"). */
+export function inicialesVendedor(v: string | null | undefined): string {
+  if (!v) return ''
+  const c = carteraDe(v)
+  if (c) return ETIQUETA_CARTERA[c].ini
+  return v.split(/\s+/).filter(Boolean).map(p => p[0]).join('').slice(0, 2).toUpperCase()
+}
+
+/** Nombre corto para chips y tarjetas ("Nicol Delgado" → "Los Ríos"). */
+export const nombreCorto = (v: string) => {
+  const c = carteraDe(v ?? '')
+  return c ? ETIQUETA_CARTERA[c].corta : (v ?? '').split(' ')[0]
+}
 
 export const CATEGORIAS_NEGOCIO = [
   'Bar',

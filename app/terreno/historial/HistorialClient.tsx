@@ -7,6 +7,7 @@ import { useIsDesktop } from '@/lib/useIsDesktop'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { SLOTS_FOTO, fotosCompletas } from '@/lib/fotosVisita'
+import { nombreCorto } from '@/lib/types'
 
 const T        = '#0F172A'   // acento del tema claro (antes dorado)
 const T_DIM    = '#EFF6FF'
@@ -480,7 +481,7 @@ function VisitaCard({ visita, items, deudor, ventasHist, visitasCliente, itemsPo
                   {visita.completada_at ? ` → ${fmtHora(visita.completada_at)}` : ''}
                 </span>
                 {vendedorNombre && (
-                  <span style={{ fontSize: 11, color: '#64748B' }}>· {vendedorNombre.split(' ')[0]}</span>
+                  <span style={{ fontSize: 11, color: '#64748B' }}>· {nombreCorto(vendedorNombre)}</span>
                 )}
                 {fotoEntries.length > 0 && (
                   <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, color: '#64748B' }}>

@@ -2,9 +2,9 @@
 
 import { useState } from 'react'
 import { Plus, Trash2, Loader2, CheckCircle } from 'lucide-react'
-import { Meta, Periodo, VENDEDOR_DISPLAY } from '@/lib/types'
+import { Meta, Periodo, dspVendedor, nombreCorto } from '@/lib/types'
 
-const dspV = (v: string | null | undefined) => VENDEDOR_DISPLAY[v ?? ''] ?? v ?? '—'
+const dspV = dspVendedor
 
 const CATEGORIAS = [
   'Total', 'Bar', 'Minimarket', 'Cafetería', 'Botillería',
@@ -156,7 +156,7 @@ export default function MetasAdminClient({ periodos, metas: initialMetas, vended
                 onFocus={inputFocusHandler}
                 onBlur={inputBlurHandler}
               >
-                {vendedores.map(v => <option key={v} value={v}>{v.split(' ')[0]}</option>)}
+                {vendedores.map(v => <option key={v} value={v}>{nombreCorto(v)}</option>)}
               </select>
             </div>
             <div>

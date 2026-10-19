@@ -6,6 +6,7 @@ import { CheckCircle2, Users, Clock3, Flag } from 'lucide-react'
 import { C, cardStyle } from '../theme'
 import PeriodoFiltro from './PeriodoFiltro'
 import type { TipoPeriodo } from '@/lib/terreno/tiempoChile'
+import { etiquetaVendedor } from '@/lib/types'
 
 // Leaflet toca `window` al importarse — igual que MiniMapaCercanos, tiene que
 // cargar sólo en el cliente o rompe el render de servidor ("window is not
@@ -94,8 +95,8 @@ export default function ResumenClient({
               <tr key={v.id} style={{ borderTop: `1px solid ${C.line}` }}>
                 <td style={{ padding: '11px 10px' }}>
                   <Link href={`/terreno/admin/rutas/${v.id}?tipo=${tipo}&fecha=${fecha}`} style={{ textDecoration: 'none' }}>
-                    <p style={{ fontSize: 13.5, fontWeight: 700, color: C.text }}>{v.nombre}</p>
-                    {v.region && <p style={{ fontSize: 11.5, color: C.muted }}>{v.region}</p>}
+                    <p style={{ fontSize: 13.5, fontWeight: 700, color: C.text }}>{etiquetaVendedor(v.nombre)}</p>
+                    {v.region && etiquetaVendedor(v.nombre) === v.nombre && <p style={{ fontSize: 11.5, color: C.muted }}>{v.region}</p>}
                   </Link>
                 </td>
                 <td style={{ padding: '11px 10px', fontSize: 14, fontWeight: 700, color: C.text }}>{v.verificadas}</td>
@@ -151,7 +152,7 @@ export default function ResumenClient({
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontSize: 13, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.clienteNombre}</p>
-                    <p style={{ fontSize: 11.5, color: C.muted }}>{v.vendedorNombre} · {fHora(v.iniciadaAt)}</p>
+                    <p style={{ fontSize: 11.5, color: C.muted }}>{etiquetaVendedor(v.vendedorNombre)} · {fHora(v.iniciadaAt)}</p>
                   </div>
                   <span style={{ fontSize: 11, fontWeight: 700, color: est.color, background: est.bg, borderRadius: 100, padding: '3px 8px', flexShrink: 0, whiteSpace: 'nowrap' }}>
                     {est.l}

@@ -17,6 +17,7 @@ const SecuenciaMapa = dynamic(() => import('../../SecuenciaMapa'), {
 })
 import { MOTIVO_LABEL, type MotivoRevision } from '@/lib/terreno/verificacion'
 import { fDistancia } from '@/lib/terreno/formato'
+import { etiquetaVendedor } from '@/lib/types'
 
 export interface ParadaDetalle {
   id: string
@@ -97,12 +98,12 @@ export default function RutaVendedorClient({
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: C.muted, marginBottom: 6 }}>
         <Link href="/terreno/admin" style={{ color: C.muted, textDecoration: 'none' }}>Equipo</Link>
         <ChevronRight size={12} />
-        <span style={{ color: C.text, fontWeight: 700 }}>{vendedorNombre}</span>
+        <span style={{ color: C.text, fontWeight: 700 }}>{etiquetaVendedor(vendedorNombre)}</span>
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 900, color: C.text, letterSpacing: '-0.4px' }}>Visitas de {vendedorNombre}</h1>
+          <h1 style={{ fontSize: 24, fontWeight: 900, color: C.text, letterSpacing: '-0.4px' }}>Visitas de {etiquetaVendedor(vendedorNombre)}</h1>
           {vendedorRegion && <p style={{ fontSize: 13, color: C.muted }}>{vendedorRegion}</p>}
         </div>
         <select
@@ -110,7 +111,7 @@ export default function RutaVendedorClient({
           onChange={e => router.push(`/terreno/admin/rutas/${e.target.value}?tipo=${tipo}&fecha=${fecha}`)}
           style={{ minHeight: 38, padding: '0 12px', borderRadius: 10, border: `1px solid ${C.line}`, background: C.card, fontSize: 13, fontWeight: 600, color: C.text }}
         >
-          {todosVendedores.map(v => <option key={v.id} value={v.id}>{v.nombre}</option>)}
+          {todosVendedores.map(v => <option key={v.id} value={v.id}>{etiquetaVendedor(v.nombre)}</option>)}
         </select>
       </div>
 

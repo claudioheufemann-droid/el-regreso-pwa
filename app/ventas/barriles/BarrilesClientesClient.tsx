@@ -11,6 +11,7 @@ import { useUser } from '@/lib/userContext'
 import NotificationsBell from '@/components/ui/NotificationsBell'
 import SettingsPanel from '@/components/ui/SettingsPanel'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
+import { nombreCorto, dspVendedor } from '@/lib/types'
 
 interface Barril {
   id: number
@@ -141,7 +142,7 @@ function ClienteCard({ g, abierto, onToggle, onWA }: {
           <div style={{ flex: 1, minWidth: 0 }}>
             <p style={{ fontSize: 14, fontWeight: 800, color: MC.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.nombre}</p>
             <p style={{ fontSize: 11.5, color: MC.muted, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {g.localidad ?? '—'}{g.vendedor ? ` · ${g.vendedor.split(' ')[0]}` : ''}
+              {g.localidad ?? '—'}{g.vendedor ? ` · ${nombreCorto(g.vendedor)}` : ''}
             </p>
           </div>
           <span style={{ fontSize: 10.5, fontWeight: 700, padding: '4px 9px', borderRadius: 20, flexShrink: 0, color: bucketColor.fg, background: bucketColor.bg }}>
@@ -407,7 +408,7 @@ function BarrilesTablaDesktop({ initialBarriles, isAdmin }: { initialBarriles: B
             <label style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 700, display: 'block', marginBottom: 6 }}>VENDEDOR</label>
             <select value={filterVendedor} onChange={e => setFilterVendedor(e.target.value)} style={selectStyle}>
               <option value="">Todos</option>
-              {vendedores.map(v => <option key={v} value={v}>{v}</option>)}
+              {vendedores.map(v => <option key={v} value={v}>{dspVendedor(v)}</option>)}
             </select>
           </div>
         )}
@@ -436,7 +437,7 @@ function BarrilesTablaDesktop({ initialBarriles, isAdmin }: { initialBarriles: B
                     <tr key={g.nombre} onClick={() => setExpandedRow(expandedRow === g.nombre ? null : g.nombre)}
                       style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer', background: expandedRow === g.nombre ? 'rgba(212,175,55,0.04)' : 'transparent' }}>
                       <td style={{ padding: '11px 14px', fontWeight: 700, color: 'var(--cream)' }}>{g.nombre}</td>
-                      {isAdmin && <td style={{ padding: '11px 14px', color: 'var(--muted)' }}>{g.vendedor || '—'}</td>}
+                      {isAdmin && <td style={{ padding: '11px 14px', color: 'var(--muted)' }}>{dspVendedor(g.vendedor)}</td>}
                       <td style={{ padding: '11px 14px', textAlign: 'right', fontWeight: 700, color: '#60a5fa' }}>{g.barriles.length}</td>
                       <td style={{ padding: '11px 14px', color: (g.peorDias ?? 0) >= 90 ? '#f87171' : (g.peorDias ?? 0) >= 30 ? '#D4AF37' : 'var(--muted)', fontWeight: 700 }}>
                         {g.peorDias !== null ? `${g.peorDias} días` : '—'}

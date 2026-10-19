@@ -7,6 +7,7 @@ import { C, cardStyle } from '../../theme'
 import PeriodoFiltro from '../PeriodoFiltro'
 import type { TipoPeriodo } from '@/lib/terreno/tiempoChile'
 import { fmtPrecioCLP } from '@/lib/catalogo-productos'
+import { etiquetaVendedor } from '@/lib/types'
 
 export interface FilaVisita {
   id: string
@@ -82,7 +83,7 @@ export default function VisitasAdminClient({ tipo, fecha, rangoTexto, filas }: {
                       {f.clienteNombre}
                     </Link>
                   </td>
-                  <td style={{ padding: '10px 12px', fontSize: 13, color: C.muted }}>{f.vendedorNombre}</td>
+                  <td style={{ padding: '10px 12px', fontSize: 13, color: C.muted }}>{etiquetaVendedor(f.vendedorNombre)}</td>
                   <td style={{ padding: '10px 12px', fontSize: 13, color: C.muted, whiteSpace: 'nowrap' }}>{fHora(f.iniciadaAt)}</td>
                   <td style={{ padding: '10px 12px' }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: est.color, background: est.bg, borderRadius: 100, padding: '3px 9px', whiteSpace: 'nowrap' }}>{est.l}</span>

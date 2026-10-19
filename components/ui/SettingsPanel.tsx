@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useUser } from '@/lib/userContext'
+import { etiquetaVendedor } from '@/lib/types'
 
 interface Props {
   onClose: () => void
@@ -453,7 +454,7 @@ export default function SettingsPanel({ onClose, userName, userEmail, avatarUrl:
                     >
                       <option value="">Selecciona…</option>
                       {vendedores.map(v => (
-                        <option key={v.id} value={v.id}>{v.nombre}{v.region ? ` — ${v.region}` : ''}</option>
+                        <option key={v.id} value={v.id}>{etiquetaVendedor(v.nombre)}{v.region && etiquetaVendedor(v.nombre) === v.nombre ? ` — ${v.region}` : ''}</option>
                       ))}
                     </select>
                   </div>

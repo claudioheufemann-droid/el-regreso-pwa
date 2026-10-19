@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { CalendarClock } from 'lucide-react'
 import Logo from '@/components/ui/Logo'
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States'
+import { dspVendedor } from '@/lib/types'
 
 interface Jornada {
   id: string
@@ -144,7 +145,7 @@ export default function JornadasAdminPage() {
                   border: `1px solid ${j.requiere_revision && j.estado === 'cerrada' ? 'rgba(255,68,68,0.25)' : 'rgba(255,255,255,0.06)'}`,
                 }}>
                   <div>
-                    <p style={{ fontSize: 13, fontWeight: 800, color: '#F4EEDF' }}>{j.vendedor?.nombre ?? '—'}</p>
+                    <p style={{ fontSize: 13, fontWeight: 800, color: '#F4EEDF' }}>{dspVendedor(j.vendedor?.nombre)}</p>
                     <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>{new Date(j.fecha).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
                   </div>
                   <div>

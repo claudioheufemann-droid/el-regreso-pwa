@@ -6,6 +6,7 @@ import { ArrowLeft, RefreshCw } from 'lucide-react'
 import { type FilaMeta, type Escala, semanaInicial } from './tipos'
 import VistaVendedor, { SinMetas } from './VistaVendedor'
 import VistaEquipo, { type VendedorPlan } from './VistaEquipo'
+import { etiquetaVendedor, nombreCorto } from '@/lib/types'
 
 const EQUIPO = '__equipo__'
 
@@ -56,11 +57,11 @@ export default function MetasTemporadaClient({
 
   let contexto: React.ReactNode = null
   if (esAdmin && seleccionado) {
-    contexto = <>Viendo lo mismo que ve <strong className="font-semibold text-[var(--cc-ink)]">{seleccionado.vendedor}</strong> · {seleccionado.territorio}</>
+    contexto = <>Viendo lo mismo que ve <strong className="font-semibold text-[var(--cc-ink)]">{etiquetaVendedor(seleccionado.vendedor)}</strong> · {seleccionado.territorio}</>
   } else if (esAdmin && vendedores.length) {
     contexto = <>Vista del equipo · {vendedores.length} vendedores</>
   } else if (seleccionado) {
-    contexto = <><strong className="font-semibold text-[var(--cc-ink)]">{seleccionado.vendedor}</strong> · {seleccionado.territorio}</>
+    contexto = <><strong className="font-semibold text-[var(--cc-ink)]">{etiquetaVendedor(seleccionado.vendedor)}</strong> · {seleccionado.territorio}</>
   }
 
   let contenido: React.ReactNode
@@ -116,7 +117,7 @@ export default function MetasTemporadaClient({
                 <Pestana activa={!seleccionado} onClick={() => elegir(EQUIPO)}>Equipo</Pestana>
                 {vendedores.map(v => (
                   <Pestana key={v.userId} activa={seleccionado?.userId === v.userId} onClick={() => elegir(v.userId)}>
-                    {v.vendedor.split(' ')[0]}
+                    {nombreCorto(v.vendedor)}
                   </Pestana>
                 ))}
               </div>

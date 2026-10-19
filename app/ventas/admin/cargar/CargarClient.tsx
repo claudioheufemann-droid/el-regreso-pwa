@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { Upload, CheckCircle, AlertCircle, FileSpreadsheet, Loader2, Settings, Calendar, Droplets, Copy, AlertTriangle, ShieldCheck } from 'lucide-react'
-import { Periodo } from '@/lib/types'
+import { Periodo, etiquetaVendedor } from '@/lib/types'
 import { useIsDesktop } from '@/lib/useIsDesktop'
 import Link from 'next/link'
 
@@ -276,7 +276,7 @@ const [file, setFile] = useState<File | null>(null)
                     background: 'var(--surface)', border: '1px solid var(--border)',
                   }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>{v.nombre}</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>{etiquetaVendedor(v.nombre)}</span>
                       <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: 'rgba(96,165,250,0.1)', color: '#D4AF37' }}>
                         {v.filas} filas
                       </span>
@@ -465,7 +465,7 @@ const [file, setFile] = useState<File | null>(null)
                   {result.vendedores.map(v => (
                     <div key={v.nombre} style={{ borderRadius: 10, padding: '10px 14px', background: 'rgba(52,211,153,0.07)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: 'white' }}>{v.nombre}</span>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: 'white' }}>{etiquetaVendedor(v.nombre)}</span>
                         <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: 'rgba(52,211,153,0.15)', color: '#5A8A4A' }}>
                           {v.filas} filas
                         </span>

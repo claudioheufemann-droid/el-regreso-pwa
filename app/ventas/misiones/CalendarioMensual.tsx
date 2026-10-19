@@ -4,9 +4,9 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronLeft, ChevronRight, Loader2, MessageCircle, Phone, Droplets, CalendarDays } from 'lucide-react'
 import { SEG_COLOR } from '@/lib/theme'
-import { VENDEDOR_DISPLAY } from '@/lib/types'
+import { dspVendedor } from '@/lib/types'
 
-const dspV = (v: string | null | undefined) => VENDEDOR_DISPLAY[v ?? ''] ?? v ?? '—'
+const dspV = dspVendedor
 
 interface PedidoEsperado {
   nombre_fantasia: string

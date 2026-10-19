@@ -13,6 +13,7 @@ import {
   BarraNivel, PctNivel, ResumenSemana, SelectorSemana, opcionesSemana,
   FranjaAcumulado, PieTemporada, Titulo,
 } from './ui'
+import { etiquetaVendedor, nombreCorto } from '@/lib/types'
 
 export interface VendedorPlan {
   userId: string
@@ -166,7 +167,7 @@ function TablaRanking({ ranking, nombre, onElegir }: { ranking: FilaRanking[]; n
 
             <span className="flex min-w-0 flex-col lg:contents">
               <span className="min-w-0">
-                <span className="block truncate text-[15px] font-bold text-[var(--cc-ink)]">{r.vendedor}</span>
+                <span className="block truncate text-[15px] font-bold text-[var(--cc-ink)]">{etiquetaVendedor(r.vendedor)}</span>
                 <span className="block truncate text-[13px] font-medium text-[var(--cc-ink-2)]">{r.territorio}</span>
               </span>
               <span className="truncate text-[13px] font-medium tabular-nums text-[var(--cc-ink-2)] sm:text-[14px]">
@@ -308,9 +309,9 @@ function FilaMatriz({ r, onElegir, children }: { r: FilaRanking; onElegir: (user
         type="button"
         onClick={() => onElegir(r.userId)}
         className="min-h-[32px] truncate pr-2 text-left text-[13px] font-bold text-[var(--cc-ink)] md:text-[14px]"
-        title={`${r.vendedor} · ${r.territorio}`}
+        title={`${etiquetaVendedor(r.vendedor)} · ${r.territorio}`}
       >
-        {r.vendedor.split(' ')[0]}
+        {nombreCorto(r.vendedor)}
       </button>
       {children}
     </>
@@ -331,7 +332,7 @@ function exportarCsv(ranking: FilaRanking[]) {
   const filas = ranking.map(r => {
     const a = r.actual
     return [
-      r.territorio, r.vendedor, a ? a.nombre : '', a?.fechaInicio ?? '', a?.fechaFin ?? '',
+      r.territorio, etiquetaVendedor(r.vendedor), a ? a.nombre : '', a?.fechaInicio ?? '', a?.fechaFin ?? '',
       a ? Math.round(a.metaNeto) : '', a ? Math.round(a.realNeto) : '', a ? dec(a.pctNeto) : '',
       a ? dec(a.metaLitros) : '', a ? dec(a.realLitros) : '', a ? dec(a.pctLitros) : '',
       a?.metaClientes ?? '', a?.realClientes ?? '', a && a.estado !== 'futura' ? NIVEL_LABEL[nivelPorPct(a.pctNeto)] : '',

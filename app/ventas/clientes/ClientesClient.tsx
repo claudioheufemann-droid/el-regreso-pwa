@@ -14,7 +14,7 @@ import type { ActividadItem } from './page'
 import AppHeader from '@/components/ui/AppHeader'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
 import { VEND_COLOR, SEG_COLOR } from '@/lib/theme'
-import { vendedorCanonico, VENDEDORES_CARTERA_ACTIVAS } from '@/lib/types'
+import { vendedorCanonico, VENDEDORES_CARTERA_ACTIVAS, nombreCorto, etiquetaVendedor, dspVendedor } from '@/lib/types'
 import { formatLocalidad } from '@/lib/format'
 import {
   type FrequencyStat, type StockBand, calcularStock, riesgoDeBand,
@@ -320,7 +320,7 @@ function ClienteRow({ c, onClick, onWA }: { c: Cliente; onClick: () => void; onW
               {c.nombre_fantasia}
             </p>
             <div style={{ display:'flex', alignItems:'center', gap:5, marginTop:2 }}>
-              <span style={{ fontSize:10, color:vendColor, fontWeight:700 }}>{vendedorCanonico(c.vendedor).split(' ')[0]}</span>
+              <span style={{ fontSize:10, color:vendColor, fontWeight:700 }}>{nombreCorto(vendedorCanonico(c.vendedor))}</span>
               {(c.localidad_entrega || c.localidad) && (
                 <span style={{ fontSize:10, color:'#555' }}>· {formatLocalidad(c.localidad_entrega || c.localidad)}</span>
               )}
@@ -493,7 +493,7 @@ function StockClienteCard({ c, onClick, onWA }: { c: Cliente; onClick: () => voi
           <p style={{ fontSize:12, color:MC.muted, marginTop:1,
             overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
             {(c.localidad_entrega || c.localidad) ? formatLocalidad(c.localidad_entrega || c.localidad) : '—'}
-            {' · '}{vendedorCanonico(c.vendedor).split(' ')[0]}
+            {' · '}{nombreCorto(vendedorCanonico(c.vendedor))}
           </p>
         </div>
         <span style={{ fontSize:11, fontWeight:700, padding:'5px 11px', borderRadius:20, flexShrink:0,
@@ -914,7 +914,7 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
           {/* Macros por vendedor (solo admin) — filtro rápido de cartera */}
           {isAdmin && (
             <div style={{ display:'flex', gap:8, overflowX:'auto', paddingBottom:10 }}>
-              {[{ key:'all', label:'Todos los vendedores' }, ...VENDEDORES_CARTERA_ACTIVAS.map(v => ({ key:v, label:v.split(' ')[0] }))].map(v=>{
+              {[{ key:'all', label:'Todos los vendedores' }, ...VENDEDORES_CARTERA_ACTIVAS.map(v => ({ key:v, label:etiquetaVendedor(v) }))].map(v=>{
                 const active = vendFiltro===v.key
                 const vendColor = v.key==='all' ? MC.text : (VEND_COLOR[v.key] ?? MC.blue)
                 return (
@@ -1022,7 +1022,7 @@ export default function ClientesClient({ clientes, periodo, totalesPorVendedor, 
               {isAdmin && (
                 <div style={{ display:'flex', gap:4, background:'rgba(255,255,255,0.04)', border:'1px solid var(--border)', borderRadius:10, padding:'3px' }}>
                   {['all', ...vendedoresScope].map(v=>{
-                    const label = v==='all' ? 'Todos' : v
+                    const label = v==='all' ? 'Todos' : dspVendedor(v)
                     const active = vendFiltro===v
                     return (
                       <button key={v} onClick={()=>handleVend(v)}

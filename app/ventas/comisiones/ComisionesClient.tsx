@@ -224,22 +224,22 @@ export default function ComisionesClient({ user, periodoInicial, periodosDisponi
           <MiComisionVendedor
             key={`marcelo_${periodo.desde}_${periodo.hasta}`}
             desde={periodo.desde} hasta={periodo.hasta} nombrePeriodo={periodo.nombre}
-            vendedor="Marcelo Diaz" nombreMostrar="Marcelo"
+            vendedor="Marcelo Diaz" nombreMostrar="Región de la Araucanía"
           />
           <MiComisionVendedor
             key={`yadro_${periodo.desde}_${periodo.hasta}`}
             desde={periodo.desde} hasta={periodo.hasta} nombrePeriodo={periodo.nombre}
-            vendedor="Yadro Fabijancic" nombreMostrar="Yadro"
+            vendedor="Yadro Fabijancic" nombreMostrar="Región Metropolitana"
           />
           <MiComisionVendedor
             key={`nicol_${periodo.desde}_${periodo.hasta}`}
             desde={periodo.desde} hasta={periodo.hasta} nombrePeriodo={periodo.nombre}
-            vendedor="nicol.delgado@elregresobeer.com" nombreMostrar="Nicol"
+            vendedor="nicol.delgado@elregresobeer.com" nombreMostrar="Región de los Ríos"
           />
           <MiComisionVendedor
             key={`marion_${periodo.desde}_${periodo.hasta}`}
             desde={periodo.desde} hasta={periodo.hasta} nombrePeriodo={periodo.nombre}
-            vendedor="Los Lagos" nombreMostrar="Marion"
+            vendedor="Los Lagos" nombreMostrar="Región de los Lagos"
           />
         </div>
       </div>

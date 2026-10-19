@@ -5,6 +5,7 @@ import { Check, X, Camera, CloudOff } from 'lucide-react'
 import { C, cardStyle } from '../../theme'
 import { MOTIVO_LABEL, type MotivoRevision } from '@/lib/terreno/verificacion'
 import { fDistancia } from '@/lib/terreno/formato'
+import { etiquetaVendedor } from '@/lib/types'
 
 export interface ItemRevision {
   id: string
@@ -77,7 +78,7 @@ export default function RevisionClient({ items }: { items: ItemRevision[] }) {
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
                 <div>
                   <p style={{ fontSize: 14.5, fontWeight: 800, color: C.text }}>{item.clienteNombre}</p>
-                  <p style={{ fontSize: 12, color: C.muted }}>{item.vendedorNombre} · {fHora(item.iniciadaAt)}</p>
+                  <p style={{ fontSize: 12, color: C.muted }}>{etiquetaVendedor(item.vendedorNombre)} · {fHora(item.iniciadaAt)}</p>
                 </div>
                 <span style={{ fontSize: 11.5, fontWeight: 700, color: C.amber, background: C.amberSoft, borderRadius: 100, padding: '3px 9px', whiteSpace: 'nowrap' }}>
                   {item.motivoRevision ? (MOTIVO_LABEL[item.motivoRevision as MotivoRevision] ?? item.motivoRevision) : 'En revisión'}

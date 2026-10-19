@@ -15,10 +15,10 @@ import AppHeader from '@/components/ui/AppHeader'
 import { useIsDesktop } from '@/lib/useIsDesktop'
 import RegistrarContactoModal, { type TipoContacto } from '@/components/ui/RegistrarContactoModal'
 import FollowUpModal, { type FollowUp } from '@/components/ui/FollowUpModal'
-import { VENDEDOR_DISPLAY } from '@/lib/types'
+import { dspVendedor } from '@/lib/types'
 import { formatLocalidad } from '@/lib/format'
 
-const dspV = (v: string | null | undefined) => VENDEDOR_DISPLAY[v ?? ''] ?? v ?? '—'
+const dspV = dspVendedor
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
 interface Cliente {

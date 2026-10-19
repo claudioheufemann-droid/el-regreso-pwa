@@ -7,9 +7,9 @@ import AppHeader from '@/components/ui/AppHeader'
 import { useEffect } from 'react'
 import { Shield, Clock, MessageCircle, ShoppingBag, Search } from 'lucide-react'
 import { useIsDesktop } from '@/lib/useIsDesktop'
-import { VENDEDOR_DISPLAY } from '@/lib/types'
+import { dspVendedor } from '@/lib/types'
 
-const dspV = (v: string | null | undefined) => VENDEDOR_DISPLAY[v ?? ''] ?? v ?? '—'
+const dspV = dspVendedor
 
 interface RowReporte {
   nombre_fantasia: string | null

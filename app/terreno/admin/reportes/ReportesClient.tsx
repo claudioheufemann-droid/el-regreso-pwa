@@ -6,6 +6,7 @@ import { C, cardStyle, TAP } from '../../theme'
 import PeriodoFiltro from '../PeriodoFiltro'
 import type { TipoPeriodo } from '@/lib/terreno/tiempoChile'
 import { fmtPrecioCLP } from '@/lib/catalogo-productos'
+import { etiquetaVendedor } from '@/lib/types'
 
 export interface FilaReporte {
   id: string
@@ -31,7 +32,7 @@ const PRESENCIA_VERIFICADA = new Set(['verificada_auto', 'aprobada_manual'])
 function filaParaExport(f: FilaReporte) {
   return {
     ID: f.id,
-    Vendedor: f.vendedor,
+    Vendedor: etiquetaVendedor(f.vendedor),
     Cliente: f.cliente,
     Dirección: f.direccion,
     Comuna: f.comuna,
@@ -122,7 +123,7 @@ export default function ReportesClient({ tipo, fecha, rangoTexto, filas }: {
       const XLSX = await import('xlsx')
       const wb = XLSX.utils.book_new()
       const hojaResumen = XLSX.utils.json_to_sheet(resumenPorVendedor.map(r => ({
-        Vendedor: r.vendedor, Visitas: r.visitas, Verificadas: r.verificadas, Finalizadas: r.finalizadas, 'Total pedidos': r.total,
+        Vendedor: etiquetaVendedor(r.vendedor), Visitas: r.visitas, Verificadas: r.verificadas, Finalizadas: r.finalizadas, 'Total pedidos': r.total,
       })))
       XLSX.utils.book_append_sheet(wb, hojaResumen, 'Resumen por vendedor')
       const hojaDetalle = XLSX.utils.json_to_sheet(filas.map(filaParaExport))
@@ -197,7 +198,7 @@ export default function ReportesClient({ tipo, fecha, rangoTexto, filas }: {
           <tbody>
             {resumenPorVendedor.map(r => (
               <tr key={r.vendedor} style={{ borderTop: `1px solid ${C.line}` }}>
-                <td style={{ padding: '9px 10px', fontSize: 13.5, fontWeight: 700, color: C.text }}>{r.vendedor}</td>
+                <td style={{ padding: '9px 10px', fontSize: 13.5, fontWeight: 700, color: C.text }}>{etiquetaVendedor(r.vendedor)}</td>
                 <td style={{ padding: '9px 10px', fontSize: 13 }}>{r.visitas}</td>
                 <td style={{ padding: '9px 10px', fontSize: 13 }}>{r.verificadas}</td>
                 <td style={{ padding: '9px 10px', fontSize: 13 }}>{r.finalizadas}</td>
@@ -227,7 +228,7 @@ export default function ReportesClient({ tipo, fecha, rangoTexto, filas }: {
             {filas.slice(0, 30).map(f => (
               <tr key={f.id} style={{ borderTop: `1px solid ${C.line}` }}>
                 <td style={{ padding: '8px 10px', fontSize: 13 }}>{f.cliente}</td>
-                <td style={{ padding: '8px 10px', fontSize: 13, color: C.muted }}>{f.vendedor}</td>
+                <td style={{ padding: '8px 10px', fontSize: 13, color: C.muted }}>{etiquetaVendedor(f.vendedor)}</td>
                 <td style={{ padding: '8px 10px', fontSize: 12.5, color: C.muted, whiteSpace: 'nowrap' }}>{new Date(f.llegada).toLocaleString('es-CL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
                 <td style={{ padding: '8px 10px', fontSize: 12.5 }}>{f.presencia}</td>
                 <td style={{ padding: '8px 10px', fontSize: 12.5 }}>{f.resultado ?? '—'}</td>

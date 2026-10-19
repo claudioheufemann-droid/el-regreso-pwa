@@ -3,6 +3,7 @@
 import { useMemo } from 'react'
 import { TrendingUp, AlertCircle, CheckCircle2, Clock } from 'lucide-react'
 import AppHeader from '@/components/ui/AppHeader'
+import { etiquetaVendedor } from '@/lib/types'
 
 interface Cliente { nombre_fantasia: string | null; vendedor: string | null }
 interface Frequencia { nombre: string | null; segmento: string | null; alert_level: string | null; ciclo_promedio_dias: number | null; dias_sin_compra: number | null }
@@ -129,7 +130,7 @@ export default function CRMMetricsClient({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {Object.entries(agendaHoy.porVendedor).map(([vendedorId, c]) => (
                 <div key={vendedorId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0' }}>
-                  <p style={{ fontSize: 13, color: '#ccc', fontWeight: 600 }}>{vendedorNombreMap[vendedorId] ?? vendedorId}</p>
+                  <p style={{ fontSize: 13, color: '#ccc', fontWeight: 600 }}>{etiquetaVendedor(vendedorNombreMap[vendedorId] ?? vendedorId)}</p>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <span style={{ fontSize: 11, fontWeight: 700, color: '#60A5FA', background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.25)', padding: '3px 9px', borderRadius: 8 }}>{c.pendientesHoy} hoy</span>
                     {c.atrasados > 0 && (
@@ -151,7 +152,7 @@ export default function CRMMetricsClient({
                 const pct = c.total > 0 ? Math.round((c.conVenta / c.total) * 100) : 0
                 return (
                   <div key={vendedorId} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <p style={{ fontSize: 13, color: '#888', minWidth: 140 }}>{vendedorNombreMap[vendedorId] ?? vendedorId}</p>
+                    <p style={{ fontSize: 13, color: '#888', minWidth: 140 }}>{etiquetaVendedor(vendedorNombreMap[vendedorId] ?? vendedorId)}</p>
                     <div style={{ flex: 1, background: 'rgba(255,255,255,0.04)', height: 24, borderRadius: 6, overflow: 'hidden' }}>
                       <div style={{ background: pct > 50 ? '#5A8A4A' : pct > 25 ? '#D4AF37' : '#B5543E', height: '100%', width: `${pct}%`, borderRadius: 6 }} />
                     </div>

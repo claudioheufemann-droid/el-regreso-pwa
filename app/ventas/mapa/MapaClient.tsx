@@ -9,7 +9,8 @@ import {
   Search, Locate, X, SlidersHorizontal,
 } from 'lucide-react'
 import { VENDEDOR_DISPLAY } from '@/lib/types'
-const dspV = (v: string) => VENDEDOR_DISPLAY[v] ?? v
+// Grupo para el filtro (no es display: el punto se etiqueta en MapLeaflet)
+const grupoV = (v: string) => VENDEDOR_DISPLAY[v] ?? v
 import { useIsDesktop } from '@/lib/useIsDesktop'
 import type { Punto, CapaViz, TileTipo, LeadPunto, FlyTarget } from './MapLeaflet'
 
@@ -198,7 +199,7 @@ export default function MapaClient({ fechasDisponibles, fechaDefault }: Props) {
   }, [puntos])
 
   const puntosFiltrados = useMemo(() => {
-    let base = vendedor === 'all' ? puntos : puntos.filter(p => dspV(p.vendedor_actual) === vendedor || p.sin_compra)
+    let base = vendedor === 'all' ? puntos : puntos.filter(p => grupoV(p.vendedor_actual) === vendedor || p.sin_compra)
     if (productoFiltro !== 'all') {
       base = base
         .map(p => {

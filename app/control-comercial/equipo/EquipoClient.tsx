@@ -8,6 +8,7 @@ import {
   CCPage, ErrorState, FilaLeyenda, PageSkeleton, ProgressBar, SegmentedControl,
   formatCLPCompacto, formatLitros, formatNumero, formatPctPlano, type Tono,
 } from '@/components/control-comercial/ui'
+import { etiquetaVendedor } from '@/lib/types'
 
 interface FilaEquipo {
   territorio: string; tipo: string; responsable: string | null
@@ -114,7 +115,8 @@ export default function EquipoClient() {
                 key={f.territorio}
                 posicion={i + 1}
                 titulo={f.territorio}
-                responsable={f.responsable}
+                // El territorio ya nombra la zona: sólo se agrega quien la lleva si no es una cartera con etiqueta
+                responsable={etiquetaVendedor(f.responsable) === f.responsable ? f.responsable : null}
                 badge={desempeno.texto}
                 badgeTono={desempeno.tono}
                 badgeIcon={desempeno.tono === 'marca' ? Award : desempeno.tono === 'ok' ? TrendingUp : undefined}

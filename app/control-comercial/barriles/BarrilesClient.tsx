@@ -11,6 +11,7 @@ import {
   CCPage, Card, CardHeader, EmptyState, ErrorState, FilaLeyenda, InsightList, NotaPie,
   PageSkeleton, formatNumero, formatPctPlano, type InsightItem, type Tono,
 } from '@/components/control-comercial/ui'
+import { etiquetaVendedor } from '@/lib/types'
 
 interface EstadoBarriles { total: number; normales: number; atencion: number; atrasados: number; criticos: number; promedio_dias_fuera: number }
 interface TopCliente { nombre_fantasia: string; cantidad: number; dias_max: number; criticos: number }
@@ -182,7 +183,7 @@ export default function BarrilesClient() {
                 {data!.porResponsable.slice(0, 6).map((r, i) => (
                   <div key={r.responsable} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderTop: i > 0 ? '1px solid var(--cc-line-soft)' : undefined, minWidth: 0 }}>
                     <span style={{ width: 22, fontSize: 12.5, fontWeight: 800, color: 'var(--cc-ink-3)', flexShrink: 0 }}>{i + 1}</span>
-                    <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 700, color: 'var(--cc-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.responsable}</span>
+                    <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 700, color: 'var(--cc-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{etiquetaVendedor(r.responsable)}</span>
                     <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--cc-red)', flexShrink: 0 }}>{r.criticos}</span>
                     <ChevronRight size={16} color="var(--cc-ink-3)" style={{ flexShrink: 0 }} />
                   </div>

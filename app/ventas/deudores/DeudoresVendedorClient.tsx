@@ -9,7 +9,7 @@ import {
 import { formatCurrency } from '@/lib/utils'
 import { useIsDesktop } from '@/lib/useIsDesktop'
 import { useUser } from '@/lib/userContext'
-import { VENDEDORES_CARTERA_COBRANZA, vendedorCanonico, grupoCarteraDe, nombreCorto } from '@/lib/types'
+import { VENDEDORES_CARTERA_COBRANZA, vendedorCanonico, grupoCarteraDe, nombreCorto, etiquetaVendedor } from '@/lib/types'
 import NotificationsBell from '@/components/ui/NotificationsBell'
 import SettingsPanel from '@/components/ui/SettingsPanel'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
@@ -1313,7 +1313,7 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor, barriles
             <label style={labelStyle}>VENDEDOR</label>
             <select value={cartera} onChange={e => setCartera(e.target.value)} style={selectStyle}>
               <option value="todos">Todos los vendedores</option>
-              {filas.map(f => <option key={f.vendedor} value={f.vendedor}>{f.vendedor}</option>)}
+              {filas.map(f => <option key={f.vendedor} value={f.vendedor}>{etiquetaVendedor(f.vendedor)}</option>)}
             </select>
           </div>
         )}
@@ -1428,7 +1428,7 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor, barriles
                       <td style={{ padding: '12px 14px', fontWeight: 700, color: TD.text, maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {deudor.nombre_fantasia}
                       </td>
-                      {isAdmin && <td style={{ padding: '12px 14px', color: TD.muted }}>{vendedorCanonico(deudor.vendedor) || '—'}</td>}
+                      {isAdmin && <td style={{ padding: '12px 14px', color: TD.muted }}>{etiquetaVendedor(deudor.vendedor) || '—'}</td>}
                       <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 700, color: colorMora }}>
                         {formatCurrency(deudor.deuda_comercial)}
                         {deudor.maquila_vencida > 0 && (

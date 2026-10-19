@@ -6,6 +6,7 @@ import { RefreshCw, MessageCircle, Phone, TrendingUp, TrendingDown, Users, Targe
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
 import { useIsDesktop } from '@/lib/useIsDesktop'
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/States'
+import { inicialesVendedor } from '@/lib/types'
 
 // ── Fila compacta para mobile (reemplaza tablas anchas con scroll-x) ─────────
 function MobileRow({ avatarChar, avatarColor, title, subtitle, metric, metricColor, progress, progressColor, actions }: {
@@ -482,7 +483,7 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
               <div key={v.vendedor} style={{ display: 'grid', gridTemplateColumns: '1fr 70px 80px 1fr 100px', gap: 8, padding: '8px 4px', borderBottom: '1px solid rgba(255,255,255,0.04)', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <div style={{ width: 26, height: 26, borderRadius: '50%', background: `${v.color}20`, border: `1.5px solid ${v.color}50`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: v.color }}>
-                    {v.vendedor.charAt(0)}
+                    {inicialesVendedor(v.vendedor)}
                   </div>
                   <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--cream)' }}>{v.vendedor}</span>
                 </div>
@@ -525,7 +526,7 @@ export default function MisionesAdminDashboard({ isAdmin }: Props) {
               {stats.porVendedor.map(v => (
                 <MobileRow
                   key={v.vendedor}
-                  avatarChar={v.vendedor.charAt(0)}
+                  avatarChar={inicialesVendedor(v.vendedor)}
                   avatarColor={v.color}
                   title={v.vendedor}
                   subtitle={`${v.asignadas} asig. · ${v.completadas} compl.`}

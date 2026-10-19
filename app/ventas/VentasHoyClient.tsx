@@ -12,6 +12,7 @@ import { Skeleton } from '@/components/ui/States'
 import NotificationsBell from '@/components/ui/NotificationsBell'
 import MiComision from './MiComision'
 import MiComisionVendedor from '@/app/terreno/MiComisionVendedor'
+import { etiquetaVendedor, inicialesVendedor } from '@/lib/types'
 import { RANGOS, type RangoKey, type HoyData, type VendedorRango, type DatosRango } from './hoyTypes'
 
 /**
@@ -533,10 +534,10 @@ function SheetDetalle({ tipo, envaseBucket, categoria, origenPedidos, porEntrega
       if (esPedidos) {
         const p = f as FilaPedido
         return p.pedido.toLowerCase().includes(q) || p.cliente.toLowerCase().includes(q)
-          || (p.vendedor ?? '').toLowerCase().includes(q) || (p.localidad ?? '').toLowerCase().includes(q)
+          || etiquetaVendedor(p.vendedor).toLowerCase().includes(q) || (p.localidad ?? '').toLowerCase().includes(q)
       }
       const c = f as FilaCliente
-      return c.cliente.toLowerCase().includes(q) || (c.vendedor ?? '').toLowerCase().includes(q)
+      return c.cliente.toLowerCase().includes(q) || etiquetaVendedor(c.vendedor).toLowerCase().includes(q)
         || (c.localidad ?? '').toLowerCase().includes(q)
     })
   }, [filas, busca, esProd, esPedidos])
@@ -545,7 +546,7 @@ function SheetDetalle({ tipo, envaseBucket, categoria, origenPedidos, porEntrega
   const vendedoresVisibles = useMemo(() => {
     if (!vendedores) return []
     const q = busca.trim().toLowerCase()
-    return q ? vendedores.filter(v => v.vendedor.toLowerCase().includes(q)) : vendedores
+    return q ? vendedores.filter(v => etiquetaVendedor(v.vendedor).toLowerCase().includes(q)) : vendedores
   }, [vendedores, busca])
 
   const totalLitros = visibles.reduce((s, f) => s + f.litros, 0)
@@ -778,7 +779,7 @@ function SheetDetalle({ tipo, envaseBucket, categoria, origenPedidos, porEntrega
                               <>
                                 {/* Factura primero — es lo que se busca en el ERP; el N° de
                                     pedido queda de referencia entre paréntesis. */}
-                                {[ped.numeroFactura ? `Factura ${ped.numeroFactura} (Ped. ${ped.pedido})` : `Pedido #${ped.pedido} · sin facturar`, ped.vendedor, ped.localidad].filter(Boolean).join(' · ')}
+                                {[ped.numeroFactura ? `Factura ${ped.numeroFactura} (Ped. ${ped.pedido})` : `Pedido #${ped.pedido} · sin facturar`, etiquetaVendedor(ped.vendedor), ped.localidad].filter(Boolean).join(' · ')}
                                 {ped.fechaPedido && (
                                   <>
                                     {' · '}
@@ -805,7 +806,7 @@ function SheetDetalle({ tipo, envaseBucket, categoria, origenPedidos, porEntrega
                             )
                             : (
                               <>
-                                {[c!.vendedor, c!.localidad].filter(Boolean).join(' · ')}
+                                {[etiquetaVendedor(c!.vendedor), c!.localidad].filter(Boolean).join(' · ')}
                                 {/* La fecha (+ hora real cuando la última actividad fue una
                                     entrega) es el criterio de orden de la lista (más
                                     reciente primero), así que va destacada para poder
@@ -940,9 +941,6 @@ function FilaMixHero({ nombre, litros, total, pct, color, colorSoft, emoji, onCl
 const COLOR_VEND = ['#0F172A', C.green, C.purple, '#EA580C', C.blue, '#0891B2']
 function sinTildes(s: string) {
   return s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
-}
-function iniciales(nombre: string) {
-  return nombre.split(/\s+/).filter(Boolean).map(p => p[0]).join('').slice(0, 2).toUpperCase()
 }
 
 /** Locales de un vendedor/región — se despliega al tocar su fila en el
@@ -1117,7 +1115,7 @@ function DetalleClientesProducto({ producto, envase, desde, hasta, porEntrega }:
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ fontSize: 13, fontWeight: 600, color: C.text, lineHeight: 1.3, wordBreak: 'break-word' }}>{c.cliente}</p>
                 <p style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>
-                  {[c.vendedor, c.localidad, c.ultimaCompra ? fFechaCorta(c.ultimaCompra) : null].filter(Boolean).join(' · ')}
+                  {[etiquetaVendedor(c.vendedor), c.localidad, c.ultimaCompra ? fFechaCorta(c.ultimaCompra) : null].filter(Boolean).join(' · ')}
                 </p>
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
@@ -1310,10 +1308,10 @@ function FilaVendedor({ v, pos, total, desde, hasta, porEntrega, mostrarAnio, an
             width: 32, height: 32, borderRadius: '50%', background: color, color: '#fff',
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700,
           }}>
-            {iniciales(v.vendedor)}
+            {inicialesVendedor(v.vendedor)}
           </span>
           <span style={{ minWidth: 0 }}>
-            <span style={{ display: 'block', fontSize: 14, fontWeight: 600, color: C.text, lineHeight: 1.3, wordBreak: 'break-word' }}>{v.vendedor}</span>
+            <span style={{ display: 'block', fontSize: 14, fontWeight: 600, color: C.text, lineHeight: 1.3, wordBreak: 'break-word' }}>{etiquetaVendedor(v.vendedor)}</span>
             {hayPorEntregar && (
               <span style={{ display: 'block', fontSize: 11, color: C.muted, marginTop: 2 }}>
                 {fL(v.litros + v.litrosPorEntregar)} total con lo por entregar
@@ -1377,10 +1375,10 @@ function FilaVendedor({ v, pos, total, desde, hasta, porEntrega, mostrarAnio, an
             width: 30, height: 30, borderRadius: '50%', background: color, color: '#fff', flexShrink: 0,
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700,
           }}>
-            {iniciales(v.vendedor)}
+            {inicialesVendedor(v.vendedor)}
           </span>
           <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, color: C.text, lineHeight: 1.3, wordBreak: 'break-word' }}>
-            {v.vendedor}
+            {etiquetaVendedor(v.vendedor)}
           </span>
           <ChevronDown size={15} color={abierto ? C.blue : C.faint} style={{
             flexShrink: 0, transform: abierto ? 'rotate(180deg)' : undefined, transition: 'transform .15s',

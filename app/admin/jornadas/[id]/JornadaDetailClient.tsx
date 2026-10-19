@@ -6,6 +6,7 @@ import Link from 'next/link'
 import Logo from '@/components/ui/Logo'
 import { ErrorState, Skeleton } from '@/components/ui/States'
 import type { PuntoRuta } from './RutaMap'
+import { dspVendedor } from '@/lib/types'
 
 const RutaMap = dynamic(() => import('./RutaMap'), {
   ssr: false,
@@ -163,7 +164,7 @@ export default function JornadaDetailClient({ jornadaId }: { jornadaId: string }
           Volver
         </Link>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 15, fontWeight: 800 }}>{jornada.vendedor?.nombre ?? '—'}</div>
+          <div style={{ fontSize: 15, fontWeight: 800 }}>{dspVendedor(jornada.vendedor?.nombre)}</div>
           <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>{new Date(jornada.fecha).toLocaleDateString('es-CL', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}</div>
         </div>
         <span style={{ padding: '5px 11px', borderRadius: 9, fontSize: 11, fontWeight: 800, color: info.color, background: `${info.color}18`, border: `1px solid ${info.color}40` }}>

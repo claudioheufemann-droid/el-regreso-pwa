@@ -18,6 +18,7 @@ import type { BarrilesFuera } from '@/lib/barrilesFuera'
 import { C, Card, Etiqueta, Franja } from './tema'
 import PagadoPorVendedor from './PagadoPorVendedor'
 import type { FilaPagadoCiclo } from '@/lib/administracion/pagadoPorCiclo'
+import { dspVendedor } from '@/lib/types'
 
 const fMoney = (n: number) => '$' + Math.round(n).toLocaleString('es-CL')
 
@@ -97,7 +98,7 @@ export default function CobranzaSection({ caja, deuda, cobros, deudoresDetalle, 
           <div style={{ display: 'flex', gap: 8 }}>
             <select value={vendedor} onChange={e => setVendedor(e.target.value)} style={{ padding: '7px 10px', borderRadius: 9, border: `1px solid ${C.line}`, fontSize: 12.5, fontWeight: 600 }}>
               <option value="todos">Todos los vendedores</option>
-              {vendedores.map(v => <option key={v} value={v}>{v}</option>)}
+              {vendedores.map(v => <option key={v} value={v}>{dspVendedor(v)}</option>)}
             </select>
             <button onClick={csv} style={{ whiteSpace: 'nowrap', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 9, border: `1px solid ${C.line}`, background: C.card, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
               <FileDown size={13} /> Excel (CSV)
@@ -118,7 +119,7 @@ export default function CobranzaSection({ caja, deuda, cobros, deudoresDetalle, 
               {(verTodos ? filtrada : filtrada.slice(0, 25)).map(a => (
                 <tr key={a.cliente}>
                   <td style={{ ...td, textAlign: 'left', fontWeight: 700, maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.cliente}</td>
-                  <td style={{ ...td, textAlign: 'left', color: C.muted }}>{a.vendedor ?? '—'}</td>
+                  <td style={{ ...td, textAlign: 'left', color: C.muted }}>{dspVendedor(a.vendedor)}</td>
                   <td style={td}>{a.facturas}</td>
                   <td style={{ ...td, fontWeight: 800, color: C.red }}>{fMoney(a.monto)}</td>
                   <td style={{ ...td, fontWeight: 700, color: a.diasAtraso > 30 ? C.red : a.diasAtraso > 7 ? C.amber : C.muted }}>{a.diasAtraso}</td>

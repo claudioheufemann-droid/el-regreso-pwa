@@ -15,6 +15,7 @@ import { ChevronRight, FileDown } from 'lucide-react'
 import { ciclosDisponibles, impagoDe, resumirPagadoCiclo, totalDe, type FilaPagadoCiclo, type Montos } from '@/lib/administracion/pagadoPorCiclo'
 import { inicioDeCiclo, finDeCiclo } from '@/lib/produccion/reglas'
 import { C, Card } from './tema'
+import { etiquetaVendedor } from '@/lib/types'
 
 const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
 const MESES_LARGO = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
@@ -155,11 +156,11 @@ export default function PagadoPorVendedor({ filas, cicloEnCurso, hoyISO }: { fil
                         <button
                           onClick={e => { e.stopPropagation(); alternar(v.vendedor) }}
                           aria-expanded={abierto}
-                          aria-label={`${abierto ? 'Ocultar' : 'Ver'} clientes de ${v.vendedor}`}
+                          aria-label={`${abierto ? 'Ocultar' : 'Ver'} clientes de ${etiquetaVendedor(v.vendedor)}`}
                           style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontWeight: 800, fontSize: 13, color: C.text }}
                         >
                           <ChevronRight size={14} color={C.muted} style={{ transform: abierto ? 'rotate(90deg)' : 'none', transition: 'transform 160ms var(--adm-ease)' }} />
-                          {v.vendedor}
+                          {etiquetaVendedor(v.vendedor)}
                         </button>
                       </td>
                       <td style={{ ...td, color: C.muted }}>{v.clientes}</td>

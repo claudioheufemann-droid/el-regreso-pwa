@@ -15,9 +15,9 @@ import {
 import type { MisionEnriquecida, ProximaPreview, HistorialSemana, EstadoMision, TipoMision } from './page'
 import { buscarTorpedo } from '@/lib/catalogo-torpedo'
 import type { AlertTipo } from '@/components/ui/WAModal'
-import { VENDEDOR_DISPLAY } from '@/lib/types'
+import { dspVendedor } from '@/lib/types'
 import { hapticExito } from '@/lib/haptics'
-const dspV = (v: string) => VENDEDOR_DISPLAY[v] ?? v
+const dspV = dspVendedor
 import AppHeader from '@/components/ui/AppHeader'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
 import { Skeleton } from '@/components/ui/States'

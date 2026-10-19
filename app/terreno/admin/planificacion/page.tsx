@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { semanaLunes, semanaSiguienteLunes } from '@/lib/terreno/planificacion/semana'
 import { hoySantiagoISO } from '@/lib/terreno/tiempoChile'
 import PlanificacionAdminClient from './PlanificacionAdminClient'
+import { etiquetaVendedor } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -43,7 +44,8 @@ export default async function PlanificacionAdminPage({ searchParams }: { searchP
   const vendedores = Array.from(new Set([...(todosVendedores ?? []).map(u => u.id), ...vendedorIds]))
     .map(id => ({
       id,
-      nombre: nombreDeUsuario.get(id)?.nombre ?? '(vendedor)',
+      // Sólo display: el id sigue identificando al vendedor
+      nombre: etiquetaVendedor(nombreDeUsuario.get(id)?.nombre) || '(vendedor)',
       iniciales: nombreDeUsuario.get(id)?.iniciales ?? '',
       plan: planPorVendedor.get(id) ?? null,
     }))

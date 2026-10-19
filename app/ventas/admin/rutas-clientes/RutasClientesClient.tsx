@@ -7,10 +7,10 @@ import {
 } from 'lucide-react'
 import { useIsDesktop } from '@/lib/useIsDesktop'
 import { VEND_COLOR as VENDEDOR_COLOR } from '@/lib/theme'
-import { VENDEDOR_DISPLAY } from '@/lib/types'
+import { dspVendedor } from '@/lib/types'
 import AppHeader from '@/components/ui/AppHeader'
 
-const dspV = (v: string | null | undefined) => VENDEDOR_DISPLAY[v ?? ''] ?? v ?? '—'
+const dspV = dspVendedor
 
 interface Cliente {
   id: number

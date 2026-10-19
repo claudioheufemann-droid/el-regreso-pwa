@@ -13,6 +13,7 @@ import {
   formatPctPlano, type Tono,
 } from '@/components/control-comercial/ui'
 import type { KpiMeta, ScopeMeta, Territorio } from '@/lib/control-comercial/tipos'
+import { etiquetaVendedor, inicialesVendedor } from '@/lib/types'
 
 interface PeriodoRow { id: number; nombre: string; fecha_inicio: string; fecha_fin: string; activo: boolean }
 
@@ -39,10 +40,6 @@ const KPI_LABELS: Record<KpiMeta, string> = {
   cuentas_regularizadas: 'Cuentas regularizadas', barriles_recuperados: 'Barriles recuperados',
 }
 const SCOPE_LABELS: Record<ScopeMeta, string> = { compania: 'Compañía', territorio: 'Territorio/Canal', vendedor: 'Vendedor' }
-
-function iniciales(nombre: string): string {
-  return nombre.trim().split(/\s+/).slice(0, 2).map(p => p[0]?.toUpperCase() ?? '').join('') || '?'
-}
 
 function pctDe(real: number, meta: number | null): number | null {
   return meta ? (real / meta) * 100 : null
@@ -169,8 +166,8 @@ export default function MetasClient() {
                   return (
                     <FilaMetaResponsable
                       key={r.responsable}
-                      nombre={r.responsable}
-                      iniciales={iniciales(r.responsable)}
+                      nombre={etiquetaVendedor(r.responsable)}
+                      iniciales={inicialesVendedor(r.responsable)}
                       estado={estado.texto}
                       estadoTono={estado.tono}
                       celdas={[
@@ -310,7 +307,7 @@ function ModalNuevaMeta({ periodoId, territorios, onClose, onGuardado }: {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <CampoSelect label="Alcance" value={scopeType} onChange={v => { setScopeType(v as ScopeMeta); setScopeValue('') }} opciones={Object.entries(SCOPE_LABELS)} />
           {scopeType !== 'compania' && (
-            <CampoSelect label={scopeType === 'territorio' ? 'Territorio/Canal' : 'Vendedor'} value={scopeValue} onChange={setScopeValue} opciones={opciones.map(v => [v, v] as [string, string])} placeholder="Elegir…" />
+            <CampoSelect label={scopeType === 'territorio' ? 'Territorio/Canal' : 'Vendedor'} value={scopeValue} onChange={setScopeValue} opciones={opciones.map(v => [v, scopeType === 'vendedor' ? etiquetaVendedor(v) : v] as [string, string])} placeholder="Elegir…" />
           )}
           <CampoSelect label="KPI" value={kpiType} onChange={v => setKpiType(v as KpiMeta)} opciones={Object.entries(KPI_LABELS)} />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>

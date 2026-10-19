@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react'
 import { Upload, AlertTriangle, CheckCircle2, ChevronDown, ChevronRight } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import SyncStatusCard from '@/components/ui/SyncStatusCard'
+import { dspVendedor } from '@/lib/types'
 
 interface Deudor {
   id: string
@@ -258,7 +259,7 @@ export default function DeudoresClient({ initialDeudores }: { initialDeudores: D
           </label>
           <select value={filterVendedor} onChange={e => setFilterVendedor(e.target.value)} style={selectStyle}>
             <option value="">Todos</option>
-            {vendedores.map(v => <option key={v} value={v}>{v}</option>)}
+            {vendedores.map(v => <option key={v} value={v}>{dspVendedor(v)}</option>)}
           </select>
         </div>
         <div>
@@ -333,7 +334,7 @@ export default function DeudoresClient({ initialDeudores }: { initialDeudores: D
                       <td style={{ padding: '11px 14px', fontWeight: 700, color: 'var(--cream)', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {deudor.nombre_fantasia}
                       </td>
-                      <td style={{ padding: '11px 14px', color: 'var(--muted)' }}>{deudor.vendedor || '—'}</td>
+                      <td style={{ padding: '11px 14px', color: 'var(--muted)' }}>{dspVendedor(deudor.vendedor)}</td>
                       <td style={{ padding: '11px 14px', color: 'var(--muted)' }}>{deudor.categoria_cliente || '—'}</td>
                       <td style={{ padding: '11px 14px', textAlign: 'right', fontWeight: 700, color: deudor.deuda_vencida > 0 ? '#f87171' : '#4ade80' }}>
                         {formatCurrency(deudor.deuda_vencida)}

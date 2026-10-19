@@ -10,6 +10,7 @@ import { useState, useMemo } from 'react'
 import { Trophy, TrendingUp, Target, Zap, Package } from 'lucide-react'
 import AppHeader from '@/components/ui/AppHeader'
 import type { RankingRow } from './page'
+import { etiquetaVendedor } from '@/lib/types'
 
 const G = '#D4AF37'
 
@@ -188,7 +189,7 @@ export default function RankingClient({ rankingMes, rankingSemana, miRegion, isA
                   {/* Nombre + región */}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ fontSize: 14, fontWeight: 700, color: esYo ? G : '#F0EDE8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {r.vendedor}{esYo && <span style={{ fontSize: 10, marginLeft: 6, color: 'rgba(212,175,55,0.7)' }}>· tú</span>}
+                      {etiquetaVendedor(r.vendedor)}{esYo && <span style={{ fontSize: 10, marginLeft: 6, color: 'rgba(212,175,55,0.7)' }}>· tú</span>}
                     </p>
                     <p style={{ fontSize: 10, color: 'rgba(255,255,255,0.32)', marginTop: 1 }}>
                       {r.region} · {fmtNum(r.litros)} L · {r.pedidos} ped.

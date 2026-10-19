@@ -5,7 +5,7 @@ import { MapContainer, TileLayer, CircleMarker, Marker, Popup, useMap } from 're
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
-import { VENDEDOR_DISPLAY } from '@/lib/types'
+import { dspVendedor } from '@/lib/types'
 
 // Ícono de arrastre para corrección manual de ubicación (DivIcon SVG,
 // sin depender de los assets de imagen default de Leaflet).
@@ -19,7 +19,7 @@ const DRAG_ICON = L.divIcon({
   iconAnchor: [17, 44],
 })
 
-const dspV = (v: string | null | undefined) => VENDEDOR_DISPLAY[v ?? ''] ?? v ?? '—'
+const dspV = dspVendedor
 
 export interface Punto {
   nombre_fantasia: string

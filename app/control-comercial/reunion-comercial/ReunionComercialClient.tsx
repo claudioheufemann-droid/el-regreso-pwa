@@ -13,6 +13,7 @@ import {
   formatNumero, formatPctPlano, type Tono,
 } from '@/components/control-comercial/ui'
 import type { FilaSeriePeriodo, ResumenEjecutivoResponse } from '@/lib/control-comercial/tipos'
+import { etiquetaVendedor } from '@/lib/types'
 
 interface FilaEquipo {
   territorio: string; responsable: string | null; venta_clp: number; litros: number
@@ -364,7 +365,7 @@ export default function ReunionComercialClient() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {territoriosOrdenados.slice(0, 6).map(f => (
               <div key={f.territorio} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 13px', borderRadius: 13, background: 'var(--cc-card-2)' }}>
-                <span style={{ fontSize: 13.5, fontWeight: 800, color: 'var(--cc-ink)' }}>{f.territorio}{f.responsable ? ` · ${f.responsable}` : ''}</span>
+                <span style={{ fontSize: 13.5, fontWeight: 800, color: 'var(--cc-ink)' }}>{f.territorio}{f.responsable && etiquetaVendedor(f.responsable) === f.responsable ? ` · ${f.responsable}` : ''}</span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--cc-ink-2)' }}>{formatCLPCompacto(f.venta_clp)}</span>
                   {f.crecimientoYoyPct !== null && <Delta pct={f.crecimientoYoyPct} sufijo="" size={12} />}
@@ -485,7 +486,7 @@ export default function ReunionComercialClient() {
             {compromisos.map(c => (
               <div key={c.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', background: 'var(--cc-card-2)', borderRadius: 12, fontSize: 12.5, gap: 8 }}>
                 <div style={{ minWidth: 0 }}>
-                  <span style={{ fontWeight: 700, color: 'var(--cc-ink)' }}>{c.responsable}</span>
+                  <span style={{ fontWeight: 700, color: 'var(--cc-ink)' }}>{etiquetaVendedor(c.responsable)}</span>
                   <span style={{ color: 'var(--cc-ink-3)' }}> — {c.accion} · {c.fecha_compromiso}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>

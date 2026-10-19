@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useCallback, useRef, useEffect } from 'react'
 import { Target, Calendar, CheckCircle, Clock, ChevronDown } from 'lucide-react'
-import { Periodo } from '@/lib/types'
+import { Periodo, etiquetaVendedor, inicialesVendedor } from '@/lib/types'
 import { useIsDesktop } from '@/lib/useIsDesktop'
 import {
   getDiasHabiles,
@@ -144,10 +144,6 @@ function fmtFecha(d: string) {
   const [, m, day] = d.split('-')
   const M = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
   return `${parseInt(day)} ${M[parseInt(m)-1]}`
-}
-
-function getInitials(name: string) {
-  return name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
 }
 
 // ─── SVG Charts ──────────────────────────────────────────────────────────────
@@ -525,11 +521,11 @@ function VendedorCard({ analytics, rangeLabel, avatarUrl }: { analytics: Analyti
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 15, fontWeight: 900, color: '#080808', flexShrink: 0,
               border: `2px solid ${SEMAFORO_COLORS[semaforo]}`,
-            }}>{getInitials(analytics.vendedor)}</div>
+            }}>{inicialesVendedor(analytics.vendedor)}</div>
           )}
           <div>
             <h2 style={{ fontWeight: 800, color: 'var(--cream)', fontSize: 16, letterSpacing: '-0.3px' }}>
-              {analytics.vendedor}
+              {etiquetaVendedor(analytics.vendedor)}
             </h2>
             <SemaforoDot estado={semaforo} />
           </div>

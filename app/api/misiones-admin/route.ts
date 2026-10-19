@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getServerUser } from '@/lib/auth'
-import { VENDEDOR_DISPLAY, esClienteExcluido } from '@/lib/types'
+import { dspVendedor, esClienteExcluido } from '@/lib/types'
 
 // Consolida nombres históricos de la BD (Javier/Carlos/…) en un solo vendedor display
-const dspV = (v: string | null): string => VENDEDOR_DISPLAY[v ?? ''] ?? v ?? '—'
+const dspV = dspVendedor
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 

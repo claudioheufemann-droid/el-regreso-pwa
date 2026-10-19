@@ -19,7 +19,7 @@ import { Fragment, useMemo, useState } from 'react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell, ResponsiveContainer } from 'recharts'
 import { ChevronDown, ChevronUp, ChevronsUpDown, ChevronRight, Search, FileDown, MessageCircle, Phone, X, Users } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
-import { VENDEDORES_CARTERA_COBRANZA, vendedorCanonico, grupoCarteraDe, nombreCorto } from '@/lib/types'
+import { VENDEDORES_CARTERA_COBRANZA, vendedorCanonico, grupoCarteraDe, nombreCorto, etiquetaVendedor } from '@/lib/types'
 import { diasMoraDeudor, severidadMora, type SeveridadMora } from '@/lib/cobranza'
 import WAModal, { type WATarget } from '@/components/ui/WAModal'
 import PanelCobranza, { documentosParaWA, type DatosCobranza } from '@/components/deudores/PanelCobranza'
@@ -399,7 +399,7 @@ export default function DeudaClienteSection({ initialDeudores, clientesPorVended
           <label style={{ fontSize: 11, color: C.muted, fontWeight: 700, display: 'block', marginBottom: 6 }}>VENDEDOR</label>
           <select value={cartera} onChange={e => setCartera(e.target.value)} style={selectStyle}>
             <option value="todos">Todos los vendedores</option>
-            {carteras.map(f => <option key={f.vendedor} value={f.vendedor}>{f.vendedor}</option>)}
+            {carteras.map(f => <option key={f.vendedor} value={f.vendedor}>{etiquetaVendedor(f.vendedor)}</option>)}
           </select>
         </div>
         <div>
@@ -470,7 +470,7 @@ export default function DeudaClienteSection({ initialDeudores, clientesPorVended
                         style={{ borderTop: `1px solid ${C.line}`, cursor: 'pointer', background: abierto ? C.goldSoft : 'transparent' }}
                       >
                         <td style={{ padding: '11px 14px', fontWeight: 700, color: C.text, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.nombre_fantasia}</td>
-                        <td style={{ padding: '11px 14px', color: C.muted }}>{vendedorCanonico(d.vendedor) || '—'}</td>
+                        <td style={{ padding: '11px 14px', color: C.muted }}>{etiquetaVendedor(d.vendedor) || '—'}</td>
                         <td style={{ padding: '11px 14px', textAlign: 'right', fontWeight: 700, color: colorMora }}>
                           {formatCurrency(d.deuda_comercial)}
                           {d.maquila_vencida > 0 && (
