@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, RefreshCw } from 'lucide-react'
-import { type FilaMeta, semanaInicial } from './tipos'
+import { type FilaMeta, type Escala, semanaInicial } from './tipos'
 import VistaVendedor, { SinMetas } from './VistaVendedor'
 import VistaEquipo, { type VendedorPlan } from './VistaEquipo'
 
@@ -16,25 +16,36 @@ const EQUIPO = '__equipo__'
  * de Tailwind (ver globals.css). El resto de Ventas sigue oscuro.
  */
 export default function MetasTemporadaClient({
-  filas, esAdmin, hoy, error,
+  filas, periodos, esAdmin, hoy, error,
 }: {
-  filas: FilaMeta[]; esAdmin: boolean; hoy: string; error: string | null
+  filas: FilaMeta[]; periodos: FilaMeta[]; esAdmin: boolean; hoy: string; error: string | null
 }) {
   const router = useRouter()
   const [elegido, setElegido] = useState<string>(EQUIPO)
-  // Semana elegida en el selector. Vive acá (no en cada vista) para que al pasar
-  // de "Equipo" a un vendedor se siga mirando la misma semana.
-  const [semana, setSemana] = useState(() => semanaInicial(filas))
+  // Escala (semana / período 24→23) y lo elegido en cada una. Vive acá (no en
+  // cada vista) para que al pasar de "Equipo" a un vendedor se siga mirando lo mismo.
+  const [escala, setEscala] = useState<Escala>('semana')
+  const [elegidaPor, setElegidaPor] = useState<Record<Escala, number>>(() => ({
+    semana: semanaInicial(filas),
+    periodo: semanaInicial(periodos),
+  }))
+  const corte = {
+    escala,
+    onEscala: setEscala,
+    valor: elegidaPor[escala],
+    onValor: (n: number) => setElegidaPor(prev => ({ ...prev, [escala]: n })),
+  }
 
   const vendedores: VendedorPlan[] = useMemo(() => {
     const porUsuario = new Map<string, VendedorPlan>()
     for (const f of filas) {
-      const v = porUsuario.get(f.userId) ?? { userId: f.userId, vendedor: f.vendedor, territorio: f.territorio, filas: [] }
+      const v = porUsuario.get(f.userId) ?? { userId: f.userId, vendedor: f.vendedor, territorio: f.territorio, filas: [], periodos: [] }
       v.filas.push(f)
       porUsuario.set(f.userId, v)
     }
+    for (const p of periodos) porUsuario.get(p.userId)?.periodos.push(p)
     return [...porUsuario.values()].sort((a, b) => a.vendedor.localeCompare(b.vendedor, 'es'))
-  }, [filas])
+  }, [filas, periodos])
 
   const seleccionado = esAdmin ? vendedores.find(v => v.userId === elegido) ?? null : vendedores[0] ?? null
 
@@ -68,11 +79,11 @@ export default function MetasTemporadaClient({
       </div>
     )
   } else if (!esAdmin) {
-    contenido = <VistaVendedor filas={filas} hoy={hoy} semana={semana} onSemana={setSemana} />
+    contenido = <VistaVendedor filas={filas} periodos={periodos} hoy={hoy} corte={corte} />
   } else if (seleccionado) {
-    contenido = <VistaVendedor key={seleccionado.userId} filas={seleccionado.filas} hoy={hoy} semana={semana} onSemana={setSemana} />
+    contenido = <VistaVendedor key={seleccionado.userId} filas={seleccionado.filas} periodos={seleccionado.periodos} hoy={hoy} corte={corte} />
   } else if (vendedores.length) {
-    contenido = <VistaEquipo vendedores={vendedores} hoy={hoy} semana={semana} onSemana={setSemana} onElegir={elegir} />
+    contenido = <VistaEquipo vendedores={vendedores} hoy={hoy} corte={corte} onElegir={elegir} />
   } else {
     contenido = <SinMetas />
   }

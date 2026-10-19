@@ -6,13 +6,21 @@
 export const TEMPORADA = '2026-2027'
 
 export type EstadoSemana = 'futura' | 'en_curso' | 'cerrada'
+/** Escala de la pantalla: semanas del plan o períodos comerciales 24→23. */
+export type Escala = 'semana' | 'periodo'
 export type Semaforo = 'verde' | 'amarillo' | 'rojo'
 
 export interface FilaMeta {
   id: number
+  tipo: Escala
+  /** "Semana 3" · "Noviembre" */
+  nombre: string
+  /** "S3" · "Nov" */
+  corto: string
   territorio: string
   userId: string
   vendedor: string
+  /** N° de semana, o N° de período (1 = octubre) si tipo = 'periodo'. */
   semana: number
   fechaInicio: string
   fechaFin: string
@@ -55,6 +63,9 @@ const num = (v: string | number | null | undefined) => Number(v ?? 0) || 0
 export function normalizarFila(r: FilaVista): FilaMeta {
   return {
     id: num(r.id),
+    tipo: 'semana',
+    nombre: `Semana ${num(r.semana)}`,
+    corto: `S${num(r.semana)}`,
     territorio: String(r.territorio ?? ''),
     userId: String(r.user_id),
     vendedor: String(r.vendedor ?? ''),
@@ -78,6 +89,26 @@ export function normalizarFila(r: FilaVista): FilaMeta {
     pctClientes: num(r.pct_clientes),
     estado: String(r.estado_semana) as EstadoSemana,
     semaforo: (r.semaforo ?? null) as Semaforo | null,
+  }
+}
+
+const MESES_LARGOS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+
+/**
+ * Fila cruda de plan_metas_periodo_avance → FilaMeta. Mismas columnas que la
+ * semanal; `periodo` va en `semana` y el nombre es el mes en que termina el
+ * período (24 oct – 23 nov = Noviembre). fecha_inicio/fin son los días que
+ * cubre el plan (octubre parte el 8), no el 24→23 completo.
+ */
+export function normalizarPeriodo(r: FilaVista): FilaMeta {
+  const mes = Number(String(r.mes).slice(5, 7))
+  const n = num(r.periodo)
+  return {
+    ...normalizarFila({ ...r, semana: n }),
+    id: -num(r.id), // no choca con los id de las filas semanales
+    tipo: 'periodo',
+    nombre: MESES_LARGOS[mes - 1],
+    corto: MESES_LARGOS[mes - 1].slice(0, 3),
   }
 }
 

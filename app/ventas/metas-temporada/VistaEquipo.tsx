@@ -9,6 +9,7 @@ import {
   nivelPorPct, nivelDeSemana, NIVEL_COLOR, NIVEL_BARRA, NIVEL_LABEL,
 } from './tipos'
 import {
+  type Corte,
   BarraNivel, PctNivel, ResumenSemana, SelectorSemana, opcionesSemana,
   FranjaAcumulado, PieTemporada, Titulo,
 } from './ui'
@@ -18,10 +19,14 @@ export interface VendedorPlan {
   vendedor: string
   territorio: string
   filas: FilaMeta[]
+  /** Las mismas metas por período comercial 24→23 (plan_metas_periodo_avance). */
+  periodos: FilaMeta[]
 }
 
 interface FilaRanking extends VendedorPlan {
-  /** Fila de la semana elegida en el selector (no necesariamente la en curso). */
+  /** Semanas o períodos, según la escala elegida. */
+  enEscala: FilaMeta[]
+  /** Fila de la semana/período elegido en el selector (no necesariamente el en curso). */
   actual: FilaMeta | null
   acum: Acumulado
 }
@@ -29,20 +34,26 @@ interface FilaRanking extends VendedorPlan {
 type Orden = 'semana' | 'acumulado'
 
 export default function VistaEquipo({
-  vendedores, hoy, semana, onSemana, onElegir,
+  vendedores, hoy, corte, onElegir,
 }: {
-  vendedores: VendedorPlan[]; hoy: string; semana: number; onSemana: (semana: number) => void; onElegir: (userId: string) => void
+  vendedores: VendedorPlan[]; hoy: string; corte: Corte; onElegir: (userId: string) => void
 }) {
+  const { escala, valor: semana } = corte
+  // Acumulado y pie siempre desde las semanas; selector, ranking y matriz en la escala elegida.
   const todas = vendedores.flatMap(v => v.filas)
   const tope = semanaTope(todas)
-  const enCurso = semanaEnCurso(todas)
-  const opciones = opcionesSemana(todas)
-  // Fila de referencia (fechas y estado) de la semana elegida: son iguales para los cuatro.
-  const semanaRef = todas.find(f => f.semana === semana) ?? null
+  const todasEscala = escala === 'periodo' ? vendedores.flatMap(v => v.periodos) : todas
+  const enCurso = semanaEnCurso(todasEscala)
+  const opciones = opcionesSemana(todasEscala)
+  // Fila de referencia (fechas y estado) de lo elegido: son iguales para los cuatro.
+  const semanaRef = todasEscala.find(f => f.semana === semana) ?? null
 
   const ranking: FilaRanking[] = useMemo(
-    () => vendedores.map(v => ({ ...v, actual: v.filas.find(f => f.semana === semana) ?? null, acum: acumuladoTemporada(v.filas) })),
-    [vendedores, semana],
+    () => vendedores.map(v => {
+      const enEscala = escala === 'periodo' ? v.periodos : v.filas
+      return { ...v, enEscala, actual: enEscala.find(f => f.semana === semana) ?? null, acum: acumuladoTemporada(v.filas) }
+    }),
+    [vendedores, escala, semana],
   )
 
   const [orden, setOrden] = useState<Orden>('semana')
@@ -63,19 +74,17 @@ export default function VistaEquipo({
 
   return (
     <div className="flex flex-col">
-      {semanaRef && (
-        <section id="resumen-semana" className="scroll-mt-4 pb-5">
-          <SelectorSemana opciones={opciones} valor={semana} actual={enCurso?.semana ?? null} onCambiar={onSemana} />
-          {/* Nivel del equipo: mismos cortes (<50 / 50–80 / ≥80) sobre la suma de la semana elegida. */}
-          <ResumenSemana prefijo="Equipo · " fila={semanaRef} suma={semanaEquipo} hoy={hoy} />
-        </section>
-      )}
+      <section id="resumen-semana" className="scroll-mt-4 pb-5">
+        <SelectorSemana opciones={opciones} actual={enCurso?.semana ?? null} corte={corte} />
+        {/* Nivel del equipo: mismos cortes (<50 / 50–80 / ≥80) sobre la suma de lo elegido. */}
+        {semanaRef && <ResumenSemana prefijo="Equipo · " fila={semanaRef} suma={semanaEquipo} hoy={hoy} />}
+      </section>
 
       <section className="border-t border-[var(--cc-line)] pb-5 pt-5">
         <Titulo
           extra={
             <div className="flex items-center gap-1">
-              <BotonOrden activo={orden === 'semana'} desc={desc} onClick={() => cambiarOrden('semana')}>% semana</BotonOrden>
+              <BotonOrden activo={orden === 'semana'} desc={desc} onClick={() => cambiarOrden('semana')}>{escala === 'periodo' ? '% mes' : '% semana'}</BotonOrden>
               <BotonOrden activo={orden === 'acumulado'} desc={desc} onClick={() => cambiarOrden('acumulado')}>% acumulado</BotonOrden>
               <button
                 type="button"
@@ -89,15 +98,16 @@ export default function VistaEquipo({
         >
           Ranking por vendedor
         </Titulo>
-        <TablaRanking ranking={ordenado} semana={semana} onElegir={onElegir} />
+        <TablaRanking ranking={ordenado} nombre={semanaRef?.nombre ?? ''} onElegir={onElegir} />
       </section>
 
       <MatrizSemaforos
         ranking={ordenado}
         semanaActual={enCurso?.semana ?? null}
         semanaElegida={semana}
+        porMes={escala === 'periodo'}
         onSemana={s => {
-          onSemana(s)
+          corte.onValor(s)
           document.getElementById('resumen-semana')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
         }}
         onElegir={onElegir}
@@ -133,11 +143,11 @@ function BotonOrden({ activo, desc, onClick, children }: { activo: boolean; desc
 const COLS_RANKING =
   'grid-cols-[20px_minmax(0,1fr)_auto_16px] lg:grid-cols-[24px_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,0.8fr)_72px_minmax(0,1.1fr)_64px_20px]'
 
-function TablaRanking({ ranking, semana, onElegir }: { ranking: FilaRanking[]; semana: number; onElegir: (id: string) => void }) {
+function TablaRanking({ ranking, nombre, onElegir }: { ranking: FilaRanking[]; nombre: string; onElegir: (id: string) => void }) {
   return (
     <div>
       <div className={`hidden ${COLS_RANKING} gap-x-4 border-b border-[var(--cc-line)] px-3 pb-2 text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--cc-ink-3)] lg:grid`}>
-        <span>#</span><span>Vendedor</span><span>Semana {semana} · Ventas / Meta</span><span /><span>Avance</span>
+        <span>#</span><span>Vendedor</span><span>{nombre} · Ventas / Meta</span><span /><span>Avance</span>
         <span>Acumulado temporada</span><span className="text-right">Clientes</span><span />
       </div>
       {ranking.map((r, i) => {
@@ -210,14 +220,15 @@ function TablaRanking({ ranking, semana, onElegir }: { ranking: FilaRanking[]; s
 const MARCAS = new Set([1, 5, 10, 15, 20, 25])
 
 function MatrizSemaforos({
-  ranking, semanaActual, semanaElegida, onSemana, onElegir,
+  ranking, semanaActual, semanaElegida, porMes, onSemana, onElegir,
 }: {
-  ranking: FilaRanking[]; semanaActual: number | null; semanaElegida: number
+  ranking: FilaRanking[]; semanaActual: number | null; semanaElegida: number; porMes: boolean
   onSemana: (semana: number) => void; onElegir: (userId: string) => void
 }) {
   const marcada = (s: number) => s === semanaActual || s === semanaElegida
   const cerca = (s: number) => [semanaActual, semanaElegida].some(m => m !== null && Math.abs(s - m) <= 2)
-  const numSemanas = Math.max(25, ...ranking.flatMap(r => r.filas.map(f => f.semana)))
+  const numSemanas = Math.max(porMes ? 1 : 25, ...ranking.flatMap(r => r.enEscala.map(f => f.semana)))
+  const cortos = new Map(ranking.flatMap(r => r.enEscala.map(f => [f.semana, f.corto] as const)))
   const semanas = Array.from({ length: numSemanas }, (_, i) => i + 1)
   const columnas = `minmax(64px, 140px) repeat(${numSemanas}, minmax(0, 1fr))`
 
@@ -238,7 +249,7 @@ function MatrizSemaforos({
           </div>
         }
       >
-        Semáforo por semana
+        {porMes ? 'Semáforo por mes (24→23)' : 'Semáforo por semana'}
       </Titulo>
 
       <div className="grid items-center gap-[2px] md:gap-[3px]" style={{ gridTemplateColumns: columnas }}>
@@ -248,19 +259,19 @@ function MatrizSemaforos({
             key={s}
             type="button"
             onClick={() => onSemana(s)}
-            aria-label={`Ver semana ${s}`}
+            aria-label={`Ver ${cortos.get(s) ?? s}`}
             className="flex min-h-[20px] justify-center overflow-visible whitespace-nowrap text-[11px] tabular-nums"
             style={{
               color: s === semanaElegida ? 'var(--cc-ink)' : s === semanaActual ? 'var(--m-oro-texto)' : 'var(--cc-ink-2)',
               fontWeight: marcada(s) ? 800 : 500,
             }}
           >
-            {marcada(s) || (MARCAS.has(s) && !cerca(s)) ? s : ''}
+            {porMes ? cortos.get(s) ?? s : marcada(s) || (MARCAS.has(s) && !cerca(s)) ? s : ''}
           </button>
         ))}
 
         {ranking.map(r => {
-          const porSemana = new Map(r.filas.map(f => [f.semana, f]))
+          const porSemana = new Map(r.enEscala.map(f => [f.semana, f]))
           return (
             <FilaMatriz key={r.userId} r={r} onElegir={onElegir}>
               {semanas.map(s => {
@@ -271,8 +282,8 @@ function MatrizSemaforos({
                     key={s}
                     type="button"
                     onClick={() => onSemana(s)}
-                    title={f ? `S${s} · ${nivel ? `${pctTxt(f.pctNeto)} · ${NIVEL_LABEL[nivel]}` : 'futura'}` : `S${s} · sin meta`}
-                    aria-label={`Ver semana ${s}`}
+                    title={f ? `${f.corto} · ${nivel ? `${pctTxt(f.pctNeto)} · ${NIVEL_LABEL[nivel]}` : 'futura'}` : `${s} · sin meta`}
+                    aria-label={`Ver ${f?.corto ?? s}`}
                     className="h-5 rounded-[3px] md:h-6"
                     style={{
                       background: nivel ? NIVEL_BARRA[nivel] : 'var(--cc-neutral-soft)',
@@ -312,7 +323,7 @@ function exportarCsv(ranking: FilaRanking[]) {
   // Separador ';' y coma decimal: es lo que abre bien un Excel en es-CL.
   const dec = (n: number) => (Math.round(n * 10) / 10).toString().replace('.', ',')
   const encabezado = [
-    'Territorio', 'Vendedor', 'Semana', 'Desde', 'Hasta',
+    'Territorio', 'Vendedor', 'Semana / mes', 'Desde', 'Hasta',
     'Meta neto', 'Real neto', '% neto', 'Meta litros', 'Real litros', '% litros',
     'Meta clientes nuevos', 'Real clientes nuevos', 'Nivel',
     'Acum meta neto', 'Acum real neto', 'Acum % neto',
@@ -320,7 +331,7 @@ function exportarCsv(ranking: FilaRanking[]) {
   const filas = ranking.map(r => {
     const a = r.actual
     return [
-      r.territorio, r.vendedor, a ? `S${a.semana}` : '', a?.fechaInicio ?? '', a?.fechaFin ?? '',
+      r.territorio, r.vendedor, a ? a.nombre : '', a?.fechaInicio ?? '', a?.fechaFin ?? '',
       a ? Math.round(a.metaNeto) : '', a ? Math.round(a.realNeto) : '', a ? dec(a.pctNeto) : '',
       a ? dec(a.metaLitros) : '', a ? dec(a.realLitros) : '', a ? dec(a.pctLitros) : '',
       a?.metaClientes ?? '', a?.realClientes ?? '', a && a.estado !== 'futura' ? NIVEL_LABEL[nivelPorPct(a.pctNeto)] : '',
@@ -332,12 +343,12 @@ function exportarCsv(ranking: FilaRanking[]) {
     return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
   }
   const csv = [encabezado, ...filas].map(f => f.map(escapar).join(';')).join('\r\n')
-  const semana = ranking.find(r => r.actual)?.actual?.semana
+  const corto = ranking.find(r => r.actual)?.actual?.corto
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = `metas-temporada-${semana ? `S${semana}` : 'equipo'}.csv`
+  link.download = `metas-temporada-${corto ?? 'equipo'}.csv`
   document.body.appendChild(link)
   link.click()
   link.remove()

@@ -3,10 +3,11 @@
 import { useState } from 'react'
 import { AlertTriangle, Target } from 'lucide-react'
 import {
-  type FilaMeta,
+  type FilaMeta, type Escala,
   semanaEnCurso, semanaInicial, acumuladoTemporada, acumular, dosRojasSeguidas,
 } from './tipos'
 import {
+  type Corte,
   ResumenSemana, SelectorSemana, opcionesSemana, TablaSemanas,
   FranjaAcumulado, PieTemporada, Titulo,
 } from './ui'
@@ -15,37 +16,45 @@ import {
  * Pantalla de metas de UN vendedor. La usa el vendedor (sus filas vienen ya
  * acotadas por RLS) y el admin al elegir a alguien en el selector — así el
  * admin ve exactamente lo mismo que esa persona.
+ * `filas` = semanas del plan; `periodos` = las mismas metas por período 24→23.
+ * Acumulado, pie y alerta de semanas rojas salen siempre de las semanas.
  */
 export default function VistaVendedor({
-  filas, hoy, semana, onSemana,
+  filas, periodos, hoy, corte,
 }: {
-  filas: FilaMeta[]; hoy: string; semana: number; onSemana: (semana: number) => void
+  filas: FilaMeta[]; periodos: FilaMeta[]; hoy: string; corte: Corte
 }) {
   const semanas = [...filas].sort((a, b) => a.semana - b.semana)
-  const actual = semanaEnCurso(semanas)
-  const [abierta, setAbierta] = useState<number | null>(actual?.semana ?? null)
+  const porMes = corte.escala === 'periodo'
+  const enEscala = porMes ? [...periodos].sort((a, b) => a.semana - b.semana) : semanas
+  const actual = semanaEnCurso(enEscala)
+  const [abierta, setAbierta] = useState<{ escala: Escala; n: number } | null>(() => {
+    const s = semanaEnCurso(semanas)
+    return s ? { escala: 'semana', n: s.semana } : null
+  })
 
   if (semanas.length === 0) return <SinMetas />
 
-  const elegida = semanas.find(f => f.semana === semana) ?? semanas.find(f => f.semana === semanaInicial(semanas)) ?? semanas[0]
+  const elegida = enEscala.find(f => f.semana === corte.valor) ?? enEscala.find(f => f.semana === semanaInicial(enEscala)) ?? null
   const total = acumular(semanas)
   const acumulado = acumuladoTemporada(semanas)
+  const abiertaAqui = abierta?.escala === corte.escala ? abierta.n : null
 
   return (
     <div className="flex flex-col">
       {dosRojasSeguidas(semanas) && <AlertaRojas />}
 
       <section className="pb-5">
-        <SelectorSemana opciones={opcionesSemana(semanas)} valor={elegida.semana} actual={actual?.semana ?? null} onCambiar={onSemana} />
-        <ResumenSemana fila={elegida} suma={acumular([elegida])} hoy={hoy} />
+        <SelectorSemana opciones={opcionesSemana(enEscala)} actual={actual?.semana ?? null} corte={{ ...corte, valor: elegida?.semana ?? corte.valor }} />
+        {elegida && <ResumenSemana fila={elegida} suma={acumular([elegida])} hoy={hoy} />}
       </section>
 
       <section className="border-t border-[var(--cc-line)] pb-5 pt-5">
-        <Titulo>Semanas de la temporada</Titulo>
+        <Titulo>{porMes ? 'Meses de la temporada (24→23)' : 'Semanas de la temporada'}</Titulo>
         <TablaSemanas
-          semanas={semanas}
-          abierta={abierta}
-          onToggle={s => setAbierta(abierta === s ? null : s)}
+          semanas={enEscala}
+          abierta={abiertaAqui}
+          onToggle={n => setAbierta(abiertaAqui === n ? null : { escala: corte.escala, n })}
         />
       </section>
 

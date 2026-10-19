@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Check, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import {
-  type Acumulado, type FilaMeta, type Nivel,
+  type Acumulado, type FilaMeta, type Nivel, type Escala,
   clp, litros, entero, pctTxt, pct, rangoFechas, fechaCorta, semanaTope, diasHabilesRestantes,
   nivelPorPct, nivelDeSemana, NIVEL_COLOR, NIVEL_BARRA, NIVEL_FONDO, NIVEL_LABEL,
 } from './tipos'
@@ -70,7 +70,7 @@ export function EncabezadoSemana({ prefijo, fila, nivel }: { prefijo?: string; f
   return (
     <div className="mb-4 flex items-center justify-between gap-3">
       <p className="min-w-0 text-[var(--cc-ink)]">
-        <span className="text-[22px] font-bold tracking-[-0.02em]">{prefijo ?? ''}Semana {fila.semana}</span>
+        <span className="text-[22px] font-bold tracking-[-0.02em]">{prefijo ?? ''}{fila.nombre}</span>
         <span className="text-[16px] font-medium text-[var(--cc-ink-2)]"> · {rangoFechas(fila.fechaInicio, fila.fechaFin)}</span>
         <span className="ml-3 inline-flex items-center gap-1.5 align-middle text-[13px] font-medium text-[var(--cc-ink-2)]">
           <span
@@ -89,64 +89,97 @@ export function EncabezadoSemana({ prefijo, fila, nivel }: { prefijo?: string; f
 
 export interface SemanaOpcion {
   semana: number
+  nombre: string
   fechaInicio: string
   fechaFin: string
 }
 
-/** Opciones únicas (una por semana) a partir de filas de uno o varios vendedores. */
+/** Qué se está mirando: escala (semana / período 24→23) y cuál de ellas. */
+export interface Corte {
+  escala: Escala
+  onEscala: (e: Escala) => void
+  /** N° de semana o de período elegido en la escala actual. */
+  valor: number
+  onValor: (n: number) => void
+}
+
+/** Opciones únicas (una por semana o período) a partir de filas de uno o varios vendedores. */
 export function opcionesSemana(filas: FilaMeta[]): SemanaOpcion[] {
   const m = new Map<number, SemanaOpcion>()
-  for (const f of filas) if (!m.has(f.semana)) m.set(f.semana, { semana: f.semana, fechaInicio: f.fechaInicio, fechaFin: f.fechaFin })
+  for (const f of filas) if (!m.has(f.semana)) m.set(f.semana, { semana: f.semana, nombre: f.nombre, fechaInicio: f.fechaInicio, fechaFin: f.fechaFin })
   return [...m.values()].sort((a, b) => a.semana - b.semana)
 }
 
 /**
- * ‹ S3 · 19–25 oct › — flechas para moverse de a una semana y un <select>
- * nativo invisible encima del rótulo para saltar directo (en el teléfono abre
- * la rueda del sistema). "Semana actual" aparece solo si uno se movió.
+ * [Semana | Mes 24→23]  ‹ Semana 3 · 19–25 oct › — el interruptor cambia la
+ * escala (semanas del plan o períodos comerciales 24→23); las flechas se mueven
+ * de a uno y un <select> nativo invisible encima del rótulo permite saltar
+ * directo (en el teléfono abre la rueda del sistema). "Ir a hoy" aparece solo
+ * si uno se movió.
  */
 export function SelectorSemana({
-  opciones, valor, actual, onCambiar,
+  opciones, actual, corte,
 }: {
-  opciones: SemanaOpcion[]; valor: number; actual: number | null; onCambiar: (semana: number) => void
+  opciones: SemanaOpcion[]; actual: number | null; corte: Corte
 }) {
+  const { escala, valor, onValor: onCambiar } = corte
   const i = opciones.findIndex(o => o.semana === valor)
   const sel = opciones[i]
   const prev = i > 0 ? opciones[i - 1] : null
   const next = i >= 0 && i < opciones.length - 1 ? opciones[i + 1] : null
-  if (!sel) return null
+  const Unidad = escala === 'periodo' ? 'Período' : 'Semana'
 
   return (
-    <div className="mb-4 flex items-center gap-2">
-      <div className="flex min-w-0 flex-1 items-center rounded-[12px] bg-[#EEEAE2] p-1 md:flex-none">
-        <FlechaSemana label="Semana anterior" disabled={!prev} onClick={() => prev && onCambiar(prev.semana)}>
-          <ChevronLeft size={18} />
-        </FlechaSemana>
-        <label className="relative min-w-0 flex-1 md:w-[250px] md:flex-none">
-          <span className="sr-only">Elegir semana</span>
-          <select
-            value={valor}
-            onChange={e => onCambiar(Number(e.target.value))}
-            className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
+    <div className="mb-4 flex flex-wrap items-center gap-2">
+      <div role="tablist" aria-label="Ver por" className="flex shrink-0 rounded-[12px] bg-[#EEEAE2] p-1">
+        {(['semana', 'periodo'] as const).map(e => (
+          <button
+            key={e}
+            type="button"
+            role="tab"
+            aria-selected={escala === e}
+            onClick={() => corte.onEscala(e)}
+            className={`min-h-[40px] rounded-[9px] px-3.5 text-[14px] font-bold ${
+              escala === e
+                ? 'bg-[var(--cc-ink)] text-[var(--cc-on-gold)]'
+                : 'text-[var(--cc-ink-2)] hover:bg-white/60 hover:text-[var(--cc-ink)]'
+            }`}
           >
-            {opciones.map(o => (
-              <option key={o.semana} value={o.semana}>
-                Semana {o.semana} · {rangoFechas(o.fechaInicio, o.fechaFin)}{o.semana === actual ? ' · en curso' : ''}
-              </option>
-            ))}
-          </select>
-          <span className="pointer-events-none flex min-h-[40px] items-center justify-center gap-1.5 rounded-[9px] bg-white px-2 text-[14px] font-bold tabular-nums text-[var(--cc-ink)] shadow-[0_1px_2px_rgba(17,13,9,0.12)]">
-            <span className="truncate">
-              Semana {sel.semana}
-              <span className="font-medium text-[var(--cc-ink-2)]"> · {rangoFechas(sel.fechaInicio, sel.fechaFin)}</span>
-            </span>
-            <ChevronDown size={15} className="shrink-0 text-[var(--cc-ink-2)]" />
-          </span>
-        </label>
-        <FlechaSemana label="Semana siguiente" disabled={!next} onClick={() => next && onCambiar(next.semana)}>
-          <ChevronRight size={18} />
-        </FlechaSemana>
+            {e === 'semana' ? 'Semana' : 'Mes 24→23'}
+          </button>
+        ))}
       </div>
+      {sel && (
+        <div className="flex min-w-[240px] flex-1 items-center rounded-[12px] bg-[#EEEAE2] p-1 md:flex-none">
+          <FlechaSemana label={`${Unidad} anterior`} disabled={!prev} onClick={() => prev && onCambiar(prev.semana)}>
+            <ChevronLeft size={18} />
+          </FlechaSemana>
+          <label className="relative min-w-0 flex-1 md:w-[250px] md:flex-none">
+            <span className="sr-only">Elegir {Unidad.toLowerCase()}</span>
+            <select
+              value={valor}
+              onChange={e => onCambiar(Number(e.target.value))}
+              className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
+            >
+              {opciones.map(o => (
+                <option key={o.semana} value={o.semana}>
+                  {o.nombre} · {rangoFechas(o.fechaInicio, o.fechaFin)}{o.semana === actual ? ' · en curso' : ''}
+                </option>
+              ))}
+            </select>
+            <span className="pointer-events-none flex min-h-[40px] items-center justify-center gap-1.5 rounded-[9px] bg-white px-2 text-[14px] font-bold tabular-nums text-[var(--cc-ink)] shadow-[0_1px_2px_rgba(17,13,9,0.12)]">
+              <span className="truncate">
+                {sel.nombre}
+                <span className="font-medium text-[var(--cc-ink-2)]"> · {rangoFechas(sel.fechaInicio, sel.fechaFin)}</span>
+              </span>
+              <ChevronDown size={15} className="shrink-0 text-[var(--cc-ink-2)]" />
+            </span>
+          </label>
+          <FlechaSemana label={`${Unidad} siguiente`} disabled={!next} onClick={() => next && onCambiar(next.semana)}>
+            <ChevronRight size={18} />
+          </FlechaSemana>
+        </div>
+      )}
       {actual !== null && valor !== actual && (
         <button
           type="button"
@@ -190,19 +223,21 @@ export function ResumenSemana({
   const nivel = futura ? null : nivelPorPct(pct(suma.realNeto, suma.metaNeto))
   const falta = suma.metaNeto - suma.realNeto
   const fuerte = 'font-bold text-[var(--cc-ink)]'
+  const mes = fila.tipo === 'periodo'
+  const cerrada = mes ? 'Mes cerrado' : 'Semana cerrada'
 
   let pie: React.ReactNode
   if (fila.estado === 'en_curso') {
     // La vista decide "en curso" con CURRENT_DATE del servidor (UTC); de noche en
     // Chile ya puede ser el día siguiente allá. Nunca contar antes del inicio.
     const dias = diasHabilesRestantes(hoy > fila.fechaInicio ? hoy : fila.fechaInicio, fila.fechaFin)
-    pie = <LineaRitmo falta={falta} dias={dias} />
+    pie = <LineaRitmo falta={falta} dias={dias} este={mes ? 'este mes' : 'esta semana'} />
   } else if (fila.estado === 'cerrada') {
     pie = (
       <p className="mt-4 text-[14px] font-medium tabular-nums text-[var(--cc-ink-2)]">
         {falta > 0
-          ? <>Semana cerrada · quedaron <strong className={fuerte}>{clp(falta)}</strong> bajo la meta</>
-          : <>Semana cerrada · meta cumplida{falta < 0 && <>, superada por <strong className={fuerte}>{clp(-falta)}</strong></>}</>}
+          ? <>{cerrada} · quedaron <strong className={fuerte}>{clp(falta)}</strong> bajo la meta</>
+          : <>{cerrada} · meta cumplida{falta < 0 && <>, superada por <strong className={fuerte}>{clp(-falta)}</strong></>}</>}
       </p>
     )
   } else {
@@ -294,7 +329,7 @@ export function indicadoresMeta(a: Acumulado): Indicador[] {
   ]
 }
 
-export function LineaRitmo({ falta, dias }: { falta: number; dias: number }) {
+export function LineaRitmo({ falta, dias, este = 'esta semana' }: { falta: number; dias: number; este?: string }) {
   const fuerte = 'font-bold text-[var(--cc-ink)]'
   let texto: React.ReactNode
   if (falta <= 0) texto = <>Meta de ventas cumplida · todo lo que se venda ahora suma al acumulado</>
@@ -306,7 +341,7 @@ export function LineaRitmo({ falta, dias }: { falta: number; dias: number }) {
         {' · '}Quedan {dias} {dias === 1 ? 'día' : 'días'}
       </>
     )
-  } else texto = <>Faltan <strong className={fuerte}>{clp(falta)}</strong> · no quedan días hábiles esta semana</>
+  } else texto = <>Faltan <strong className={fuerte}>{clp(falta)}</strong> · no quedan días hábiles {este}</>
   return <p className="mt-4 text-[14px] font-medium tabular-nums text-[var(--cc-ink-2)]">{texto}</p>
 }
 
@@ -326,14 +361,16 @@ export function TablaSemanas({
   semanas: FilaMeta[]; abierta: number | null; onToggle: (semana: number) => void
 }) {
   const [todas, setTodas] = useState(false)
-  const limite = Math.max(semanaTope(semanas), 1) + SEMANAS_ADELANTE
+  const porMes = semanas[0]?.tipo === 'periodo'
+  // Los 6 meses caben siempre; solo las 25 semanas se recortan.
+  const limite = porMes ? Infinity : Math.max(semanaTope(semanas), 1) + SEMANAS_ADELANTE
   const ocultas = semanas.filter(f => f.semana > limite)
   const visibles = todas ? semanas : semanas.filter(f => f.semana <= limite)
 
   return (
     <div>
       <div className={`hidden ${COLS_SEMANA} gap-x-3 lg:gap-x-4 border-b border-[var(--cc-line)] px-3 pb-2 ${CABECERA} md:grid`}>
-        <span>Semana</span><span>Período</span><span>Ventas / Meta</span><span /><span>Avance</span><span />
+        <span>{porMes ? 'Mes' : 'Semana'}</span><span>Período</span><span>Ventas / Meta</span><span /><span>Avance</span><span />
       </div>
       {visibles.map(f => (
         <FilaSemana key={f.id} fila={f} abierta={abierta === f.semana} onToggle={() => onToggle(f.semana)} />
@@ -371,7 +408,7 @@ function FilaSemana({ fila, abierta, onToggle }: { fila: FilaMeta; abierta: bool
         style={{ background: enCurso ? 'rgba(200,149,28,0.10)' : undefined }}
       >
         <span className="text-[15px] font-bold tabular-nums" style={{ color: enCurso ? 'var(--m-oro-texto)' : 'var(--cc-ink)' }}>
-          S{fila.semana}
+          {fila.corto}
         </span>
         <span className="flex min-w-0 flex-col md:contents">
           <span className="truncate text-[13px] font-medium text-[var(--cc-ink-2)] md:text-[14px]">
