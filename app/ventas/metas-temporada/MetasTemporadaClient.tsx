@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, RefreshCw } from 'lucide-react'
-import { type FilaMeta } from './tipos'
+import { type FilaMeta, semanaInicial } from './tipos'
 import VistaVendedor, { SinMetas } from './VistaVendedor'
 import VistaEquipo, { type VendedorPlan } from './VistaEquipo'
 
@@ -22,6 +22,9 @@ export default function MetasTemporadaClient({
 }) {
   const router = useRouter()
   const [elegido, setElegido] = useState<string>(EQUIPO)
+  // Semana elegida en el selector. Vive acá (no en cada vista) para que al pasar
+  // de "Equipo" a un vendedor se siga mirando la misma semana.
+  const [semana, setSemana] = useState(() => semanaInicial(filas))
 
   const vendedores: VendedorPlan[] = useMemo(() => {
     const porUsuario = new Map<string, VendedorPlan>()
@@ -65,11 +68,11 @@ export default function MetasTemporadaClient({
       </div>
     )
   } else if (!esAdmin) {
-    contenido = <VistaVendedor filas={filas} hoy={hoy} />
+    contenido = <VistaVendedor filas={filas} hoy={hoy} semana={semana} onSemana={setSemana} />
   } else if (seleccionado) {
-    contenido = <VistaVendedor key={seleccionado.userId} filas={seleccionado.filas} hoy={hoy} />
+    contenido = <VistaVendedor key={seleccionado.userId} filas={seleccionado.filas} hoy={hoy} semana={semana} onSemana={setSemana} />
   } else if (vendedores.length) {
-    contenido = <VistaEquipo vendedores={vendedores} hoy={hoy} onElegir={elegir} />
+    contenido = <VistaEquipo vendedores={vendedores} hoy={hoy} semana={semana} onSemana={setSemana} onElegir={elegir} />
   } else {
     contenido = <SinMetas />
   }

@@ -4,11 +4,10 @@ import { useState } from 'react'
 import { AlertTriangle, Target } from 'lucide-react'
 import {
   type FilaMeta,
-  rangoFechas, diasHabilesRestantes,
-  semanaEnCurso, acumuladoTemporada, acumular, dosRojasSeguidas, nivelDeSemana,
+  semanaEnCurso, semanaInicial, acumuladoTemporada, acumular, dosRojasSeguidas,
 } from './tipos'
 import {
-  EncabezadoSemana, Indicadores, indicadoresDe, LineaRitmo, TablaSemanas,
+  ResumenSemana, SelectorSemana, opcionesSemana, TablaSemanas,
   FranjaAcumulado, PieTemporada, Titulo,
 } from './ui'
 
@@ -17,13 +16,18 @@ import {
  * acotadas por RLS) y el admin al elegir a alguien en el selector — así el
  * admin ve exactamente lo mismo que esa persona.
  */
-export default function VistaVendedor({ filas, hoy }: { filas: FilaMeta[]; hoy: string }) {
+export default function VistaVendedor({
+  filas, hoy, semana, onSemana,
+}: {
+  filas: FilaMeta[]; hoy: string; semana: number; onSemana: (semana: number) => void
+}) {
   const semanas = [...filas].sort((a, b) => a.semana - b.semana)
   const actual = semanaEnCurso(semanas)
   const [abierta, setAbierta] = useState<number | null>(actual?.semana ?? null)
 
   if (semanas.length === 0) return <SinMetas />
 
+  const elegida = semanas.find(f => f.semana === semana) ?? semanas.find(f => f.semana === semanaInicial(semanas)) ?? semanas[0]
   const total = acumular(semanas)
   const acumulado = acumuladoTemporada(semanas)
 
@@ -31,7 +35,10 @@ export default function VistaVendedor({ filas, hoy }: { filas: FilaMeta[]; hoy: 
     <div className="flex flex-col">
       {dosRojasSeguidas(semanas) && <AlertaRojas />}
 
-      {actual ? <SemanaActual fila={actual} hoy={hoy} /> : <SinSemanaEnCurso filas={semanas} />}
+      <section className="pb-5">
+        <SelectorSemana opciones={opcionesSemana(semanas)} valor={elegida.semana} actual={actual?.semana ?? null} onCambiar={onSemana} />
+        <ResumenSemana fila={elegida} suma={acumular([elegida])} hoy={hoy} />
+      </section>
 
       <section className="border-t border-[var(--cc-line)] pb-5 pt-5">
         <Titulo>Semanas de la temporada</Titulo>
@@ -48,19 +55,6 @@ export default function VistaVendedor({ filas, hoy }: { filas: FilaMeta[]; hoy: 
   )
 }
 
-function SemanaActual({ fila, hoy }: { fila: FilaMeta; hoy: string }) {
-  // La vista decide "en curso" con CURRENT_DATE del servidor (UTC); de noche en
-  // Chile ya puede ser el día siguiente allá. Nunca contar antes del inicio.
-  const dias = diasHabilesRestantes(hoy > fila.fechaInicio ? hoy : fila.fechaInicio, fila.fechaFin)
-  return (
-    <section className="pb-5">
-      <EncabezadoSemana fila={fila} nivel={nivelDeSemana(fila)} />
-      <Indicadores items={indicadoresDe(acumular([fila]))} />
-      <LineaRitmo falta={fila.metaNeto - fila.realNeto} dias={dias} />
-    </section>
-  )
-}
-
 function AlertaRojas() {
   return (
     <div
@@ -74,20 +68,6 @@ function AlertaRojas() {
         Coordina una llamada con la gerencia comercial para ajustar el plan.
       </p>
     </div>
-  )
-}
-
-function SinSemanaEnCurso({ filas }: { filas: FilaMeta[] }) {
-  const todasFuturas = filas.every(f => f.estado === 'futura')
-  return (
-    <section className="pb-5">
-      <p className="text-[20px] font-bold tracking-[-0.02em] text-[var(--cc-ink)]">Sin semana en curso</p>
-      <p className="mt-1 text-[14px] font-medium text-[var(--cc-ink-2)]">
-        {todasFuturas
-          ? `La temporada parte el ${rangoFechas(filas[0].fechaInicio, filas[0].fechaInicio)}.`
-          : 'La temporada terminó. Este es el resultado final.'}
-      </p>
-    </section>
   )
 }
 

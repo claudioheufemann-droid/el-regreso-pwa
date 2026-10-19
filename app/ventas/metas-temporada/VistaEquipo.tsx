@@ -4,12 +4,12 @@ import { useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp, ChevronRight, Download } from 'lucide-react'
 import {
   type FilaMeta, type Acumulado,
-  clp, entero, pctTxt, pct, diasHabilesRestantes,
+  clp, entero, pctTxt, pct,
   semanaEnCurso, semanaTope, acumular, acumuladoTemporada,
   nivelPorPct, nivelDeSemana, NIVEL_COLOR, NIVEL_BARRA, NIVEL_LABEL,
 } from './tipos'
 import {
-  BarraNivel, PctNivel, EncabezadoSemana, Indicadores, indicadoresDe, LineaRitmo,
+  BarraNivel, PctNivel, ResumenSemana, SelectorSemana, opcionesSemana,
   FranjaAcumulado, PieTemporada, Titulo,
 } from './ui'
 
@@ -21,6 +21,7 @@ export interface VendedorPlan {
 }
 
 interface FilaRanking extends VendedorPlan {
+  /** Fila de la semana elegida en el selector (no necesariamente la en curso). */
   actual: FilaMeta | null
   acum: Acumulado
 }
@@ -28,17 +29,20 @@ interface FilaRanking extends VendedorPlan {
 type Orden = 'semana' | 'acumulado'
 
 export default function VistaEquipo({
-  vendedores, hoy, onElegir,
+  vendedores, hoy, semana, onSemana, onElegir,
 }: {
-  vendedores: VendedorPlan[]; hoy: string; onElegir: (userId: string) => void
+  vendedores: VendedorPlan[]; hoy: string; semana: number; onSemana: (semana: number) => void; onElegir: (userId: string) => void
 }) {
   const todas = vendedores.flatMap(v => v.filas)
   const tope = semanaTope(todas)
-  const semanaRef = semanaEnCurso(todas)
+  const enCurso = semanaEnCurso(todas)
+  const opciones = opcionesSemana(todas)
+  // Fila de referencia (fechas y estado) de la semana elegida: son iguales para los cuatro.
+  const semanaRef = todas.find(f => f.semana === semana) ?? null
 
   const ranking: FilaRanking[] = useMemo(
-    () => vendedores.map(v => ({ ...v, actual: semanaEnCurso(v.filas), acum: acumuladoTemporada(v.filas) })),
-    [vendedores],
+    () => vendedores.map(v => ({ ...v, actual: v.filas.find(f => f.semana === semana) ?? null, acum: acumuladoTemporada(v.filas) })),
+    [vendedores, semana],
   )
 
   const [orden, setOrden] = useState<Orden>('semana')
@@ -60,14 +64,10 @@ export default function VistaEquipo({
   return (
     <div className="flex flex-col">
       {semanaRef && (
-        <section className="pb-5">
-          {/* Nivel del equipo: mismos cortes (<50 / 50–80 / ≥80) sobre la suma de las semanas en curso. */}
-          <EncabezadoSemana prefijo="Equipo · " fila={semanaRef} nivel={nivelPorPct(pct(semanaEquipo.realNeto, semanaEquipo.metaNeto))} />
-          <Indicadores items={indicadoresDe(semanaEquipo)} />
-          <LineaRitmo
-            falta={semanaEquipo.metaNeto - semanaEquipo.realNeto}
-            dias={diasHabilesRestantes(hoy > semanaRef.fechaInicio ? hoy : semanaRef.fechaInicio, semanaRef.fechaFin)}
-          />
+        <section id="resumen-semana" className="scroll-mt-4 pb-5">
+          <SelectorSemana opciones={opciones} valor={semana} actual={enCurso?.semana ?? null} onCambiar={onSemana} />
+          {/* Nivel del equipo: mismos cortes (<50 / 50–80 / ≥80) sobre la suma de la semana elegida. */}
+          <ResumenSemana prefijo="Equipo · " fila={semanaRef} suma={semanaEquipo} hoy={hoy} />
         </section>
       )}
 
@@ -89,10 +89,19 @@ export default function VistaEquipo({
         >
           Ranking por vendedor
         </Titulo>
-        <TablaRanking ranking={ordenado} onElegir={onElegir} />
+        <TablaRanking ranking={ordenado} semana={semana} onElegir={onElegir} />
       </section>
 
-      <MatrizSemaforos ranking={ordenado} semanaActual={semanaRef?.semana ?? null} onElegir={onElegir} />
+      <MatrizSemaforos
+        ranking={ordenado}
+        semanaActual={enCurso?.semana ?? null}
+        semanaElegida={semana}
+        onSemana={s => {
+          onSemana(s)
+          document.getElementById('resumen-semana')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }}
+        onElegir={onElegir}
+      />
 
       <FranjaAcumulado a={acumEquipo} etiqueta="Acumulado del equipo a la fecha" />
       <PieTemporada metaNeto={total.metaNeto} metaLitros={total.metaLitros} realNeto={acumEquipo.realNeto} />
@@ -124,15 +133,16 @@ function BotonOrden({ activo, desc, onClick, children }: { activo: boolean; desc
 const COLS_RANKING =
   'grid-cols-[20px_minmax(0,1fr)_auto_16px] lg:grid-cols-[24px_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,0.8fr)_72px_minmax(0,1.1fr)_64px_20px]'
 
-function TablaRanking({ ranking, onElegir }: { ranking: FilaRanking[]; onElegir: (id: string) => void }) {
+function TablaRanking({ ranking, semana, onElegir }: { ranking: FilaRanking[]; semana: number; onElegir: (id: string) => void }) {
   return (
     <div>
       <div className={`hidden ${COLS_RANKING} gap-x-4 border-b border-[var(--cc-line)] px-3 pb-2 text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--cc-ink-3)] lg:grid`}>
-        <span>#</span><span>Vendedor</span><span>Semana · Ventas / Meta</span><span /><span>Avance</span>
+        <span>#</span><span>Vendedor</span><span>Semana {semana} · Ventas / Meta</span><span /><span>Avance</span>
         <span>Acumulado temporada</span><span className="text-right">Clientes</span><span />
       </div>
       {ranking.map((r, i) => {
         const a = r.actual
+        const futura = a?.estado === 'futura'
         const nivel = a ? nivelDeSemana(a) : null
         const pAcum = pct(r.acum.realNeto, r.acum.metaNeto)
         return (
@@ -150,9 +160,13 @@ function TablaRanking({ ranking, onElegir }: { ranking: FilaRanking[]; onElegir:
                 <span className="block truncate text-[13px] font-medium text-[var(--cc-ink-2)]">{r.territorio}</span>
               </span>
               <span className="truncate text-[13px] font-medium tabular-nums text-[var(--cc-ink-2)] sm:text-[14px]">
-                {a ? <><strong className="font-bold text-[var(--cc-ink)]">{clp(a.realNeto)}</strong> / {clp(a.metaNeto)}</> : '—'}
+                {!a ? '—' : futura ? (
+                  <>Meta <strong className="font-bold text-[var(--cc-ink)]">{clp(a.metaNeto)}</strong></>
+                ) : (
+                  <><strong className="font-bold text-[var(--cc-ink)]">{clp(a.realNeto)}</strong> / {clp(a.metaNeto)}</>
+                )}
               </span>
-              <span className="hidden lg:block">{a && <BarraNivel valor={a.pctNeto} alto={7} />}</span>
+              <span className="hidden lg:block">{a && !futura && <BarraNivel valor={a.pctNeto} alto={7} />}</span>
               {/* En móvil, el acumulado va en una tercera línea */}
               <span className="truncate text-[12px] font-medium tabular-nums text-[var(--cc-ink-2)] lg:hidden">
                 Acum. {clp(r.acum.realNeto)} · <PctNivel valor={pAcum} />
@@ -166,10 +180,10 @@ function TablaRanking({ ranking, onElegir }: { ranking: FilaRanking[]; onElegir:
                 title={nivel ? NIVEL_LABEL[nivel] : undefined}
               >
                 <span className="size-2.5 rounded-full" style={{ background: nivel ? NIVEL_BARRA[nivel] : 'var(--cc-neutral)' }} />
-                {a ? pctTxt(a.pctNeto) : '—'}
+                {a && !futura ? pctTxt(a.pctNeto) : '—'}
               </span>
               <span className="text-[12px] font-medium tabular-nums text-[var(--cc-ink-2)] lg:hidden">
-                {a ? `${entero(a.realClientes)}/${entero(a.metaClientes)} nuevos` : ''}
+                {!a ? '' : futura ? `meta ${entero(a.metaClientes)} nuevos` : `${entero(a.realClientes)}/${entero(a.metaClientes)} nuevos`}
               </span>
             </span>
 
@@ -177,7 +191,11 @@ function TablaRanking({ ranking, onElegir }: { ranking: FilaRanking[]; onElegir:
               <strong className="font-bold text-[var(--cc-ink)]">{clp(r.acum.realNeto)}</strong> · <PctNivel valor={pAcum} />
             </span>
             <span className="hidden text-right text-[14px] font-bold tabular-nums text-[var(--cc-ink)] lg:block">
-              {a ? <>{entero(a.realClientes)}<span className="font-medium text-[var(--cc-ink-2)]">/{entero(a.metaClientes)}</span></> : '—'}
+              {!a ? '—' : futura ? (
+                <span className="font-medium text-[var(--cc-ink-2)]">meta {entero(a.metaClientes)}</span>
+              ) : (
+                <>{entero(a.realClientes)}<span className="font-medium text-[var(--cc-ink-2)]">/{entero(a.metaClientes)}</span></>
+              )}
             </span>
             <ChevronRight size={17} className="justify-self-end text-[var(--cc-ink-2)]" />
           </button>
@@ -192,10 +210,13 @@ function TablaRanking({ ranking, onElegir }: { ranking: FilaRanking[]; onElegir:
 const MARCAS = new Set([1, 5, 10, 15, 20, 25])
 
 function MatrizSemaforos({
-  ranking, semanaActual, onElegir,
+  ranking, semanaActual, semanaElegida, onSemana, onElegir,
 }: {
-  ranking: FilaRanking[]; semanaActual: number | null; onElegir: (userId: string) => void
+  ranking: FilaRanking[]; semanaActual: number | null; semanaElegida: number
+  onSemana: (semana: number) => void; onElegir: (userId: string) => void
 }) {
+  const marcada = (s: number) => s === semanaActual || s === semanaElegida
+  const cerca = (s: number) => [semanaActual, semanaElegida].some(m => m !== null && Math.abs(s - m) <= 2)
   const numSemanas = Math.max(25, ...ranking.flatMap(r => r.filas.map(f => f.semana)))
   const semanas = Array.from({ length: numSemanas }, (_, i) => i + 1)
   const columnas = `minmax(64px, 140px) repeat(${numSemanas}, minmax(0, 1fr))`
@@ -223,13 +244,19 @@ function MatrizSemaforos({
       <div className="grid items-center gap-[2px] md:gap-[3px]" style={{ gridTemplateColumns: columnas }}>
         <span />
         {semanas.map(s => (
-          <span
+          <button
             key={s}
-            className="flex justify-center overflow-visible whitespace-nowrap text-[11px] tabular-nums"
-            style={{ color: s === semanaActual ? 'var(--m-oro-texto)' : 'var(--cc-ink-2)', fontWeight: s === semanaActual ? 800 : 500 }}
+            type="button"
+            onClick={() => onSemana(s)}
+            aria-label={`Ver semana ${s}`}
+            className="flex min-h-[20px] justify-center overflow-visible whitespace-nowrap text-[11px] tabular-nums"
+            style={{
+              color: s === semanaElegida ? 'var(--cc-ink)' : s === semanaActual ? 'var(--m-oro-texto)' : 'var(--cc-ink-2)',
+              fontWeight: marcada(s) ? 800 : 500,
+            }}
           >
-            {s === semanaActual || (MARCAS.has(s) && (semanaActual === null || Math.abs(s - semanaActual) > 2)) ? s : ''}
-          </span>
+            {marcada(s) || (MARCAS.has(s) && !cerca(s)) ? s : ''}
+          </button>
         ))}
 
         {ranking.map(r => {
@@ -240,13 +267,16 @@ function MatrizSemaforos({
                 const f = porSemana.get(s)
                 const nivel = f ? nivelDeSemana(f) : null
                 return (
-                  <span
+                  <button
                     key={s}
+                    type="button"
+                    onClick={() => onSemana(s)}
                     title={f ? `S${s} · ${nivel ? `${pctTxt(f.pctNeto)} · ${NIVEL_LABEL[nivel]}` : 'futura'}` : `S${s} · sin meta`}
+                    aria-label={`Ver semana ${s}`}
                     className="h-5 rounded-[3px] md:h-6"
                     style={{
                       background: nivel ? NIVEL_BARRA[nivel] : 'var(--cc-neutral-soft)',
-                      outline: s === semanaActual ? '1.5px solid var(--cc-gold)' : undefined,
+                      outline: s === semanaElegida ? '2px solid var(--cc-ink)' : s === semanaActual ? '1.5px solid var(--cc-gold)' : undefined,
                       outlineOffset: 1,
                     }}
                   />
@@ -293,7 +323,7 @@ function exportarCsv(ranking: FilaRanking[]) {
       r.territorio, r.vendedor, a ? `S${a.semana}` : '', a?.fechaInicio ?? '', a?.fechaFin ?? '',
       a ? Math.round(a.metaNeto) : '', a ? Math.round(a.realNeto) : '', a ? dec(a.pctNeto) : '',
       a ? dec(a.metaLitros) : '', a ? dec(a.realLitros) : '', a ? dec(a.pctLitros) : '',
-      a?.metaClientes ?? '', a?.realClientes ?? '', a ? NIVEL_LABEL[nivelPorPct(a.pctNeto)] : '',
+      a?.metaClientes ?? '', a?.realClientes ?? '', a && a.estado !== 'futura' ? NIVEL_LABEL[nivelPorPct(a.pctNeto)] : '',
       Math.round(r.acum.metaNeto), Math.round(r.acum.realNeto), dec(pct(r.acum.realNeto, r.acum.metaNeto)),
     ]
   })

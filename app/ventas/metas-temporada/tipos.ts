@@ -106,6 +106,12 @@ export function rangoFechas(inicio: string, fin: string) {
   return `${a.d} ${MESES[a.m - 1]} – ${b.d} ${MESES[b.m - 1]}`
 }
 
+/** "26 oct" */
+export function fechaCorta(iso: string) {
+  const a = partes(iso)
+  return `${a.d} ${MESES[a.m - 1]}`
+}
+
 /** Días hábiles (lun–vie) desde `hoy` inclusive hasta `fin` inclusive. Fechas YYYY-MM-DD. */
 export function diasHabilesRestantes(hoy: string, fin: string) {
   const h = partes(hoy)
@@ -131,6 +137,13 @@ export function semanaTope(filas: FilaMeta[]) {
   if (actual) return actual.semana
   const cerradas = filas.filter(f => f.estado === 'cerrada')
   return cerradas.length ? Math.max(...cerradas.map(f => f.semana)) : 0
+}
+
+/** Semana que se muestra al abrir: la en curso; si no hay, la última cerrada; si la temporada no parte, la primera. */
+export function semanaInicial(filas: FilaMeta[]) {
+  const tope = semanaTope(filas)
+  if (tope) return tope
+  return filas.length ? Math.min(...filas.map(f => f.semana)) : 1
 }
 
 export function acumular(filas: FilaMeta[]): Acumulado {

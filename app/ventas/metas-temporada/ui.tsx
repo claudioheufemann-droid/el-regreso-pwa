@@ -1,10 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { Check, ChevronDown } from 'lucide-react'
+import { Check, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import {
   type Acumulado, type FilaMeta, type Nivel,
-  clp, litros, entero, pctTxt, pct, rangoFechas, semanaTope,
+  clp, litros, entero, pctTxt, pct, rangoFechas, fechaCorta, semanaTope, diasHabilesRestantes,
   nivelPorPct, nivelDeSemana, NIVEL_COLOR, NIVEL_BARRA, NIVEL_FONDO, NIVEL_LABEL,
 } from './tipos'
 
@@ -72,14 +72,153 @@ export function EncabezadoSemana({ prefijo, fila, nivel }: { prefijo?: string; f
       <p className="min-w-0 text-[var(--cc-ink)]">
         <span className="text-[22px] font-bold tracking-[-0.02em]">{prefijo ?? ''}Semana {fila.semana}</span>
         <span className="text-[16px] font-medium text-[var(--cc-ink-2)]"> · {rangoFechas(fila.fechaInicio, fila.fechaFin)}</span>
-        {fila.estado === 'en_curso' && (
-          <span className="ml-3 inline-flex items-center gap-1.5 align-middle text-[13px] font-medium text-[var(--cc-ink-2)]">
-            <span className="size-2 rounded-full bg-[var(--cc-gold)]" /> En curso
-          </span>
-        )}
+        <span className="ml-3 inline-flex items-center gap-1.5 align-middle text-[13px] font-medium text-[var(--cc-ink-2)]">
+          <span
+            className="size-2 rounded-full"
+            style={{ background: fila.estado === 'en_curso' ? 'var(--cc-gold)' : 'var(--cc-neutral)' }}
+          />
+          {fila.estado === 'en_curso' ? 'En curso' : fila.estado === 'cerrada' ? 'Cerrada' : 'Por venir'}
+        </span>
       </p>
       <ChipNivel nivel={nivel} />
     </div>
+  )
+}
+
+// ── Selector de semana ───────────────────────────────────────────────────────
+
+export interface SemanaOpcion {
+  semana: number
+  fechaInicio: string
+  fechaFin: string
+}
+
+/** Opciones únicas (una por semana) a partir de filas de uno o varios vendedores. */
+export function opcionesSemana(filas: FilaMeta[]): SemanaOpcion[] {
+  const m = new Map<number, SemanaOpcion>()
+  for (const f of filas) if (!m.has(f.semana)) m.set(f.semana, { semana: f.semana, fechaInicio: f.fechaInicio, fechaFin: f.fechaFin })
+  return [...m.values()].sort((a, b) => a.semana - b.semana)
+}
+
+/**
+ * ‹ S3 · 19–25 oct › — flechas para moverse de a una semana y un <select>
+ * nativo invisible encima del rótulo para saltar directo (en el teléfono abre
+ * la rueda del sistema). "Semana actual" aparece solo si uno se movió.
+ */
+export function SelectorSemana({
+  opciones, valor, actual, onCambiar,
+}: {
+  opciones: SemanaOpcion[]; valor: number; actual: number | null; onCambiar: (semana: number) => void
+}) {
+  const i = opciones.findIndex(o => o.semana === valor)
+  const sel = opciones[i]
+  const prev = i > 0 ? opciones[i - 1] : null
+  const next = i >= 0 && i < opciones.length - 1 ? opciones[i + 1] : null
+  if (!sel) return null
+
+  return (
+    <div className="mb-4 flex items-center gap-2">
+      <div className="flex min-w-0 flex-1 items-center rounded-[12px] bg-[#EEEAE2] p-1 md:flex-none">
+        <FlechaSemana label="Semana anterior" disabled={!prev} onClick={() => prev && onCambiar(prev.semana)}>
+          <ChevronLeft size={18} />
+        </FlechaSemana>
+        <label className="relative min-w-0 flex-1 md:w-[250px] md:flex-none">
+          <span className="sr-only">Elegir semana</span>
+          <select
+            value={valor}
+            onChange={e => onCambiar(Number(e.target.value))}
+            className="absolute inset-0 z-10 h-full w-full cursor-pointer opacity-0"
+          >
+            {opciones.map(o => (
+              <option key={o.semana} value={o.semana}>
+                Semana {o.semana} · {rangoFechas(o.fechaInicio, o.fechaFin)}{o.semana === actual ? ' · en curso' : ''}
+              </option>
+            ))}
+          </select>
+          <span className="pointer-events-none flex min-h-[40px] items-center justify-center gap-1.5 rounded-[9px] bg-white px-2 text-[14px] font-bold tabular-nums text-[var(--cc-ink)] shadow-[0_1px_2px_rgba(17,13,9,0.12)]">
+            <span className="truncate">
+              Semana {sel.semana}
+              <span className="font-medium text-[var(--cc-ink-2)]"> · {rangoFechas(sel.fechaInicio, sel.fechaFin)}</span>
+            </span>
+            <ChevronDown size={15} className="shrink-0 text-[var(--cc-ink-2)]" />
+          </span>
+        </label>
+        <FlechaSemana label="Semana siguiente" disabled={!next} onClick={() => next && onCambiar(next.semana)}>
+          <ChevronRight size={18} />
+        </FlechaSemana>
+      </div>
+      {actual !== null && valor !== actual && (
+        <button
+          type="button"
+          onClick={() => onCambiar(actual)}
+          className="inline-flex min-h-[44px] shrink-0 items-center rounded-[10px] px-3 text-[13px] font-bold text-[var(--m-oro-texto)] hover:bg-[var(--cc-gold-soft)]"
+        >
+          Ir a hoy
+        </button>
+      )}
+    </div>
+  )
+}
+
+function FlechaSemana({ label, disabled, onClick, children }: { label: string; disabled: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+      className="flex size-[40px] shrink-0 items-center justify-center rounded-[9px] text-[var(--cc-ink)] hover:bg-white/70 disabled:opacity-30 disabled:hover:bg-transparent"
+    >
+      {children}
+    </button>
+  )
+}
+
+// ── Resumen de una semana (pasada, en curso o futura) ────────────────────────
+
+/**
+ * Encabezado + 3 indicadores + línea de cierre. Cambia según el estado:
+ * en curso → ritmo diario que falta · cerrada → cuánto faltó o sobró ·
+ * futura → solo la meta (todavía no hay avance que pintar en rojo).
+ */
+export function ResumenSemana({
+  prefijo, fila, suma, hoy,
+}: {
+  prefijo?: string; fila: FilaMeta; suma: Acumulado; hoy: string
+}) {
+  const futura = fila.estado === 'futura'
+  const nivel = futura ? null : nivelPorPct(pct(suma.realNeto, suma.metaNeto))
+  const falta = suma.metaNeto - suma.realNeto
+  const fuerte = 'font-bold text-[var(--cc-ink)]'
+
+  let pie: React.ReactNode
+  if (fila.estado === 'en_curso') {
+    // La vista decide "en curso" con CURRENT_DATE del servidor (UTC); de noche en
+    // Chile ya puede ser el día siguiente allá. Nunca contar antes del inicio.
+    const dias = diasHabilesRestantes(hoy > fila.fechaInicio ? hoy : fila.fechaInicio, fila.fechaFin)
+    pie = <LineaRitmo falta={falta} dias={dias} />
+  } else if (fila.estado === 'cerrada') {
+    pie = (
+      <p className="mt-4 text-[14px] font-medium tabular-nums text-[var(--cc-ink-2)]">
+        {falta > 0
+          ? <>Semana cerrada · quedaron <strong className={fuerte}>{clp(falta)}</strong> bajo la meta</>
+          : <>Semana cerrada · meta cumplida{falta < 0 && <>, superada por <strong className={fuerte}>{clp(-falta)}</strong></>}</>}
+      </p>
+    )
+  } else {
+    pie = (
+      <p className="mt-4 text-[14px] font-medium text-[var(--cc-ink-2)]">
+        Parte el <strong className={fuerte}>{fechaCorta(fila.fechaInicio)}</strong> · el avance se mide desde ese día
+      </p>
+    )
+  }
+
+  return (
+    <>
+      <EncabezadoSemana prefijo={prefijo} fila={fila} nivel={nivel} />
+      <Indicadores items={futura ? indicadoresMeta(suma) : indicadoresDe(suma)} />
+      {pie}
+    </>
   )
 }
 
@@ -87,7 +226,8 @@ export interface Indicador {
   etiqueta: string
   valor: React.ReactNode
   meta: string | null
-  porcentaje: number
+  /** null = semana futura: sin % ni barra. */
+  porcentaje: number | null
 }
 
 /** Tres indicadores alineados: columnas separadas por línea en tablet/escritorio, filas en móvil. */
@@ -102,13 +242,15 @@ export function Indicadores({ items }: { items: Indicador[] }) {
               <span className="truncate text-[14px] font-medium text-[var(--cc-ink-2)]">{it.etiqueta}</span>
               <span className="flex shrink-0 items-baseline gap-2">
                 <span className="text-[20px] font-bold tracking-[-0.02em] tabular-nums text-[var(--cc-ink)]">{it.valor}</span>
-                <PctNivel valor={it.porcentaje} className="w-[46px] text-right text-[14px]" />
+                {it.porcentaje !== null && <PctNivel valor={it.porcentaje} className="w-[46px] text-right text-[14px]" />}
               </span>
             </div>
-            <div className="mt-2 flex items-center gap-3">
-              <span className="flex-1"><BarraNivel valor={it.porcentaje} alto={7} /></span>
-              {it.meta && <span className="shrink-0 text-[13px] font-medium tabular-nums text-[var(--cc-ink-2)]">{it.meta}</span>}
-            </div>
+            {it.porcentaje !== null && (
+              <div className="mt-2 flex items-center gap-3">
+                <span className="flex-1"><BarraNivel valor={it.porcentaje} alto={7} /></span>
+                {it.meta && <span className="shrink-0 text-[13px] font-medium tabular-nums text-[var(--cc-ink-2)]">{it.meta}</span>}
+              </div>
+            )}
           </div>
 
           {/* Tablet y escritorio: columna */}
@@ -118,10 +260,10 @@ export function Indicadores({ items }: { items: Indicador[] }) {
               <span className="truncate text-[28px] font-bold leading-tight tracking-[-0.02em] tabular-nums text-[var(--cc-ink)] lg:text-[30px]">
                 {it.valor}
               </span>
-              <PctNivel valor={it.porcentaje} className="shrink-0 text-[17px]" />
+              {it.porcentaje !== null && <PctNivel valor={it.porcentaje} className="shrink-0 text-[17px]" />}
             </div>
             <p className="mb-2.5 h-[20px] truncate text-[14px] font-medium tabular-nums text-[var(--cc-ink-2)]">{it.meta ?? ''}</p>
-            <div className="pr-6"><BarraNivel valor={it.porcentaje} alto={9} /></div>
+            {it.porcentaje !== null && <div className="pr-6"><BarraNivel valor={it.porcentaje} alto={9} /></div>}
           </div>
         </div>
       ))}
@@ -140,6 +282,15 @@ export function indicadoresDe(a: Acumulado): Indicador[] {
       meta: null,
       porcentaje: pct(a.realClientes, a.metaClientes),
     },
+  ]
+}
+
+/** Semana futura: lo que hay que vender, sin avance. */
+export function indicadoresMeta(a: Acumulado): Indicador[] {
+  return [
+    { etiqueta: 'Meta ventas netas', valor: clp(a.metaNeto), meta: null, porcentaje: null },
+    { etiqueta: 'Meta litros', valor: `${litros(a.metaLitros)} L`, meta: null, porcentaje: null },
+    { etiqueta: 'Meta clientes nuevos', valor: entero(a.metaClientes), meta: null, porcentaje: null },
   ]
 }
 
