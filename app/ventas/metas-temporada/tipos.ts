@@ -97,8 +97,8 @@ const MESES_LARGOS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Ju
 /**
  * Fila cruda de plan_metas_periodo_avance → FilaMeta. Mismas columnas que la
  * semanal; `periodo` va en `semana` y el nombre es el mes en que termina el
- * período (24 oct – 23 nov = Noviembre). fecha_inicio/fin son los días que
- * cubre el plan (octubre parte el 8), no el 24→23 completo.
+ * período (24 oct – 23 nov = Noviembre). fecha_inicio/fin son el 24→23
+ * completo (Octubre = 24 sep – 23 oct), aunque el plan parta el 8 oct.
  */
 export function normalizarPeriodo(r: FilaVista): FilaMeta {
   const mes = Number(String(r.mes).slice(5, 7))

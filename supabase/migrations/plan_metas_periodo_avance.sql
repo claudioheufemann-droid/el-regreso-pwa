@@ -3,7 +3,10 @@
 -- Meta: cada fila semanal se reparte parejo por día calendario (así se armó el
 -- plan desde las metas mensuales) y se suma por período. Real: mismas reglas
 -- que plan_metas_avance (fecha_pedido, exclusiones, aperturas >730 días) pero
--- con las fechas exactas del período, acotadas a los días que cubre el plan.
+-- con el período 24→23 COMPLETO, aunque el plan no lo cubra entero (pedido de
+-- Claudio, 2026-10-19: Octubre = 24 sep – 23 oct, para que la venta cuadre con
+-- el resto de la app). Octubre compara esa venta contra la meta del plan, que
+-- sólo existe desde el 8 oct — decisión de Claudio, no estirar la meta.
 create or replace view public.plan_metas_periodo_avance
 with (security_invoker = true) as
 with base as (
@@ -24,7 +27,7 @@ with base as (
            lag(p.fecha) over (partition by p.cliente order by p.fecha, p.pedido) as fecha_anterior
     from pedidos_cliente p
   ) x
-  where x.fecha >= '2026-10-01'::date and (x.fecha_anterior is null or (x.fecha - x.fecha_anterior) > 730)
+  where x.fecha >= '2026-09-24'::date and (x.fecha_anterior is null or (x.fecha - x.fecha_anterior) > 730)
 ), dias as (
   select m.temporada, m.territorio, m.user_id, d.dia::date as dia,
          (m.fecha_fin - m.fecha_inicio + 1)::numeric as n,
@@ -37,7 +40,8 @@ with base as (
   cross join lateral generate_series(m.fecha_inicio::timestamp, m.fecha_fin::timestamp, interval '1 day') as d(dia)
 ), per as (
   select temporada, territorio, user_id, mes,
-         min(dia) as fecha_inicio, max(dia) as fecha_fin,
+         (mes - interval '1 month' + interval '23 days')::date as fecha_inicio,
+         (mes + interval '22 days')::date as fecha_fin,
          round(sum(meta_neto / n)) as meta_neto,
          round(sum(meta_litros / n), 1) as meta_litros,
          round(sum(meta_clientes_nuevos / n), 1) as meta_clientes_nuevos,
