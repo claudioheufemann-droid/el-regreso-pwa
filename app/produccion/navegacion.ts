@@ -1,4 +1,4 @@
-import { Sun, TrendingUp, ClipboardList, Factory, ShoppingCart } from 'lucide-react'
+import { Sun, TrendingUp, ClipboardList, Factory, ShoppingCart, Beer } from 'lucide-react'
 
 /**
  * Las cinco pestañas del módulo Producción (rediseño 4-oct-2026). Antes eran
@@ -20,6 +20,7 @@ export const navItems = [
   { id: 'demanda', icon: TrendingUp, label: 'Demanda', pregunta: '¿Cuánto vamos a vender?' },
   { id: 'plan', icon: ClipboardList, label: 'Plan', pregunta: '¿Cuánto y cuándo hay que producir?' },
   { id: 'planta', icon: Factory, label: 'Planta', pregunta: '¿Qué hay en cada tanque y qué se cocina?' },
+  { id: 'lotes', icon: Beer, label: 'Lotes', pregunta: '¿En qué etapa está cada lote y qué salió de él?' },
   { id: 'compras', icon: ShoppingCart, label: 'Compras', pregunta: '¿Qué compramos, cuánto y cuánto cuesta?' },
 ] as const
 

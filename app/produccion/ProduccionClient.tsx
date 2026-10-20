@@ -19,6 +19,7 @@ import TabDemanda from './vistas/TabDemanda'
 import TabPlan from './vistas/TabPlan'
 import TabPlanta from './vistas/TabPlanta'
 import TabCompras from './vistas/TabCompras'
+import TabLotes from './vistas/TabLotes'
 
 /**
  * Cascarón del módulo Producción: encabezado, las cinco pestañas y los modales
@@ -125,6 +126,7 @@ export default function ProduccionClient(props: ProduccionProps) {
         {activeTab === 'demanda' && <TabDemanda p={p} />}
         {activeTab === 'plan' && <TabPlan p={p} />}
         {activeTab === 'planta' && <TabPlanta p={p} />}
+        {activeTab === 'lotes' && <TabLotes />}
         {activeTab === 'compras' && <TabCompras p={p} />}
 
         {/* Modales que se abren desde más de una pestaña: viven acá para que
