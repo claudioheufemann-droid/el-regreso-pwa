@@ -69,8 +69,12 @@ from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 
 REPORT_URL = "https://www.gestioncervecera.com/Informes/Ver?informe=MovimientosCtaCte"
 # Ver la nota larga arriba: por encima de ~20-45 días el ERP deja de bajar el
-# Excel directo y pasa a mandarlo por email de forma asíncrona.
-DIAS_VENTANA = 20
+# Excel directo y pasa a mandarlo por email de forma asíncrona. El umbral real
+# parece depender de la cantidad de movimientos, no de los días: con 20 días
+# funcionó hasta el 17-oct-2026 y desde ahí el ERP mandó todo por email (12
+# corridas fallidas seguidas, sin pagos nuevos en la app del 17 al 20). Con 10
+# días hay margen de sobra: el sync corre cada 6 h.
+DIAS_VENTANA = 10
 
 # Idéntico al de extractor.py (Ventas Detalladas) — mismo sitio, mismos
 # campos de fecha, mismo bug si se usa page.fill() a secas.
