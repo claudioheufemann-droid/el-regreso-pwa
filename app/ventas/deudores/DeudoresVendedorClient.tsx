@@ -99,23 +99,86 @@ const MC = {
   red: '#DC2626', redSoft: '#FEF2F2', whatsapp: '#25D366',
 }
 
-type Bucket = 'al-dia' | '1-30' | '31-60' | '+60'
-
 // Semáforo por crédito del cliente (ver severidadMora en lib/cobranza): es lo
-// que pinta montos y días. Los buckets de abajo sólo agrupan para los filtros.
+// que pinta montos y días. Los tramos de abajo sólo agrupan para los filtros.
 const COLOR_MORA: Record<SeveridadMora, { fg: string; bg: string }> = {
   'al-dia':  { fg: MC.green, bg: MC.greenSoft },
   vencida:   { fg: MC.amber, bg: MC.amberSoft },
   critica:   { fg: MC.red,   bg: MC.redSoft },
 }
 
-// Los 6 buckets granulares que trae el ERP se consolidan en 3 (el criterio
-// que se usa en toda la pantalla): el bucket más viejo con saldo > 0 manda.
-function bucketDe(d: Deudor): Bucket {
-  if ((d.deuda_entre_60_89_dias || 0) + (d.deuda_mas_90_dias || 0) > 0) return '+60'
-  if ((d.deuda_entre_30_44_dias || 0) + (d.deuda_entre_45_59_dias || 0) > 0) return '31-60'
-  if ((d.deuda_menor_14_dias || 0) + (d.deuda_entre_15_29_dias || 0) > 0) return '1-30'
-  return 'al-dia'
+// ── Tramos de mora (filtro) ──────────────────────────────────────────────────
+// Los mismos 6 tramos de antigüedad del ERP. Se asignan por los días de la
+// columna "Días vencida" (documento más antiguo impago), así lo que se filtra
+// calza con lo que se ve en la fila. Si no hay fecha para calcular días, cae al
+// tramo más viejo con saldo que informa el ERP.
+type Tramo = '1-14' | '15-29' | '30-44' | '45-59' | '60-89' | '90+'
+
+const TRAMOS: { key: Tramo; label: string; desde: number; color: string }[] = [
+  { key: '1-14',  label: 'Hasta 14 días', desde: 1,  color: MC.amber },
+  { key: '15-29', label: '15–29 días',    desde: 15, color: MC.amber },
+  { key: '30-44', label: '30–44 días',    desde: 30, color: '#EA580C' },
+  { key: '45-59', label: '45–59 días',    desde: 45, color: '#EA580C' },
+  { key: '60-89', label: '60–89 días',    desde: 60, color: MC.red },
+  { key: '90+',   label: 'Más de 90 días', desde: 90, color: MC.red },
+]
+
+function tramoDe(d: Deudor): Tramo | null {
+  if ((d.deuda_comercial || 0) <= 0) return null
+  const dias = diasMoraDe(d)
+  if (dias > 0) {
+    for (let i = TRAMOS.length - 1; i >= 0; i--) if (dias >= TRAMOS[i].desde) return TRAMOS[i].key
+  }
+  if ((d.deuda_mas_90_dias || 0) > 0) return '90+'
+  if ((d.deuda_entre_60_89_dias || 0) > 0) return '60-89'
+  if ((d.deuda_entre_45_59_dias || 0) > 0) return '45-59'
+  if ((d.deuda_entre_30_44_dias || 0) > 0) return '30-44'
+  if ((d.deuda_entre_15_29_dias || 0) > 0) return '15-29'
+  return '1-14'
+}
+
+function resumenTramos(lista: Deudor[]): Record<Tramo, { n: number; monto: number }> {
+  const res = Object.fromEntries(TRAMOS.map(t => [t.key, { n: 0, monto: 0 }])) as Record<Tramo, { n: number; monto: number }>
+  for (const d of lista) {
+    const t = tramoDe(d)
+    if (t) { res[t].n++; res[t].monto += d.deuda_comercial || 0 }
+  }
+  return res
+}
+
+/** Chips de tramo de mora — un toque filtra, otro toque en el mismo lo quita. */
+function TramoChips({ lista, activo, onSelect, conMonto }: {
+  lista: Deudor[]; activo: Tramo | 'todos'; onSelect: (t: Tramo | 'todos') => void; conMonto?: boolean
+}) {
+  const resumen = useMemo(() => resumenTramos(lista), [lista])
+  const conVencida = TRAMOS.reduce((s, t) => s + resumen[t.key].n, 0)
+  const chips = [
+    { key: 'todos' as const, label: 'Todos', n: lista.length, monto: null as number | null, color: MC.blue },
+    ...TRAMOS.map(t => ({ key: t.key, label: t.label, n: resumen[t.key].n, monto: resumen[t.key].monto as number | null, color: t.color })),
+  ]
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }} aria-label={`${conVencida} clientes con deuda vencida por tramo`}>
+      {chips.map(c => {
+        const on = activo === c.key
+        return (
+          <button key={c.key} onClick={() => onSelect(on && c.key !== 'todos' ? 'todos' : c.key)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', minHeight: 40, borderRadius: 12,
+              cursor: 'pointer', font: 'inherit', border: `1px solid ${on ? c.color : MC.border}`,
+              background: on ? c.color : MC.card, color: on ? '#FFFFFF' : MC.text,
+              fontSize: 13, fontWeight: on ? 800 : 600, whiteSpace: 'nowrap' }}>
+            {c.label}
+            <span style={{ fontSize: 12, fontWeight: 800, padding: '0 6px', borderRadius: 8,
+              background: on ? 'rgba(255,255,255,0.25)' : 'rgba(15,23,42,0.06)', color: on ? '#FFFFFF' : MC.muted }}>
+              {c.n}
+            </span>
+            {conMonto && c.monto !== null && c.n > 0 && (
+              <span style={{ fontSize: 12, fontWeight: 700, color: on ? '#FFFFFF' : c.color }}>{formatCurrency(c.monto)}</span>
+            )}
+          </button>
+        )
+      })}
+    </div>
+  )
 }
 
 // ── Carteras ─────────────────────────────────────────────────────────────────
@@ -692,7 +755,7 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clien
 
   // 'todos' = las 4 carteras sumadas; o el nombre canónico de un vendedor.
   const [cartera, setCartera] = useState<string>('todos')
-  const [filterBucket, setFilterBucket] = useState<Bucket | 'todos'>('todos')
+  const [filterBucket, setFilterBucket] = useState<Tramo | 'todos'>('todos')
   const [searchText, setSearchText] = useState('')
   const [sortBy, setSortBy] = useState<'deuda' | 'nombre' | 'antigua'>('deuda')
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
@@ -751,23 +814,16 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clien
     noVencida: base.reduce((s, d) => s + saldoNoVencidoDe(d), 0),
   }
 
-  const bucketCounts = useMemo(() => {
-    const counts: Record<Bucket, number> = { 'al-dia': 0, '1-30': 0, '31-60': 0, '+60': 0 }
-    for (const d of base) counts[bucketDe(d)]++
-    return counts
-  }, [base])
-
   const filtrados = useMemo(() => {
     let res = base.filter(d => {
-      if (filterBucket !== 'todos' && bucketDe(d) !== filterBucket) return false
+      if (filterBucket !== 'todos' && tramoDe(d) !== filterBucket) return false
       if (searchText && !d.nombre_fantasia.toLowerCase().includes(searchText.toLowerCase())) return false
       return true
     })
-    const rangoBucket: Record<Bucket, number> = { '+60': 3, '31-60': 2, '1-30': 1, 'al-dia': 0 }
     res = [...res].sort((a, b) => {
       switch (sortBy) {
         case 'nombre':  return a.nombre_fantasia.localeCompare(b.nombre_fantasia)
-        case 'antigua': return rangoBucket[bucketDe(b)] - rangoBucket[bucketDe(a)] || b.deuda_comercial - a.deuda_comercial
+        case 'antigua': return diasMoraDe(b) - diasMoraDe(a) || b.deuda_comercial - a.deuda_comercial
         default:        return b.deuda_comercial - a.deuda_comercial
       }
     })
@@ -898,30 +954,9 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clien
         {/* Desglose + filtro por vendedor (sólo admin) */}
         {isAdmin && <ResumenCarteras filas={filas} total={total} activo={cartera} onSelect={v => setCartera(c => (c === v ? 'todos' : v))} />}
 
-        {/* Chips de rango de días */}
-        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, marginBottom: 12 }}>
-          {([
-            { key: 'todos' as const, label: 'Todos', count: base.length, color: MC.blue },
-            { key: '1-30' as const, label: '1–30 días', count: bucketCounts['1-30'], color: MC.amber },
-            { key: '31-60' as const, label: '31–60 días', count: bucketCounts['31-60'], color: MC.amber },
-            { key: '+60' as const, label: '+60 días', count: bucketCounts['+60'], color: MC.red },
-          ]).map(f => {
-            const active = filterBucket === f.key
-            return (
-              <button key={f.key} onClick={() => setFilterBucket(f.key)}
-                style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px', borderRadius: 12,
-                  cursor: 'pointer', border: `1px solid ${active ? f.color : MC.border}`,
-                  background: active ? f.color : MC.card, color: active ? '#FFFFFF' : MC.text,
-                  fontSize: 13, fontWeight: active ? 800 : 600 }}>
-                {f.label}
-                <span style={{ fontSize: 12, fontWeight: 800, padding: '0 6px', borderRadius: 8,
-                  background: active ? 'rgba(255,255,255,0.25)' : 'rgba(15,23,42,0.06)',
-                  color: active ? '#FFFFFF' : MC.muted }}>
-                  {f.count}
-                </span>
-              </button>
-            )
-          })}
+        {/* Chips de tramo de mora (mismos 6 tramos del ERP) */}
+        <div style={{ marginBottom: 12 }}>
+          <TramoChips lista={base} activo={filterBucket} onSelect={setFilterBucket} />
         </div>
 
         {/* Buscador */}
@@ -1082,6 +1117,7 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor, barriles
 }) {
   const [cartera, setCartera] = useState<string>('todos')
   const [filterDeudaVencida, setFilterDeudaVencida] = useState<'todos' | 'vencida' | 'sin-vencida'>('todos')
+  const [filterTramo, setFilterTramo] = useState<Tramo | 'todos'>('todos')
   const [searchText, setSearchText] = useState('')
   const [orden, setOrden] = useState<{ col: ColOrden; dir: DirOrden }>({ col: 'deuda', dir: 'desc' })
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
@@ -1103,23 +1139,29 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor, barriles
     [universo, clientesPorVendedor],
   )
 
-  const filteredDeudores = useMemo(() => {
+  // Todos los filtros menos el de tramo: es la base de los contadores de los
+  // chips de tramo (si no, cada chip se contaría a sí mismo).
+  const sinTramo = useMemo(() => {
     const q = searchText.toLowerCase()
-    const res = universo.filter(d => {
+    return universo.filter(d => {
       if (isAdmin && cartera !== 'todos' && vendedorCanonico(d.vendedor) !== cartera) return false
       if (filterDeudaVencida === 'vencida' && d.deuda_comercial <= 0) return false
       if (filterDeudaVencida === 'sin-vencida' && d.deuda_comercial > 0) return false
       if (q && !d.nombre_fantasia.toLowerCase().includes(q)) return false
       return true
     })
+  }, [universo, isAdmin, cartera, filterDeudaVencida, searchText])
+
+  const filteredDeudores = useMemo(() => {
+    const res = filterTramo === 'todos' ? sinTramo : sinTramo.filter(d => tramoDe(d) === filterTramo)
     return ordenarDeudores(res, orden.col, orden.dir)
-  }, [universo, isAdmin, cartera, filterDeudaVencida, searchText, orden])
+  }, [sinTramo, filterTramo, orden])
 
   // "Quitar filtros": vuelve a la vista con que se entra a la pantalla.
-  const hayFiltros = cartera !== 'todos' || filterDeudaVencida !== 'todos' || searchText !== ''
+  const hayFiltros = cartera !== 'todos' || filterDeudaVencida !== 'todos' || filterTramo !== 'todos' || searchText !== ''
     || orden.col !== 'deuda' || orden.dir !== 'desc'
   const limpiarFiltros = () => {
-    setCartera('todos'); setFilterDeudaVencida('todos'); setSearchText(''); setOrden({ col: 'deuda', dir: 'desc' })
+    setCartera('todos'); setFilterDeudaVencida('todos'); setFilterTramo('todos'); setSearchText(''); setOrden({ col: 'deuda', dir: 'desc' })
   }
 
   const clicEncabezado = (col: ColOrden) => {
@@ -1344,6 +1386,12 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor, barriles
             ))}
           </select>
         </div>
+      </div>
+
+      {/* Tramo de mora: días del documento más antiguo impago */}
+      <div style={{ marginBottom: 16 }}>
+        <label style={labelStyle}>DÍAS VENCIDA</label>
+        <TramoChips lista={sinTramo} activo={filterTramo} onSelect={setFilterTramo} conMonto />
       </div>
 
       {hayFiltros && (
