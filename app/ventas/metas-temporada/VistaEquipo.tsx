@@ -10,7 +10,7 @@ import {
 } from './tipos'
 import {
   type Corte,
-  BarraNivel, PctNivel, ResumenSemana, SelectorSemana, opcionesSemana,
+  BarraNivel, PctNivel, PorEntregar, ResumenSemana, SelectorSemana, opcionesSemana,
   FranjaAcumulado, PieTemporada, Titulo,
 } from './ui'
 import { etiquetaVendedor, nombreCorto } from '@/lib/types'
@@ -170,12 +170,15 @@ function TablaRanking({ ranking, nombre, onElegir }: { ranking: FilaRanking[]; n
                 <span className="block truncate text-[15px] font-bold text-[var(--cc-ink)]">{etiquetaVendedor(r.vendedor)}</span>
                 <span className="block truncate text-[13px] font-medium text-[var(--cc-ink-2)]">{r.territorio}</span>
               </span>
-              <span className="truncate text-[13px] font-medium tabular-nums text-[var(--cc-ink-2)] sm:text-[14px]">
-                {!a ? '—' : futura ? (
-                  <>Meta <strong className="font-bold text-[var(--cc-ink)]">{clp(a.metaNeto)}</strong></>
-                ) : (
-                  <><strong className="font-bold text-[var(--cc-ink)]">{clp(a.realNeto)}</strong> / {clp(a.metaNeto)}</>
-                )}
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate text-[13px] font-medium tabular-nums text-[var(--cc-ink-2)] sm:text-[14px]">
+                  {!a ? '—' : futura ? (
+                    <>Meta <strong className="font-bold text-[var(--cc-ink)]">{clp(a.metaNeto)}</strong></>
+                  ) : (
+                    <><strong className="font-bold text-[var(--cc-ink)]">{clp(a.realNeto)}</strong> / {clp(a.metaNeto)}</>
+                  )}
+                </span>
+                {a && !futura && <PorEntregar monto={a.realNetoPorEntregar} className="text-[12px]" />}
               </span>
               <span className="hidden lg:block">{a && !futura && <BarraNivel valor={a.pctNeto} alto={7} />}</span>
               {/* En móvil, el acumulado va en una tercera línea */}
@@ -325,7 +328,7 @@ function exportarCsv(ranking: FilaRanking[]) {
   const dec = (n: number) => (Math.round(n * 10) / 10).toString().replace('.', ',')
   const encabezado = [
     'Territorio', 'Vendedor', 'Semana / mes', 'Desde', 'Hasta',
-    'Meta neto', 'Real neto', '% neto', 'Meta litros', 'Real litros', '% litros',
+    'Meta neto', 'Real neto', 'Por entregar neto', '% neto', 'Meta litros', 'Real litros', '% litros',
     'Meta clientes nuevos', 'Real clientes nuevos', 'Nivel',
     'Acum meta neto', 'Acum real neto', 'Acum % neto',
   ]
@@ -333,7 +336,7 @@ function exportarCsv(ranking: FilaRanking[]) {
     const a = r.actual
     return [
       r.territorio, etiquetaVendedor(r.vendedor), a ? a.nombre : '', a?.fechaInicio ?? '', a?.fechaFin ?? '',
-      a ? Math.round(a.metaNeto) : '', a ? Math.round(a.realNeto) : '', a ? dec(a.pctNeto) : '',
+      a ? Math.round(a.metaNeto) : '', a ? Math.round(a.realNeto) : '', a ? Math.round(a.realNetoPorEntregar) : '', a ? dec(a.pctNeto) : '',
       a ? dec(a.metaLitros) : '', a ? dec(a.realLitros) : '', a ? dec(a.pctLitros) : '',
       a?.metaClientes ?? '', a?.realClientes ?? '', a && a.estado !== 'futura' ? NIVEL_LABEL[nivelPorPct(a.pctNeto)] : '',
       Math.round(r.acum.metaNeto), Math.round(r.acum.realNeto), dec(pct(r.acum.realNeto, r.acum.metaNeto)),

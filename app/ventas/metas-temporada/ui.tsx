@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Check, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Check, ChevronDown, ChevronLeft, ChevronRight, Truck } from 'lucide-react'
 import {
   type Acumulado, type FilaMeta, type Nivel, type Escala,
   clp, litros, entero, pctTxt, pct, rangoFechas, fechaCorta, semanaTope, diasHabilesRestantes,
@@ -263,6 +263,23 @@ export interface Indicador {
   meta: string | null
   /** null = semana futura: sin % ni barra. */
   porcentaje: number | null
+  /** Línea extra bajo la barra (p. ej. cuánto está por entregar). */
+  nota?: React.ReactNode
+}
+
+/**
+ * La venta de Metas cuenta el pedido completo aunque no se haya entregado:
+ * la entrega ya es responsabilidad de logística, no del vendedor (Claudio,
+ * 21-oct-2026). Esta línea lo hace visible para que no parezca que falta venta.
+ */
+export function PorEntregar({ monto, className = '' }: { monto: number; className?: string }) {
+  if (Math.round(monto) <= 0) return null
+  return (
+    <span className={`inline-flex min-w-0 items-center gap-1.5 text-[13px] font-medium tabular-nums text-[var(--cc-ink-2)] ${className}`}>
+      <Truck size={13} className="shrink-0 text-[var(--cc-gold)]" />
+      <span className="truncate">Incluye <strong className="font-bold text-[var(--cc-ink)]">{clp(monto)}</strong> por entregar</span>
+    </span>
+  )
 }
 
 /** Tres indicadores alineados: columnas separadas por línea en tablet/escritorio, filas en móvil. */
@@ -286,6 +303,7 @@ export function Indicadores({ items }: { items: Indicador[] }) {
                 {it.meta && <span className="shrink-0 text-[13px] font-medium tabular-nums text-[var(--cc-ink-2)]">{it.meta}</span>}
               </div>
             )}
+            {it.nota && <div className="mt-1.5 flex">{it.nota}</div>}
           </div>
 
           {/* Tablet y escritorio: columna */}
@@ -299,6 +317,7 @@ export function Indicadores({ items }: { items: Indicador[] }) {
             </div>
             <p className="mb-2.5 h-[20px] truncate text-[14px] font-medium tabular-nums text-[var(--cc-ink-2)]">{it.meta ?? ''}</p>
             {it.porcentaje !== null && <div className="pr-6"><BarraNivel valor={it.porcentaje} alto={9} /></div>}
+            {it.nota && <div className="mt-2 flex">{it.nota}</div>}
           </div>
         </div>
       ))}
@@ -309,7 +328,13 @@ export function Indicadores({ items }: { items: Indicador[] }) {
 /** Indicadores estándar de una semana (o de una suma de semanas). */
 export function indicadoresDe(a: Acumulado): Indicador[] {
   return [
-    { etiqueta: 'Ventas netas', valor: clp(a.realNeto), meta: `de ${clp(a.metaNeto)}`, porcentaje: pct(a.realNeto, a.metaNeto) },
+    {
+      etiqueta: 'Ventas netas',
+      valor: clp(a.realNeto),
+      meta: `de ${clp(a.metaNeto)}`,
+      porcentaje: pct(a.realNeto, a.metaNeto),
+      nota: <PorEntregar monto={a.realNetoPorEntregar} />,
+    },
     { etiqueta: 'Litros', valor: `${litros(a.realLitros)} L`, meta: `de ${litros(a.metaLitros)} L`, porcentaje: pct(a.realLitros, a.metaLitros) },
     {
       etiqueta: 'Clientes nuevos',
@@ -512,6 +537,7 @@ export function FranjaAcumulado({ a, etiqueta = 'Acumulado a la fecha' }: { a: A
             <PctNivel valor={p} className="text-[16px]" />
           </div>
         </div>
+        <PorEntregar monto={a.realNetoPorEntregar} className="mt-1.5" />
       </div>
       <div className="min-w-0 lg:px-6">
         <p className="mb-1 text-[14px] font-medium text-[var(--cc-ink-2)]">Litros</p>

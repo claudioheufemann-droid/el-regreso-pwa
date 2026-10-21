@@ -31,6 +31,8 @@ export interface FilaMeta {
   metaCajasCerveza: number
   metaBarriles: number
   realNeto: number
+  /** Parte de realNeto con pedidos aún sin entregar (ya cuentan para la meta: la entrega es de logística). */
+  realNetoPorEntregar: number
   realLitros: number
   realClientes: number
   realCajasKombucha: number
@@ -47,6 +49,7 @@ export interface FilaMeta {
 export interface Acumulado {
   metaNeto: number
   realNeto: number
+  realNetoPorEntregar: number
   metaLitros: number
   realLitros: number
   metaClientes: number
@@ -79,6 +82,7 @@ export function normalizarFila(r: FilaVista): FilaMeta {
     metaCajasCerveza: num(r.meta_cajas_cerveza),
     metaBarriles: num(r.meta_barriles),
     realNeto: num(r.real_neto),
+    realNetoPorEntregar: num(r.real_neto_por_entregar),
     realLitros: num(r.real_litros),
     realClientes: num(r.real_clientes_nuevos),
     realCajasKombucha: num(r.real_cajas_kombucha),
@@ -182,12 +186,13 @@ export function acumular(filas: FilaMeta[]): Acumulado {
     (a, f) => ({
       metaNeto: a.metaNeto + f.metaNeto,
       realNeto: a.realNeto + f.realNeto,
+      realNetoPorEntregar: a.realNetoPorEntregar + f.realNetoPorEntregar,
       metaLitros: a.metaLitros + f.metaLitros,
       realLitros: a.realLitros + f.realLitros,
       metaClientes: a.metaClientes + f.metaClientes,
       realClientes: a.realClientes + f.realClientes,
     }),
-    { metaNeto: 0, realNeto: 0, metaLitros: 0, realLitros: 0, metaClientes: 0, realClientes: 0 },
+    { metaNeto: 0, realNeto: 0, realNetoPorEntregar: 0, metaLitros: 0, realLitros: 0, metaClientes: 0, realClientes: 0 },
   )
 }
 
