@@ -140,7 +140,7 @@ export interface DatosCobros {
    *  cobrado más lo que `proyeccion.semanas[0]` todavía espera para el
    *  resto de la semana. */
   confirmadoEstaSemana: number
-  /** Datos para el calendario de entradas día por día (CalendarioSemana). */
+  /** Pagos por día y datos del calendario de entradas (CobrosSemana usa realesPorDia). */
   calendario: DatosCalendario
 }
 

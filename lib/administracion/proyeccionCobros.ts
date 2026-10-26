@@ -95,6 +95,7 @@ export interface FacturaPendiente {
   /** Fecha esperada si el cliente pagara exactamente a su plazo PACTADO —
    *  independiente de `fechaEsperada` (que usa el comportamiento medido). */
   fechaEsperadaPactada: string
+  diasCredito: number
   fuente: FuentePlazo
   /** Días transcurridos desde que se esperaba el pago SEGÚN COMPORTAMIENTO
    *  REAL. 0 si todavía no vence bajo ese criterio. */
@@ -160,7 +161,7 @@ export interface ProyeccionCobros {
   pagadasSegunErp: { monto: number; facturas: number }
   /** Todas las facturas pendientes, en formato compacto, con sus dos fechas
    *  esperadas (comportamiento real y plazo pactado) y sus días de atraso.
-   *  Alimenta el calendario semanal día por día (CalendarioSemana): ahí se
+   *  Alimenta la vista semana a semana y día a día (CobrosSemana): ahí se
    *  decide a qué día cae cada una según el escenario elegido. */
   pendientes: FacturaCalendario[]
 }
@@ -171,7 +172,10 @@ export interface FacturaCalendario {
   factura: string
   bruto: number
   fechaEsperada: string
+  /** El vencimiento de la factura: emisión (o entrega, si aún no se factura) + días de crédito pactados. */
   fechaEsperadaPactada: string
+  /** Días de crédito pactados con que se calculó el vencimiento. */
+  diasCredito: number
   diasAtraso: number
   diasAtrasoPactado: number
 }
@@ -242,7 +246,13 @@ function recortarContraSaldoErp(
 }
 
 /** Factura impaga, ya agrupada (una factura viene partida en una línea por producto). */
-export interface FacturaImpaga { cliente: string; fechaEntrega: string; bruto: number }
+export interface FacturaImpaga {
+  cliente: string
+  fechaEntrega: string
+  bruto: number
+  /** Emisión de la factura; el plazo pactado corre desde aquí (sin ella, desde la entrega). */
+  fechaFactura?: string | null
+}
 
 /**
  * Facturas despachadas y sin pago, en BRUTO, agrupadas por número y recortadas
@@ -262,7 +272,7 @@ export function armarFacturasPendientes({ ventas, facturasImpagas, saldoErp }: {
   /* Una factura puede venir partida en varias líneas de venta (una por
      producto). Se agrupa primero, porque el cobro ocurre por factura
      completa, no por línea. */
-  const porFactura = new Map<string, { cliente: string; fechaEntrega: string; bruto: number }>()
+  const porFactura = new Map<string, FacturaImpaga>()
   const sinRastreo = { monto: 0, filas: 0 }
 
   for (const f of ventas) {
@@ -283,11 +293,14 @@ export function armarFacturasPendientes({ ventas, facturasImpagas, saldoErp }: {
       cliente: f.nombre_fantasia ?? '(sin nombre)',
       fechaEntrega: f.fecha_entrega,
       bruto: 0,
+      fechaFactura: null,
     }
     acc.bruto += bruto
     // Si las líneas tienen fechas distintas gana la más tardía: la factura no
     // se cobra hasta que salió todo lo que incluye.
     if (f.fecha_entrega > acc.fechaEntrega) acc.fechaEntrega = f.fecha_entrega
+    const emision = f.fecha_facturacion ? String(f.fecha_facturacion).slice(0, 10) : null
+    if (emision && (!acc.fechaFactura || emision > acc.fechaFactura)) acc.fechaFactura = emision
     porFactura.set(factura, acc)
   }
 
@@ -333,7 +346,9 @@ export function proyectarCobros({
     const fechaEsperada = sumarDias(v.fechaEntrega, plazo.promedio)
     const fechaEsperadaOptimista = sumarDias(v.fechaEntrega, plazo.p25)
     const fechaEsperadaLenta = sumarDias(v.fechaEntrega, plazo.p75)
-    const fechaEsperadaPactada = sumarDias(v.fechaEntrega, plazo.pactado)
+    // El comportamiento real se midió desde la entrega; el pactado es el vencimiento que trae
+    // impresa la factura: emisión + días de crédito (misma regla que Deudores, 26-oct-2026).
+    const fechaEsperadaPactada = sumarDias(v.fechaFactura ?? v.fechaEntrega, plazo.pactado)
     const diasAtraso = Math.max(0, diffDias(fechaEsperada, hoyISO))
     const diasAtrasoPactado = Math.max(0, diffDias(fechaEsperadaPactada, hoyISO))
 
@@ -341,7 +356,7 @@ export function proyectarCobros({
     pendientes.push({
       cliente: v.cliente, factura, fechaEntrega: v.fechaEntrega, bruto: v.bruto,
       dias: plazo.promedio, fechaEsperada, fechaEsperadaOptimista, fechaEsperadaLenta, fechaEsperadaPactada,
-      fuente: plazo.fuente, diasAtraso, diasAtrasoPactado,
+      diasCredito: plazo.pactado, fuente: plazo.fuente, diasAtraso, diasAtrasoPactado,
     })
   }
 
@@ -421,7 +436,7 @@ export function proyectarCobros({
     pagadasSegunErp,
     pendientes: pendientes.map(p => ({
       cliente: p.cliente, factura: p.factura, bruto: Math.round(p.bruto),
-      fechaEsperada: p.fechaEsperada, fechaEsperadaPactada: p.fechaEsperadaPactada,
+      fechaEsperada: p.fechaEsperada, fechaEsperadaPactada: p.fechaEsperadaPactada, diasCredito: p.diasCredito,
       diasAtraso: p.diasAtraso, diasAtrasoPactado: p.diasAtrasoPactado,
     })),
   }

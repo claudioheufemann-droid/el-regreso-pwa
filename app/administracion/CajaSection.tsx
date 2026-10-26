@@ -6,8 +6,9 @@
  * auditoría del 2-oct-2026 reemplaza a Flujo de Caja, a la proyección de "Plata que
  * entró" y a la curva de Cobranza, que daban tres números distintos para la misma semana.
  *
- * Orden: datos al día → 3 cifras → gráfico → planilla semanal → planilla mensual →
- * validaciones → cómo se calcula → calendario y lo que entró de verdad → carga manual.
+ * Orden: datos al día → pagos de clientes semana a semana (CobrosSemana) → 3 cifras → gráfico
+ * del modelo → planilla mensual →
+ * validaciones → cómo se calcula → lo que entró de verdad → carga manual.
  */
 
 import { useMemo, useState } from 'react'
@@ -22,6 +23,7 @@ import type { DatosCobros, SaldoBanco } from './page'
 import IngresoRealSection from './IngresoRealSection'
 import CargaDatosCaja from './CargaDatosCaja'
 import EscenariosMensuales from './EscenariosMensuales'
+import CobrosSemana from './CobrosSemana'
 import { C, Card, Etiqueta, Franja } from './tema'
 
 
@@ -63,8 +65,6 @@ function BotonCsv({ onClick }: { onClick: () => void }) {
 const th: React.CSSProperties = { padding: '9px 12px', fontSize: 10.5, fontWeight: 800, letterSpacing: '.05em', textTransform: 'uppercase', color: C.muted, textAlign: 'right', whiteSpace: 'nowrap', background: C.bg, borderBottom: `1px solid ${C.line}` }
 const td: React.CSSProperties = { padding: '8px 12px', fontSize: 13, textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', borderBottom: `1px solid ${C.line}` }
 
-type Semaforo = 'rojo' | 'amarillo' | 'verde'
-const COLOR_SEMAFORO: Record<Semaforo, string> = { rojo: C.red, amarillo: C.amber, verde: C.green }
 
 export default function CajaSection({ datos, escenarios, cobros, saldoActual, hayCompras, frescura, hoyISO }: {
   datos: DatosCajaCobrada
@@ -88,8 +88,6 @@ export default function CajaSection({ datos, escenarios, cobros, saldoActual, ha
   const ultima = caja.semanas[caja.semanas.length - 1]
   const peor = caja.semanas.reduce((m, s) => (s.acumulado < m.acumulado ? s : m), caja.semanas[0])
 
-  // Semáforo por semana: rojo si el saldo acumulado queda negativo; amarillo si esa semana sale más de lo que entra.
-  const semaforo = (s: (typeof caja.semanas)[number]): Semaforo => (hayBanco && s.acumulado < 0 ? 'rojo' : s.neto < 0 ? 'amarillo' : 'verde')
 
   const grafico = useMemo(() => caja.semanas.map(s => ({
     semana: `S${s.semanaIso}`,
@@ -122,6 +120,9 @@ export default function CajaSection({ datos, escenarios, cobros, saldoActual, ha
           })}
         </div>
       </Card>
+
+      {/* ── Lo que entra por pago de facturas, semana a semana y día a día ── */}
+      <CobrosSemana cobros={cobros} hoyISO={hoyISO} />
 
       {/* ── Las 3 cifras ── */}
       <Franja min={250}>
@@ -164,8 +165,16 @@ export default function CajaSection({ datos, escenarios, cobros, saldoActual, ha
 
       {/* ── Gráfico ── */}
       <Card>
-        <h3 style={{ fontSize: 15, fontWeight: 800, color: C.text }}>Entradas y salidas por semana</h3>
-        <p style={{ fontSize: 12, color: C.muted, marginTop: 3, marginBottom: 10 }}>Confirmado, proyectado y contado siempre van separados. La línea es el {hayBanco ? 'saldo' : 'flujo'} acumulado.</p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
+          <div>
+            <h3 style={{ fontSize: 15, fontWeight: 800, color: C.text }}>Modelo de caja: entradas y salidas por semana</h3>
+            <p style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>Incluye la venta que todavía no se hace, el contado y las compras. La línea es el {hayBanco ? 'saldo' : 'flujo'} acumulado.</p>
+          </div>
+          <BotonCsv onClick={() => descargarCsv(`caja-semanal-${hoyISO}.csv`, [
+            ['Semana ISO', 'Desde', 'Confirmado', 'Proyectado', 'Atrasadas recuperadas', 'Contado', 'Total entradas', 'Salidas', 'Neto', 'Acumulado', 'Ajuste backtest (ya aplicado)'],
+            ...caja.semanas.map(s => [s.semanaIso, s.lunes, s.confirmado, s.proyectado, s.atrasadas, s.contado, s.entradas, s.salidas, s.neto, s.acumulado, s.ajusteBacktest]),
+          ])} />
+        </div>
         <ResponsiveContainer width="100%" height={300}>
           <ComposedChart data={grafico} stackOffset="sign">
             <CartesianGrid strokeDasharray="3 3" stroke={C.line} vertical={false} />
@@ -182,70 +191,6 @@ export default function CajaSection({ datos, escenarios, cobros, saldoActual, ha
             <Line dataKey="Acumulado" stroke={C.text} strokeWidth={2} dot={false} />
           </ComposedChart>
         </ResponsiveContainer>
-      </Card>
-
-      {/* ── Planilla semanal ── */}
-      <Card padding={0}>
-        <div style={{ padding: '16px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <div>
-            <h3 style={{ fontSize: 15, fontWeight: 800, color: C.text }}>Semana a semana, hasta el 31 de diciembre</h3>
-            <p style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>CLP brutos. Semáforo: rojo = el saldo queda negativo · amarillo = esa semana sale más de lo que entra.</p>
-          </div>
-          <BotonCsv onClick={() => descargarCsv(`caja-semanal-${hoyISO}.csv`, [
-            ['Semana ISO', 'Desde', 'Confirmado', 'Proyectado', 'Atrasadas recuperadas', 'Contado', 'Total entradas', 'Salidas', 'Neto', 'Acumulado', 'Ajuste backtest (ya aplicado)'],
-            ...caja.semanas.map(s => [s.semanaIso, s.lunes, s.confirmado, s.proyectado, s.atrasadas, s.contado, s.entradas, s.salidas, s.neto, s.acumulado, s.ajusteBacktest]),
-          ])} />
-        </div>
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', minWidth: 860, borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>
-                <th style={{ ...th, textAlign: 'left' }}>Semana</th>
-                <th style={th} title="Facturas ya emitidas e impagas que, según cómo paga cada cliente, deberían entrar esa semana, corregidas con el backtest (los clientes pagan más lento de lo que su perfil supone).">Confirmado</th>
-                <th style={th} title="Venta a crédito que todavía no se factura (litros de Producción × precio real + pedidos sin despachar), cobrada con el patrón real de pago y corregida con el backtest.">Proyectado</th>
-                <th style={th} title="Facturas atrasadas que se recuperan, al ritmo medido (6% / 1,4% / 0,6% del pendiente por mes).">Atrasadas</th>
-                <th style={th} title="Mostrador PDV + restaurante BaseCamp: promedio real reciente.">Contado</th>
-                <th style={th}>Total entradas</th>
-                <th style={th} title="Pagos a proveedores cargados + compras de insumos proyectadas. No incluye sueldos, arriendos ni impuestos.">Salidas</th>
-                <th style={th}>Neto</th>
-                <th style={th}>{hayBanco ? 'Saldo' : 'Acumulado'}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {caja.semanas.map(s => {
-                const sem = semaforo(s)
-                return (
-                  <tr key={s.lunes}>
-                    <td style={{ ...td, textAlign: 'left', fontWeight: 700 }}>
-                      <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 99, background: COLOR_SEMAFORO[sem], marginRight: 8 }} />
-                      S{s.semanaIso} <span style={{ color: C.muted, fontWeight: 500 }}>· {fDia(s.lunes)}</span>
-                    </td>
-                    <td style={{ ...td, color: C.blue }}>{fMoney(s.confirmado)}</td>
-                    <td style={{ ...td, color: C.muted }}>{fMoney(s.proyectado)}</td>
-                    <td style={{ ...td, color: C.red }}>{s.atrasadas ? fMoney(s.atrasadas) : '—'}</td>
-                    <td style={{ ...td, color: C.teal }}>{fMoney(s.contado)}</td>
-                    <td style={{ ...td, fontWeight: 800 }}>{fMoney(s.entradas)}</td>
-                    <td style={{ ...td, color: C.muted }}>{s.salidas ? `−${fMoney(s.salidas)}` : '—'}</td>
-                    <td style={{ ...td, color: s.neto < 0 ? C.amber : C.text }}>{fMoney(s.neto)}</td>
-                    <td style={{ ...td, fontWeight: 800, color: hayBanco && s.acumulado < 0 ? C.red : C.text }}>{fMoney(s.acumulado)}</td>
-                  </tr>
-                )
-              })}
-              <tr>
-                <td style={{ ...td, textAlign: 'left', fontWeight: 800, background: C.bg }}>Total</td>
-                {(['confirmado', 'proyectado', 'atrasadas', 'contado', 'entradas', 'salidas', 'neto'] as const).map(k => (
-                  <td key={k} style={{ ...td, fontWeight: 800, background: C.bg }}>{fMoney(caja.semanas.reduce((a, s) => a + s[k], 0) * (k === 'salidas' ? -1 : 1))}</td>
-                ))}
-                <td style={{ ...td, background: C.bg }} />
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <p style={{ padding: '10px 18px 14px', fontSize: 12, color: C.muted, lineHeight: 1.55 }}>
-          Hay <strong style={{ color: C.red }}>{fMoney(caja.atrasado.monto)}</strong> en {caja.atrasado.facturas} facturas que ya debieron pagarse: la columna Atrasadas sólo
-          cuenta lo que se recupera solo al ritmo medido ({fMoney(caja.semanas.reduce((a, s) => a + s.atrasadas, 0))} a fin de año). El resto depende de la gestión de cobranza.
-          {' '}Confirmado y proyectado ya vienen corregidos con el backtest: {fMoney(-caja.semanas.reduce((a, s) => a + s.ajusteBacktest, 0))} menos que lo que daba el modelo sin corregir.
-        </p>
       </Card>
 
       {/* ── Planilla mensual ── */}

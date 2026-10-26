@@ -77,6 +77,9 @@ export interface FilaVentaFinanzas {
    *  contra su pago en `cobros_erp` (ver proyeccionCobros.ts) — presente en
    *  ~95% de las ventas despachadas. */
   numero_factura?: string | null
+  /** Emisión de la factura (null ⇒ todavía no se factura). El vencimiento
+   *  corre desde aquí, igual que en Deudores (lib/cobranza.ts). */
+  fecha_facturacion?: string | null
 }
 
 /** ¿Esta fila es ingreso real de la empresa? Excluye consumo interno sin

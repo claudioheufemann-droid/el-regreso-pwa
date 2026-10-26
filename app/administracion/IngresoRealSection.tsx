@@ -10,7 +10,6 @@ import {
   } from 'lucide-react'
 import type { DatosCobros, ComportamientoPago } from './page'
 import { LABEL_METODO, type MetodoPago } from '@/lib/administracion/movimientosCtaCte'
-import CalendarioSemana from './CalendarioSemana'
 import { C } from './tema'
 
 /**
@@ -62,7 +61,8 @@ type OrdenCol = 'monto' | 'p50' | 'brecha' | 'cliente'
 
 /**
  * Desde la auditoría del 2-oct-2026 esta sección se reparte en dos pestañas:
- *   · modo 'caja'     → calendario de la semana + lo que entró de verdad semana a semana.
+ *   · modo 'caja'     → lo que entró de verdad semana a semana (el día a día de lo que
+ *                       vence vive en CobrosSemana).
  *   · modo 'cobranza' → cuánto se demoran en pagar y cliente por cliente.
  * La proyección de cobros ("cuánto entra") ya no vive acá: la da la Caja real cobrada
  * (lib/administracion/cajaCobrada.ts), un solo motor para todo el módulo.
@@ -151,8 +151,6 @@ export default function IngresoRealSection({ datos, modo }: { datos: DatosCobros
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-
-      {modo === 'caja' && <CalendarioSemana datos={datos} />}
 
       {/* ── Gráfico semanal ───────────────────────────────────────────────── */}
       {modo === 'caja' && (

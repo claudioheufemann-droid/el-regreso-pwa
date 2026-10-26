@@ -51,7 +51,9 @@ export async function cargarDatosAdministracion() {
   const ciclo = cicloEnCursoISO()
   const inicioCiclo = inicioDeCiclo(ciclo)
   const finCiclo = finDeCiclo(ciclo)
-  const hoyISO = new Date().toISOString().slice(0, 10)
+  // Hoy en Chile, no en UTC: desde las 21:00 el UTC ya es mañana y el domingo en la noche
+  // la "semana en curso" saltaba a la siguiente.
+  const hoyISO = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' }).format(new Date())
   const diaActual = Math.floor((Date.parse(`${hoyISO}T00:00:00Z`) - Date.parse(`${inicioCiclo}T00:00:00Z`)) / MS_POR_DIA) + 1
   const diasEnCiclo = Math.floor((Date.parse(`${finCiclo}T00:00:00Z`) - Date.parse(`${inicioCiclo}T00:00:00Z`)) / MS_POR_DIA) + 1
   const avance: AvanceCiclo = {
@@ -119,7 +121,7 @@ export async function cargarDatosAdministracion() {
       const lotes = await Promise.all(
         Array.from({ length: paginas }, (_, i) =>
           admin.from('ventas')
-            .select('nombre_fantasia, producto, categoria_producto, envase, litros, total_sin_impuesto, fecha_pedido, fecha_entrega, entregado, numero_factura, fecha_entrega_estimada')
+            .select('nombre_fantasia, producto, categoria_producto, envase, litros, total_sin_impuesto, fecha_pedido, fecha_entrega, entregado, numero_factura, fecha_entrega_estimada, fecha_facturacion')
             .gte('fecha_pedido', desdeVentas)
             .order('id', { ascending: true })
             .range(i * PAGE, i * PAGE + PAGE - 1)
@@ -583,7 +585,7 @@ export async function cargarDatosAdministracion() {
     'bruto',
   ))
 
-  // Calendario de entradas de la semana (CalendarioSemana): facturas por día esperado, mostrador
+  // Datos por día para CobrosSemana (pagos que ya entraron) — facturas por día esperado, mostrador
   // y BaseCamp repartidos con su patrón real por día de la semana.
   const calendario = armarDatosCalendario({
     hoyISO,
