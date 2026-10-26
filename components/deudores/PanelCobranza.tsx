@@ -223,7 +223,7 @@ export function FilaDocumento({ d, p, porVencer = false }: {
               )}
             </p>
             <p style={{ fontSize: 11, color: p.muted, marginTop: 1 }}>
-              Pedido N° {d.pedido.replace(/^0+/, '')} · {d.fechaEntrega ? `entregado ${fFechaCorta(d.fechaEntrega)}` : 'sin entregar aún'} · {porVencer || d.diasMora === 0 ? 'vence' : 'venció'} {fFechaCorta(d.fechaVencimiento)}
+              Pedido N° {d.pedido.replace(/^0+/, '')} · {d.fechaFactura ? `facturada ${fFechaCorta(d.fechaFactura)}` : d.fechaEntrega ? `entregado ${fFechaCorta(d.fechaEntrega)}` : 'sin entregar aún'} · {porVencer || d.diasMora === 0 ? 'vence' : 'venció'} {fFechaCorta(d.fechaVencimiento)}
             </p>
           </div>
           <div style={{ textAlign: 'right', flexShrink: 0 }}>
@@ -383,9 +383,13 @@ export default function PanelCobranza({ cliente, tema = 'claro', onDatos }: {
             <p style={{ fontSize: 11.5, color: p.muted, marginTop: 4, lineHeight: 1.45 }}>
               Documento más antiguo impago
               {masAntiguo.numeroFactura ? `: factura N° ${masAntiguo.numeroFactura}` : ''}
-              {masAntiguo.fechaEntrega ? `, entregado el ${fFecha(masAntiguo.fechaEntrega)}` : ''}.{' '}
+              {masAntiguo.fechaFactura
+                ? ` del ${fFecha(masAntiguo.fechaFactura)}`
+                : masAntiguo.fechaEntrega ? `, entregado el ${fFecha(masAntiguo.fechaEntrega)}` : ''}.{' '}
               {masAntiguo.diasMora === 0 ? 'Vence' : 'Venció'} el {fFecha(masAntiguo.fechaVencimiento)}
-              {detalle.diasPago > 0 ? ` (${detalle.diasPago} días de plazo desde la entrega)` : ''}.
+              {detalle.diasPago > 0
+                ? ` (${detalle.diasPago} días de plazo desde la ${masAntiguo.fechaFactura ? 'factura' : 'entrega'})`
+                : ''}.
             </p>
           ) : detalle.fechaDocumentoAntiguo && (
             <p style={{ fontSize: 11.5, color: p.muted, marginTop: 4, lineHeight: 1.45 }}>

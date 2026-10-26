@@ -43,8 +43,13 @@
  * La cifra a cobrar SIEMPRE sale del ERP (`deuda_vencida`, menos maquila),
  * nunca de la suma reconstruida.
  *
- * EL CRÉDITO CORRE DESDE LA ENTREGA, NO DESDE EL PEDIDO (2026-10-26)
+ * EL CRÉDITO CORRE DESDE LA FACTURA, NO DESDE EL PEDIDO (2026-10-26)
  * ------------------------------------------------------------------
+ * Base del plazo: la emisión de la factura (`ventas.fecha_facturacion`), así
+ * el vencimiento es exactamente el que trae impreso la factura. Si todavía no
+ * se factura, la entrega. Antes de tener la fecha de factura se usó sólo la
+ * entrega; el razonamiento de abajo sigue valiendo:
+ *
  * El ERP cuenta la mora desde la fecha del remito (≈ el día del pedido). Pero
  * el cliente recién recibe la mercadería y la factura cuando se le entrega, y
  * ahí empiezan sus `dias_pago` — la misma regla que ya usa Administración
@@ -212,7 +217,12 @@ export interface DocumentoVencido {
   fechaEmision: string
   /** Cuándo se le entregó al cliente. null ⇒ todavía no se entrega. */
   fechaEntrega: string | null
-  /** Entrega + `dias_pago`: desde aquí el documento está vencido. */
+  /** Emisión de la factura. null ⇒ todavía no se factura. */
+  fechaFactura: string | null
+  /**
+   * El vencimiento que dice la factura: emisión + `dias_pago`. Sin factura
+   * todavía, entrega + `dias_pago`. Desde este día el documento está vencido.
+   */
   fechaVencimiento: string
   /**
    * Días transcurridos desde el vencimiento real (desde la entrega).
@@ -266,6 +276,8 @@ export interface FilaVenta extends LineaVenta {
   fecha_pedido: string
   /** null ⇒ el pedido todavía no se entrega. */
   fecha_entrega?: string | null
+  /** Emisión de la factura. null ⇒ todavía no se factura. */
+  fecha_facturacion?: string | null
   /** N° de factura del ERP (columna "Factura" del informe de ventas). */
   numero_factura: string | null
 }
@@ -396,13 +408,18 @@ function armarDocumentos(ventas: FilaVenta[], diasPago: number, hoy: string): Do
       .slice(0, 10)
     // Si las líneas salieron en días distintos manda la última: la factura se
     // completa cuando llegó todo lo que incluye.
-    const fechaEntrega = filas.reduce<string | null>((max, f) => {
-      const e = f.fecha_entrega ? f.fecha_entrega.slice(0, 10) : null
-      return e && (!max || e > max) ? e : max
-    }, null)
-    // Sin entrega todavía el crédito no empezó a correr: lo antes que puede
-    // vencer es `dias_pago` después de hoy.
-    const baseCredito = fechaEntrega
+    const ultimaFecha = (campo: 'fecha_entrega' | 'fecha_facturacion') =>
+      filas.reduce<string | null>((max, f) => {
+        const e = f[campo] ? String(f[campo]).slice(0, 10) : null
+        return e && (!max || e > max) ? e : max
+      }, null)
+    const fechaEntrega = ultimaFecha('fecha_entrega')
+    const fechaFactura = ultimaFecha('fecha_facturacion')
+    // El plazo corre desde la emisión de la factura: así el vencimiento es el
+    // mismo que trae impreso. Sin factura todavía, desde la entrega; sin
+    // entrega, el crédito no empezó a correr y lo antes que puede vencer es
+    // `dias_pago` después de hoy.
+    const baseCredito = fechaFactura ?? fechaEntrega
       ?? (diasEntre(fechaEmision, hoy) > DIAS_SIN_ENTREGA_ES_HUECO ? fechaEmision : hoy)
     const fechaVencimiento = sumarDias(baseCredito, diasPago)
     const diasMora = diasEntre(fechaVencimiento, hoy)
@@ -428,6 +445,7 @@ function armarDocumentos(ventas: FilaVenta[], diasPago: number, hoy: string): Do
       pedido,
       fechaEmision,
       fechaEntrega,
+      fechaFactura,
       fechaVencimiento,
       diasMora,
       diasMoraERP,

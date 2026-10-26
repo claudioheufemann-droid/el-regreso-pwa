@@ -60,7 +60,7 @@ export interface VencimientoReal {
 }
 
 const COLUMNAS_VENTA_COBRANZA =
-  'nombre_fantasia, pedido, fecha_pedido, fecha_entrega, producto, envase, categoria_producto, litros, total_sin_impuesto, numero_factura'
+  'nombre_fantasia, pedido, fecha_pedido, fecha_entrega, fecha_facturacion, producto, envase, categoria_producto, litros, total_sin_impuesto, numero_factura'
 const DEUDORES_POR_CONSULTA = 25
 const FILAS_POR_PAGINA = 1000
 

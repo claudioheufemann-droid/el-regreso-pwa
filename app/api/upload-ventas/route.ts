@@ -197,6 +197,11 @@ function parseAndValidate(rows: Record<string, unknown>[]) {
         // ya cargadas, pese a que el ERP sí trae el número (589/795 filas con
         // dato en un export de muestra).
         numero_factura: String(row['Factura'] ?? row['FacturaEnMinusculas'] ?? '').trim() || null,
+        // Emisión de la factura: de aquí corre el plazo de pago y sale el
+        // vencimiento que usa Deudores (lib/cobranza.ts). null = sin facturar.
+        fecha_facturacion: parseFecha(
+          row['FechaDeFacturacion'] ?? row['Fecha de facturación'] ?? row['Fecha de facturacion']
+        ),
         tipo_venta:
           String(row['TipoDeVenta'] ?? row['Tipo de venta'] ?? '').trim() || null,
         localidad: String(row['Localidad'] ?? '').trim() || null,
