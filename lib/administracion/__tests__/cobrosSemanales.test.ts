@@ -33,15 +33,15 @@ describe('armarCobrosSemanales', () => {
     expect(s.numero).toBe(44)
     expect(s.domingo).toBe('2026-11-01')
     expect(s.entro).toBe(1000)
-    expect(s.porCobrar).toBe(5000)
+    expect(s.porEntrar).toBe(5000)
     expect(s.total).toBe(6000)
-    expect(s.dias[1].porCobrar).toBe(2000) // martes: vencida sin pagar
+    expect(s.dias[1].porEntrar).toBe(2000) // martes: vencida sin pagar
     expect(s.dias[3].entro).toBeNull() // jueves todavía no pasa
   })
 
   it('el vencimiento de fin de semana pasa al lunes siguiente', () => {
-    expect(semana('2026-11-02').dias[0].porCobrar).toBe(4000)
-    expect(semana('2026-10-26').dias[5].porCobrar).toBe(0)
+    expect(semana('2026-11-02').dias[0].porEntrar).toBe(4000)
+    expect(semana('2026-10-26').dias[5].porEntrar).toBe(0)
   })
 
   it('lo vencido antes de esta semana va aparte y la semana pasada sólo muestra lo que entró', () => {
@@ -49,7 +49,7 @@ describe('armarCobrosSemanales', () => {
     const pasada = semana('2026-10-19')
     expect(pasada.estado).toBe('pasada')
     expect(pasada.entro).toBe(500)
-    expect(pasada.porCobrar).toBe(0)
+    expect(pasada.porEntrar).toBe(0)
   })
 
   it('deja fuera PDV, BaseCamp y enlatado móvil (pagos y facturas)', () => {
@@ -71,7 +71,35 @@ describe('armarCobrosSemanales', () => {
     })
     const s = otro.semanas.find(x => x.estado === 'en_curso')!
     expect(s.entro).toBe(32)
-    expect(s.porCobrar).toBe(100)
+    expect(s.porEntrar).toBe(100)
+  })
+
+  it('con los filtros suma cada tipo de venta por separado', () => {
+    const pagos = [
+      { fecha: '2026-10-26', cliente: 'Cliente PDV', monto: 100 },
+      { fecha: '2026-10-26', cliente: 'EWU Ginger Beer', monto: 200 },
+      { fecha: '2026-10-26', cliente: 'Teja Market', monto: 400 },
+      { fecha: '2026-10-26', cliente: 'BaseCamp El Regreso', monto: 999 }, // cuenta interna: nunca cuenta
+    ]
+    const contado = {
+      mostradorSemanal: 700, patronMostrador: [1, 1, 1, 1, 1, 1, 1].map(x => x / 7),
+      ventasBasecamp: { '2026-10-26': 50 }, ultimaFechaBasecamp: '2026-10-26',
+      basecampSemanal: 1400, patronBasecamp: [1, 1, 1, 1, 1, 1, 1].map(x => x / 7),
+    }
+    const todo = armarCobrosSemanales({ hoyISO: hoy, pendientes: [{ ...f('B', '2026-10-30', 3000), cliente: 'Cervecera Bundor SPA' }], pagos, contado, segmentos: ['fabrica', 'enlatado', 'pdv', 'basecamp'] })
+    const s = todo.semanas.find(x => x.estado === 'en_curso')!
+    expect(s.dias[0].entroPor).toEqual({ fabrica: 400, enlatado: 200, pdv: 100, basecamp: 50 })
+    // PDV: lunes y martes ya pasaron (hoy es miércoles), se estima de miércoles a domingo: 5 × 100.
+    expect(s.totalPor.pdv).toBe(100 + 500)
+    // BaseCamp: cargado sólo hasta el lunes → martes a domingo estimados: 6 × 200.
+    expect(s.totalPor.basecamp).toBe(50 + 1200)
+    expect(s.totalPor.enlatado).toBe(200 + 3000)
+
+    const soloPdv = armarCobrosSemanales({ hoyISO: hoy, pendientes: [f('C', '2026-10-30', 3000)], pagos, contado, segmentos: ['pdv'] })
+    const p = soloPdv.semanas.find(x => x.estado === 'en_curso')!
+    expect(p.entro).toBe(100)
+    expect(p.porEntrar).toBe(500)
+    expect(p.facturas).toBe(0)
   })
 
   it('muestra al menos 5 semanas hacia adelante y el último pago cargado', () => {
