@@ -68,7 +68,8 @@ function fFechaCorta(iso: string): string {
 /** Un solo criterio de color para la mora en toda la pantalla. */
 function colorMora(dias: number, p: Paleta): { fg: string; bg: string } {
   if (dias >= 60) return { fg: p.red, bg: p.redSoft }
-  if (dias >= 1) return { fg: p.amber, bg: p.amberSoft }
+  // 0 = vence hoy: ya se cobra, así que no va en verde.
+  if (dias >= 0) return { fg: p.amber, bg: p.amberSoft }
   return { fg: p.green, bg: p.greenSoft }
 }
 
@@ -222,15 +223,17 @@ export function FilaDocumento({ d, p, porVencer = false }: {
               )}
             </p>
             <p style={{ fontSize: 11, color: p.muted, marginTop: 1 }}>
-              Pedido N° {d.pedido.replace(/^0+/, '')} · {fFechaCorta(d.fechaEmision)} · {porVencer ? 'vence' : 'venció'} {fFechaCorta(d.fechaVencimiento)}
+              Pedido N° {d.pedido.replace(/^0+/, '')} · {d.fechaEntrega ? `entregado ${fFechaCorta(d.fechaEntrega)}` : 'sin entregar aún'} · {porVencer || d.diasMora === 0 ? 'vence' : 'venció'} {fFechaCorta(d.fechaVencimiento)}
             </p>
           </div>
           <div style={{ textAlign: 'right', flexShrink: 0 }}>
             <p style={{ fontSize: 13.5, fontWeight: 800, color: p.text }}>{fPlata(d.monto)}</p>
             <span style={{ fontSize: 10, fontWeight: 700, color: c.fg }}>
-              {porVencer
-                ? `faltan ${diasRestantes} ${diasRestantes === 1 ? 'día' : 'días'}`
-                : `${d.diasMora} ${d.diasMora === 1 ? 'día' : 'días'}`}
+              {d.diasMora === 0
+                ? 'vence hoy'
+                : porVencer
+                  ? `faltan ${diasRestantes} ${diasRestantes === 1 ? 'día' : 'días'}`
+                  : `${d.diasMora} ${d.diasMora === 1 ? 'día' : 'días'}`}
             </span>
           </div>
           <ChevronRight size={15} color={p.faint}
@@ -359,17 +362,32 @@ export default function PanelCobranza({ cliente, tema = 'claro', onDatos }: {
   // que tiene que cobrar.
   const comerciales = detalle.vencidos.filter(d => !d.esMaquila)
   const maquila = detalle.vencidos.filter(d => d.esMaquila)
+  // `vencidos` viene del más atrasado al más nuevo: el primero es el que fija
+  // los días de arriba.
+  const masAntiguo = detalle.vencidos[0] ?? null
 
   return (
     <div style={{ marginBottom: 12 }}>
       {/* Días exactos de mora — el número que el vendedor dice por teléfono. */}
       {datos.deudaComercial > 0 && (
         <div style={{ background: c.bg, border: `1px solid ${c.fg}30`, borderRadius: 12, padding: '12px 14px', marginBottom: 12 }}>
-          <p style={{ fontSize: 9.5, color: p.muted, fontWeight: 700, letterSpacing: '0.05em' }}>DEUDA VENCIDA HACE</p>
-          <p style={{ fontSize: 26, fontWeight: 900, color: c.fg, letterSpacing: '-0.5px', lineHeight: 1.1, marginTop: 2 }}>
-            {detalle.diasMoraMaxima} <span style={{ fontSize: 15, fontWeight: 700 }}>{detalle.diasMoraMaxima === 1 ? 'día' : 'días'}</span>
+          <p style={{ fontSize: 9.5, color: p.muted, fontWeight: 700, letterSpacing: '0.05em' }}>
+            {detalle.diasMoraMaxima === 0 ? 'DEUDA VENCIDA' : 'DEUDA VENCIDA HACE'}
           </p>
-          {detalle.fechaDocumentoAntiguo && (
+          <p style={{ fontSize: 26, fontWeight: 900, color: c.fg, letterSpacing: '-0.5px', lineHeight: 1.1, marginTop: 2 }}>
+            {detalle.diasMoraMaxima === 0
+              ? 'Vence hoy'
+              : <>{detalle.diasMoraMaxima} <span style={{ fontSize: 15, fontWeight: 700 }}>{detalle.diasMoraMaxima === 1 ? 'día' : 'días'}</span></>}
+          </p>
+          {masAntiguo ? (
+            <p style={{ fontSize: 11.5, color: p.muted, marginTop: 4, lineHeight: 1.45 }}>
+              Documento más antiguo impago
+              {masAntiguo.numeroFactura ? `: factura N° ${masAntiguo.numeroFactura}` : ''}
+              {masAntiguo.fechaEntrega ? `, entregado el ${fFecha(masAntiguo.fechaEntrega)}` : ''}.{' '}
+              {masAntiguo.diasMora === 0 ? 'Vence' : 'Venció'} el {fFecha(masAntiguo.fechaVencimiento)}
+              {detalle.diasPago > 0 ? ` (${detalle.diasPago} días de plazo desde la entrega)` : ''}.
+            </p>
+          ) : detalle.fechaDocumentoAntiguo && (
             <p style={{ fontSize: 11.5, color: p.muted, marginTop: 4, lineHeight: 1.45 }}>
               Documento más antiguo impago
               {detalle.remitoMasAntiguo ? `: remito N° ${detalle.remitoMasAntiguo}` : ''} del{' '}

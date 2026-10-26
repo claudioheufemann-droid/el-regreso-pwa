@@ -2,7 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getServerUser } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { vendedorCanonico } from '@/lib/types'
-import { calcularMaquila, puedeVerDeudaGlobal } from '@/lib/deudaComercial'
+import { calcularMaquila, conVencimientoReal, puedeVerDeudaGlobal } from '@/lib/deudaComercial'
 import { barrilesFueraPorCartera } from '@/lib/barrilesFuera'
 import DeudoresVendedorClient from './DeudoresVendedorClient'
 
@@ -42,14 +42,21 @@ export default async function DeudoresVentasPage() {
   // que descontarla de los totales por cartera. Se calcula acá y no en el
   // cliente porque los KPIs tienen que salir correctos sin desplegar ninguna
   // tarjeta. Barato: sólo 3 clientes de los 171 tienen maquila.
-  const { maquilaPorCliente, soloMaquila } = await calcularMaquila(supabase, deudores ?? [])
+  const { maquilaPorCliente, soloMaquila, vencimientoPorCliente } = await calcularMaquila(supabase, deudores ?? [])
 
   // Clientes cuya ÚNICA venta registrada es maquila (co-packing, no cerveza ni
   // kombucha) se sacan enteros de Deudores: no son cobranza del área comercial
   // y su saldo/barriles sólo ensucian el número (pedido de Claudio, 2026-09-17,
   // a raíz de El Growler). El día que también compren cerveza/kombucha,
   // `soloMaquila` deja de incluirlos automáticamente.
-  const deudoresComerciales = (deudores ?? []).filter(d => !soloMaquila.has(d.nombre_fantasia))
+  //
+  // Y la mora va contada desde la ENTREGA, no desde el pedido como la cuenta
+  // el ERP: lo que todavía no vence sale de `deuda_vencida` y cada fila trae
+  // sus días reales en `dias_mora` (ver lib/cobranza.ts).
+  const deudoresComerciales = conVencimientoReal(
+    (deudores ?? []).filter(d => !soloMaquila.has(d.nombre_fantasia)),
+    vencimientoPorCliente,
+  )
 
   const clientesPorVendedor: Record<string, number> = {}
   for (const c of clientesRows ?? []) {

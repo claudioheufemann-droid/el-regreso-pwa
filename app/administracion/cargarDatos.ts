@@ -10,7 +10,7 @@ import { esIngresoReal, normalizarNombreCliente, brutoDeFila, lunesDe, categoria
 import { semanasRodantes, calcularDiasPagoProveedores, type EntradaCompra } from '@/lib/administracion/flujoSemanal'
 import { proyectarCobros, type PlazoCliente } from '@/lib/administracion/proyeccionCobros'
 import { vendedorCanonico, grupoCarteraDe, CLIENTES_FORECAST_INDIVIDUAL, NOMBRE_RESTAURANTE_FORECAST, NOMBRE_COMPRAS_TOTAL } from '@/lib/types'
-import { maquilaVencidaDe, type FilaVenta } from '@/lib/cobranza'
+import { calcularMaquila, conVencimientoReal } from '@/lib/deudaComercial'
 import { barrilesFueraPorCartera } from '@/lib/barrilesFuera'
 import type { FrescuraDato } from './CajaSection'
 import type { AvanceCiclo, ComportamientoPago, DatosCobros, ForecastCliente, PuntoFinanzas, ResumenDeuda, SaldoBanco, SemanaCobro, SemanaForecastCliente, SerieFinanzas } from './page'
@@ -171,7 +171,9 @@ export async function cargarDatosAdministracion() {
     admin.from('clientes').select('vendedor'),
     barrilesFueraPorCartera(admin),
   ])
-  const maquilaPorCliente = await calcularMaquila(admin, deudoresDetalle ?? [])
+  // Mismo cálculo que /ventas/deudores: maquila aparte y mora contada desde la
+  // entrega, no desde el pedido como la cuenta el ERP (ver lib/cobranza.ts).
+  const { maquilaPorCliente, vencimientoPorCliente } = await calcularMaquila(admin, deudoresDetalle ?? [])
   const clientesPorVendedor: Record<string, number> = {}
   for (const c of clientesVendedorRaw ?? []) {
     const key = vendedorCanonico(c.vendedor) || '__sin_vendedor__'
@@ -683,7 +685,7 @@ export async function cargarDatosAdministracion() {
     hayCompras: compras.length > 0,
     frescura,
     hoyISO,
-    deudoresDetalle: deudoresDetalle ?? [],
+    deudoresDetalle: conVencimientoReal(deudoresDetalle ?? [], vencimientoPorCliente),
     clientesPorVendedor,
     maquilaPorCliente,
     barrilesFuera,
@@ -695,48 +697,4 @@ export async function cargarDatosAdministracion() {
 }
 
 export type DatosAdministracion = Awaited<ReturnType<typeof cargarDatosAdministracion>>
-
-type DeudorRow = { nombre_fantasia: string; deuda_vencida: number | null }
-
-/** { nombre_fantasia → plata vencida que es maquila }. Mismo cálculo que
- *  app/ventas/deudores/page.tsx — ver ese archivo para el porqué. */
-async function calcularMaquila(
-  supabase: ReturnType<typeof createAdminClient>,
-  deudores: DeudorRow[],
-): Promise<Record<string, number>> {
-  const conDeuda = deudores.filter(d => (Number(d.deuda_vencida) || 0) > 0)
-  if (conDeuda.length === 0) return {}
-
-  const { data: filasMaquila } = await supabase
-    .from('ventas')
-    .select('nombre_fantasia')
-    .or('producto.ilike.%maquila%,producto.ilike.%latas finales%')
-    .in('nombre_fantasia', conDeuda.map(d => d.nombre_fantasia))
-
-  const clientes = [...new Set((filasMaquila ?? []).map(f => f.nombre_fantasia as string))]
-  if (clientes.length === 0) return {}
-
-  const { data: ventasMaquila } = await supabase
-    .from('ventas')
-    .select('nombre_fantasia, pedido, fecha_pedido, producto, envase, categoria_producto, litros, total_sin_impuesto')
-    .in('nombre_fantasia', clientes)
-
-  const porCliente = new Map<string, FilaVenta[]>()
-  for (const v of (ventasMaquila ?? []) as (FilaVenta & { nombre_fantasia: string })[]) {
-    const arr = porCliente.get(v.nombre_fantasia)
-    if (arr) arr.push(v)
-    else porCliente.set(v.nombre_fantasia, [v])
-  }
-
-  const out: Record<string, number> = {}
-  for (const d of conDeuda) {
-    if (!porCliente.has(d.nombre_fantasia)) continue
-    const monto = maquilaVencidaDe(
-      d as Parameters<typeof maquilaVencidaDe>[0],
-      porCliente.get(d.nombre_fantasia) ?? [],
-    )
-    if (monto > 0) out[d.nombre_fantasia] = monto
-  }
-  return out
-}
 

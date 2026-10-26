@@ -42,6 +42,22 @@
  *
  * La cifra a cobrar SIEMPRE sale del ERP (`deuda_vencida`, menos maquila),
  * nunca de la suma reconstruida.
+ *
+ * EL CRÉDITO CORRE DESDE LA ENTREGA, NO DESDE EL PEDIDO (2026-10-26)
+ * ------------------------------------------------------------------
+ * El ERP cuenta la mora desde la fecha del remito (≈ el día del pedido). Pero
+ * el cliente recién recibe la mercadería y la factura cuando se le entrega, y
+ * ahí empiezan sus `dias_pago` — la misma regla que ya usa Administración
+ * para proyectar cobros. Ecole pidió el 14-oct, se le entregó el 22-oct y
+ * tiene 7 días: vence el 29-oct, pero el ERP (y la app) la daban "vencida
+ * hace 5 días" el 26-oct. En 131 de 187 deudores revisados ese día la mora
+ * salía inflada (hasta 15 días de más) y 3 aparecían vencidos sin estarlo.
+ *
+ * Por eso cada documento lleva DOS cuentas: `diasMoraERP` (desde el pedido)
+ * sólo para calzarlo contra los tramos del ERP, y `diasMora` (desde la
+ * entrega) que es la que se muestra y la que decide si ya venció. Lo que el
+ * ERP llama vencido pero en realidad todavía no vence pasa a `porVencer` y
+ * su plata sale en `vencidoNoExigible`, que se descuenta de lo que se cobra.
  */
 
 import { IVA, ILA_CERVEZA } from './rentabilidad'
@@ -100,8 +116,12 @@ function aUTC(fecha: string): number {
   return Date.UTC(y, (m || 1) - 1, d || 1)
 }
 
+/**
+ * Fecha de HOY en Chile. Antes salía en UTC y desde las 21:00 (20:00 en
+ * invierno) la app ya contaba un día más de mora del que correspondía.
+ */
 export function hoyISO(): string {
-  return new Date().toISOString().slice(0, 10)
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' }).format(new Date())
 }
 
 export function diasEntre(desde: string, hasta: string): number {
@@ -150,6 +170,9 @@ export function diasMoraDeudor(
   d: { external_fecha?: string | null; dias_pago?: number | null; deuda_vencida?: number | null },
   hoy: string = hoyISO(),
 ): number {
+  // Ojo: cuenta desde el remito, no desde la entrega, así que puede inflar la
+  // mora. Es sólo el respaldo para cuando no hay ventas con que reconstruir;
+  // la cifra buena es `diasMoraMaxima` de `reconstruirCobranza`.
   if (!d.external_fecha) return 0
   if ((Number(d.deuda_vencida) || 0) <= 0) return 0
   const vence = sumarDias(d.external_fecha.slice(0, 10), Number(d.dias_pago) || 0)
@@ -187,9 +210,17 @@ export interface ItemDocumento {
 export interface DocumentoVencido {
   pedido: string
   fechaEmision: string
+  /** Cuándo se le entregó al cliente. null ⇒ todavía no se entrega. */
+  fechaEntrega: string | null
+  /** Entrega + `dias_pago`: desde aquí el documento está vencido. */
   fechaVencimiento: string
-  /** Días transcurridos desde el vencimiento. ≤ 0 ⇒ todavía no vence. */
+  /**
+   * Días transcurridos desde el vencimiento real (desde la entrega).
+   * 0 ⇒ vence hoy; < 0 ⇒ todavía no vence.
+   */
   diasMora: number
+  /** Días según el ERP (desde el pedido). Sólo para calzar contra sus tramos. */
+  diasMoraERP: number
   tramo: TramoKey | null
   tramoLabel: string
   monto: number
@@ -233,6 +264,8 @@ export interface DeudorEntrada {
 export interface FilaVenta extends LineaVenta {
   pedido: string | null
   fecha_pedido: string
+  /** null ⇒ el pedido todavía no se entrega. */
+  fecha_entrega?: string | null
   /** N° de factura del ERP (columna "Factura" del informe de ventas). */
   numero_factura: string | null
 }
@@ -270,6 +303,12 @@ export interface DetalleCobranza {
   restoSinDetalle: number
   /** Parte de la deuda vencida que es co-packing y no cobranza comercial. */
   maquilaVencida: number
+  /**
+   * Plata que el ERP ya cuenta como vencida pero que en realidad todavía no
+   * vence, porque el crédito corre desde la entrega y no desde el pedido. Se
+   * descuenta de lo que se cobra; los documentos quedan en `porVencer`.
+   */
+  vencidoNoExigible: number
   /** true si cada tramo del ERP cuadró exacto con un subconjunto de pedidos. */
   conciliado: boolean
 }
@@ -324,13 +363,19 @@ function subconjuntoQueSuma(docs: DocumentoVencido[], objetivo: number): Documen
 
   const elegidos: DocumentoVencido[] = []
   let suma = 0
-  for (const d of [...docs].sort((a, b) => b.diasMora - a.diasMora)) {
+  for (const d of [...docs].sort((a, b) => b.diasMoraERP - a.diasMoraERP)) {
     if (suma + d.monto > objetivo + tol) continue
     elegidos.push(d)
     suma += d.monto
   }
   return Math.abs(suma - objetivo) <= tol ? elegidos : null
 }
+
+/**
+ * Un pedido sin fecha de entrega con más de este tiempo es un hueco del
+ * histórico, no un pedido pendiente: se toma la fecha del pedido.
+ */
+const DIAS_SIN_ENTREGA_ES_HUECO = 30
 
 /** Agrupa las filas de `ventas` en documentos (un documento = un `pedido`). */
 function armarDocumentos(ventas: FilaVenta[], diasPago: number, hoy: string): DocumentoVencido[] {
@@ -349,8 +394,19 @@ function armarDocumentos(ventas: FilaVenta[], diasPago: number, hoy: string): Do
     const fechaEmision = filas
       .reduce((min, f) => (f.fecha_pedido < min ? f.fecha_pedido : min), filas[0].fecha_pedido)
       .slice(0, 10)
-    const fechaVencimiento = sumarDias(fechaEmision, diasPago)
+    // Si las líneas salieron en días distintos manda la última: la factura se
+    // completa cuando llegó todo lo que incluye.
+    const fechaEntrega = filas.reduce<string | null>((max, f) => {
+      const e = f.fecha_entrega ? f.fecha_entrega.slice(0, 10) : null
+      return e && (!max || e > max) ? e : max
+    }, null)
+    // Sin entrega todavía el crédito no empezó a correr: lo antes que puede
+    // vencer es `dias_pago` después de hoy.
+    const baseCredito = fechaEntrega
+      ?? (diasEntre(fechaEmision, hoy) > DIAS_SIN_ENTREGA_ES_HUECO ? fechaEmision : hoy)
+    const fechaVencimiento = sumarDias(baseCredito, diasPago)
     const diasMora = diasEntre(fechaVencimiento, hoy)
+    const diasMoraERP = diasEntre(sumarDias(fechaEmision, diasPago), hoy)
 
     const items: ItemDocumento[] = filas
       .map(f => ({
@@ -371,10 +427,12 @@ function armarDocumentos(ventas: FilaVenta[], diasPago: number, hoy: string): Do
     docs.push({
       pedido,
       fechaEmision,
+      fechaEntrega,
       fechaVencimiento,
       diasMora,
+      diasMoraERP,
       tramo,
-      tramoLabel: TRAMOS.find(t => t.key === tramo)?.label ?? 'Por vencer',
+      tramoLabel: TRAMOS.find(t => t.key === tramo)?.label ?? (diasMora === 0 ? 'Vence hoy' : 'Por vencer'),
       monto,
       montoOriginal: monto,
       abonoParcial: false,
@@ -429,7 +487,9 @@ export function reconstruirCobranza(
     hoy,
   )
 
-  const porVencer = candidatos.filter(d => d.diasMora <= 0)
+  // El calce contra los tramos usa la cuenta del ERP (desde el pedido): es la
+  // que el ERP usó para repartir su plata. La mora real se aplica después.
+  const porVencer = candidatos.filter(d => d.diasMoraERP <= 0)
   const vencidos: DocumentoVencido[] = []
   const restoPorTramo: RestoTramo[] = []
   let conciliado = true
@@ -438,7 +498,7 @@ export function reconstruirCobranza(
     const objetivo = saldosTramo[tramo.key]
     if (objetivo <= 0) continue // tramo sin saldo ⇒ esos pedidos ya se pagaron
 
-    const delTramo = candidatos.filter(d => d.tramo === tramo.key)
+    const delTramo = candidatos.filter(d => tramoDeMora(d.diasMoraERP) === tramo.key)
     let asignado = 0
 
     if (delTramo.length === 0) {
@@ -455,7 +515,7 @@ export function reconstruirCobranza(
         // ese documento ya tiene plata abonada.
         conciliado = false
         let restante = objetivo
-        for (const d of [...delTramo].sort((a, b) => b.diasMora - a.diasMora)) {
+        for (const d of [...delTramo].sort((a, b) => b.diasMoraERP - a.diasMoraERP)) {
           if (restante <= 0) break
           const doc = restante < d.monto ? { ...d, monto: restante, abonoParcial: true } : d
           vencidos.push(doc)
@@ -477,7 +537,7 @@ export function reconstruirCobranza(
     }
   }
 
-  vencidos.sort((a, b) => b.diasMora - a.diasMora)
+  vencidos.sort((a, b) => b.diasMoraERP - a.diasMoraERP)
 
   // Los tramos del ERP a veces suman MÁS que su propia `deuda_vencida` — pasa
   // cuando hay un abono a cuenta que el ERP todavía no imputó a ningún
@@ -492,16 +552,31 @@ export function reconstruirCobranza(
     vencidos[i] = { ...vencidos[i], monto: vencidos[i].monto - quita, abonoParcial: true }
     exceso -= quita
   }
-  const vencidosFinal = vencidos.filter(d => d.monto > 1)
+  const vencidosERP = vencidos.filter(d => d.monto > 1)
 
-  // Días de mora del documento más antiguo con saldo. Preferimos el que sale
-  // de la propia reconstrucción (fecha_pedido + dias_pago, "cuándo entró la
-  // venta a nuestro sistema"): es la misma fecha con la que se arma cada
-  // documento de `vencidosFinal`, así que la cifra de arriba no puede
-  // contradecir el detalle de abajo. El estimado por `external_fecha` (el
-  // remito del ERP) queda sólo como respaldo para los clientes sin ninguna
-  // venta reconstruida (79 de 171 no tienen histórico cargado).
-  const diasMoraMaxima = vencidosFinal.length > 0 ? vencidosFinal[0].diasMora : diasMoraMaximaERP
+  // Mora real, desde la entrega. Lo que el ERP ya da por vencido pero todavía
+  // no cumple sus `dias_pago` desde que se entregó pasa a por vencer y se
+  // descuenta de lo que se cobra. El mismo día del vencimiento (`diasMora` 0)
+  // ya cuenta como vencido: es el día en que hay que cobrarlo.
+  const vencidosFinal = vencidosERP
+    .filter(d => d.diasMora >= 0)
+    .sort((a, b) => b.diasMora - a.diasMora)
+  const noExigibles = vencidosERP.filter(d => d.diasMora < 0)
+  // Si nada de lo vencido según el ERP vence de verdad, no queda nada que
+  // cobrar: sin esto el redondeo del bruto dejaba "$7 vencidos" sueltos.
+  const nadaExigible = noExigibles.length > 0 && vencidosFinal.length === 0 && restoPorTramo.length === 0
+  const vencidoNoExigible = nadaExigible
+    ? deudaVencida
+    : noExigibles.reduce((s, d) => s + d.monto, 0)
+
+  // Días de mora del documento más antiguo con saldo, contados desde su
+  // entrega — la misma fecha con la que se arma cada documento de
+  // `vencidosFinal`, así que la cifra de arriba no puede contradecir el
+  // detalle de abajo. El estimado por `external_fecha` (el remito del ERP)
+  // queda sólo como respaldo cuando la deuda no se pudo reconstruir.
+  const diasMoraMaxima = vencidosFinal.length > 0
+    ? vencidosFinal[0].diasMora
+    : restoPorTramo.length > 0 ? diasMoraMaximaERP : 0
 
   return {
     diasMoraMaxima,
@@ -510,11 +585,12 @@ export function reconstruirCobranza(
       deudor.external_remito_mas_antiguo != null ? Number(deudor.external_remito_mas_antiguo) : null,
     diasPago,
     vencidos: vencidosFinal,
-    porVencer: porVencer.sort((a, b) => b.diasMora - a.diasMora),
+    porVencer: [...porVencer, ...noExigibles].sort((a, b) => b.diasMora - a.diasMora),
     totalReconstruido: vencidosFinal.reduce((s, d) => s + d.monto, 0),
     restoPorTramo,
     restoSinDetalle: restoPorTramo.reduce((s, r) => s + r.monto, 0),
     maquilaVencida: vencidosFinal.filter(d => d.esMaquila).reduce((s, d) => s + d.monto, 0),
+    vencidoNoExigible,
     conciliado,
   }
 }

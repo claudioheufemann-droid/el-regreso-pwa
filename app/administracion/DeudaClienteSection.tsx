@@ -56,6 +56,8 @@ export interface DeudorRaw {
   external_fecha?: string | null
   external_remito_mas_antiguo?: number | null
   updated_at: string
+  /** Días reales de mora desde la entrega (lib/deudaComercial → conVencimientoReal). */
+  dias_mora?: number | null
 }
 
 interface Deudor extends DeudorRaw {
@@ -90,6 +92,8 @@ function esCarteraDeVenta(d: Deudor): boolean {
   return grupoCarteraDe(d.vendedor) === 'vendedor'
 }
 function diasMoraDe(d: Deudor): number {
+  if ((d.deuda_comercial || 0) <= 0) return 0
+  if (d.dias_mora != null) return d.dias_mora
   return diasMoraDeudor({ ...d, deuda_vencida: d.deuda_comercial })
 }
 function saldoNoVencidoDe(d: Pick<Deudor, 'saldo_total' | 'deuda_vencida'>): number {
@@ -477,8 +481,8 @@ export default function DeudaClienteSection({ initialDeudores, clientesPorVended
                             <span style={{ display: 'block', fontSize: 10.5, fontWeight: 500, color: C.muted }}>+ {formatCurrency(Math.round(d.maquila_vencida))} maquila</span>
                           )}
                         </td>
-                        <td style={{ padding: '11px 14px', textAlign: 'right', fontWeight: 700, whiteSpace: 'nowrap', color: dias > 0 ? colorMora : C.muted }}>
-                          {dias > 0 ? `${dias} días` : '—'}
+                        <td style={{ padding: '11px 14px', textAlign: 'right', fontWeight: 700, whiteSpace: 'nowrap', color: d.deuda_comercial > 0 && dias >= 0 ? colorMora : C.muted }}>
+                          {d.deuda_comercial > 0 && dias >= 0 ? (dias === 0 ? 'vence hoy' : `${dias} ${dias === 1 ? 'día' : 'días'}`) : '—'}
                         </td>
                         <td style={{ padding: '11px 14px', textAlign: 'right', color: C.text, fontWeight: 600 }}>{formatCurrency(d.saldo_comercial)}</td>
                         <td style={{ padding: '11px 14px', textAlign: 'right', color: d.barriles_adeudados > 0 ? C.purple : C.muted, fontWeight: 600 }}>{d.barriles_adeudados}</td>

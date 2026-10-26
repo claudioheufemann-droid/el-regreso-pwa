@@ -74,12 +74,14 @@ function mensajeCobranza(t: WATarget): string {
   const resto = (t.documentos?.length ?? 0) - docs.length
   const detalle = docs.length
     ? '\n\n' + docs
-        .map(d => `• Factura N° ${d.numeroFactura ? d.numeroFactura.replace(/^0+/, '') : `(pedido ${d.pedido.replace(/^0+/, '')}, sin facturar aún)`} del ${fFecha(d.fechaEmision)} — venció el ${fFecha(d.fechaVencimiento)} (${d.diasMora} ${d.diasMora === 1 ? 'día' : 'días'}) — ${CLP.format(d.monto)}`)
+        .map(d => `• Factura N° ${d.numeroFactura ? d.numeroFactura.replace(/^0+/, '') : `(pedido ${d.pedido.replace(/^0+/, '')}, sin facturar aún)`} del ${fFecha(d.fechaEmision)} — ${d.diasMora === 0 ? `vence hoy, ${fFecha(d.fechaVencimiento)}` : `venció el ${fFecha(d.fechaVencimiento)} (${d.diasMora} ${d.diasMora === 1 ? 'día' : 'días'})`} — ${CLP.format(d.monto)}`)
         .join('\n') +
       (resto > 0 ? `\n• y ${resto} documento${resto === 1 ? '' : 's'} más` : '')
     : ''
 
-  return `${saludo} Te escribo desde El Regreso Beer porque tienes una deuda vencida ${cuanto}${monto}.${detalle}\n\nNecesitamos que puedas regularizarla lo antes posible. Si ya hiciste la transferencia, mándame el comprobante y la descontamos al tiro. ¡Gracias!`
+  const deuda = t.diasVencida === 0 ? 'una deuda que vence hoy' : `una deuda vencida ${cuanto}`
+
+  return `${saludo} Te escribo desde El Regreso Beer porque tienes ${deuda}${monto}.${detalle}\n\nNecesitamos que puedas regularizarla lo antes posible. Si ya hiciste la transferencia, mándame el comprobante y la descontamos al tiro. ¡Gracias!`
 }
 
 export function generarMensajeWA(t: WATarget): string {

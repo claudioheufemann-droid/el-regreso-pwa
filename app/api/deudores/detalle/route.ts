@@ -61,7 +61,7 @@ export async function GET(req: Request) {
 
   let qVentas = supabase
     .from('ventas')
-    .select('pedido, fecha_pedido, producto, envase, categoria_producto, litros, total_sin_impuesto, numero_factura')
+    .select('pedido, fecha_pedido, fecha_entrega, producto, envase, categoria_producto, litros, total_sin_impuesto, numero_factura')
     .eq('nombre_fantasia', cliente)
     .order('fecha_pedido', { ascending: false })
   if (desde) qVentas = qVentas.gte('fecha_pedido', desde)
@@ -78,7 +78,9 @@ export async function GET(req: Request) {
   if (errVentas) return NextResponse.json({ error: errVentas.message }, { status: 500 })
 
   const detalle = reconstruirCobranza(deudor, (ventas ?? []) as FilaVenta[])
-  const deudaVencida = Number(deudor.deuda_vencida) || 0
+  // Lo que el ERP da por vencido pero todavía no vence (el crédito corre desde
+  // la entrega) no se cobra: mismo ajuste que la lista (conVencimientoReal).
+  const deudaVencida = Math.max(0, (Number(deudor.deuda_vencida) || 0) - detalle.vencidoNoExigible)
 
   return NextResponse.json({
     cliente,

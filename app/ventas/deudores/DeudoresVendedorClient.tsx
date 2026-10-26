@@ -47,6 +47,12 @@ interface Deudor {
   external_fecha?: string | null
   external_remito_mas_antiguo?: number | null
   updated_at: string
+  /**
+   * Días reales de mora del documento más antiguo, contados desde la entrega
+   * (page.tsx → conVencimientoReal). 0 = vence hoy. null = no se pudo
+   * reconstruir y se usa el estimado del ERP.
+   */
+  dias_mora?: number | null
   /** Parte de `deuda_vencida` que es co-packing (calculada en page.tsx). */
   maquila_vencida: number
   /** `deuda_vencida` menos la maquila: lo que persigue el área comercial. */
@@ -252,7 +258,14 @@ function csvEscape(v: string | number): string {
 
 /** Días exactos de mora, mirando sólo la deuda comercial (la maquila no cuenta). */
 function diasMoraDe(d: Deudor): number {
+  if ((d.deuda_comercial || 0) <= 0) return 0
+  if (d.dias_mora != null) return d.dias_mora
   return diasMoraDeudor({ ...d, deuda_vencida: d.deuda_comercial })
+}
+
+/** "vence hoy" el día del vencimiento (ya se cobra), "N días" después. */
+function etiquetaDias(dias: number): string {
+  return dias === 0 ? 'vence hoy' : `${dias} ${dias === 1 ? 'día' : 'días'}`
 }
 
 async function fetchDetalleDeudor(nombreFantasia: string): Promise<{ vencidos: DocumentoVencido[] } | null> {
@@ -436,11 +449,9 @@ function DeudorCard({ d, abierto, onToggle }: {
   const avatar = avatarColorDe(d.nombre_fantasia)
   const [waAbierto, setWaAbierto] = useState(false)
 
-  // Estimado rápido (external_fecha + dias_pago), calculado de la propia fila
-  // para poder mostrarlo en la lista sin desplegar nada ni pedir datos al
-  // servidor. Una vez desplegada la tarjeta y llegado el detalle real
-  // (fecha_pedido + dias_pago, la fecha en que la venta entró a nuestro
-  // sistema), ese manda — mismo criterio que ya usaba el mensaje de WhatsApp.
+  // Días reales (entrega + dias_pago), calculados en el servidor para poder
+  // mostrarlos en la lista sin desplegar nada. Una vez desplegada la tarjeta
+  // el detalle trae la misma cifra; si llega, manda.
   const diasMoraEstimado = diasMoraDe(d)
 
   // El detalle por factura llega cuando se despliega la tarjeta; el mensaje de
@@ -488,9 +499,9 @@ function DeudorCard({ d, abierto, onToggle }: {
           </div>
           {/* Días exactos, no el rango: "153 días" le sirve al vendedor para
               cobrar; "+60 días" no le dice nada por teléfono. */}
-          {diasMora > 0 && (
+          {d.deuda_comercial > 0 && diasMora >= 0 && (
             <span style={{ fontSize: 10.5, fontWeight: 800, padding: '4px 9px', borderRadius: 20, flexShrink: 0, color: colorMora.fg, background: colorMora.bg, whiteSpace: 'nowrap' }}>
-              {diasMora} {diasMora === 1 ? 'día' : 'días'}
+              {etiquetaDias(diasMora)}
             </span>
           )}
           <ChevronRight size={16} color={MC.faint} style={{ flexShrink: 0, transform: abierto ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }} />
@@ -1496,8 +1507,8 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor, barriles
                       </td>
                       {/* Días exactos de mora del documento más antiguo impago. */}
                       <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 700, whiteSpace: 'nowrap',
-                        color: diasFila > 0 ? colorMora : TD.faint }}>
-                        {diasFila > 0 ? `${diasFila} días` : '—'}
+                        color: deudor.deuda_comercial > 0 && diasFila >= 0 ? colorMora : TD.faint }}>
+                        {deudor.deuda_comercial > 0 && diasFila >= 0 ? etiquetaDias(diasFila) : '—'}
                       </td>
                       <td style={{ padding: '12px 14px', textAlign: 'right', color: TD.text, fontWeight: 600 }}>
                         {formatCurrency(deudor.saldo_comercial)}
