@@ -189,6 +189,21 @@ export async function cargarDatosAdministracion() {
      pago no se muestra en ninguna pantalla, sólo el semanal y el resumen por
      cliente. */
   const desdeCobros = correrDias(hoyISO, -182)
+  // Pagos uno a uno desde el lunes de la semana pasada (~300 filas): CobrosSemana los
+  // filtra por cliente para mostrar sólo la venta de fábrica. cobros_por_dia no sirve
+  // acá porque mete BaseCamp, EWU y Bundor en 'credito'.
+  const pagosRecientesP = (async () => {
+    const desde = correrDias(lunesDe(hoyISO), -7)
+    const filas: { fecha: string; cliente: string; monto: number }[] = []
+    for (let offset = 0; ; offset += PAGE) {
+      const { data } = await admin.from('cobros_erp').select('fecha, cliente, monto')
+        .gte('fecha', desde).order('id', { ascending: true }).range(offset, offset + PAGE - 1)
+      if (!data || data.length === 0) break
+      filas.push(...data.map(d => ({ fecha: String(d.fecha).slice(0, 10), cliente: String(d.cliente ?? ''), monto: Number(d.monto) || 0 })))
+      if (data.length < PAGE) break
+    }
+    return filas
+  })()
   const [cobrosSemanaRaw, comportamientoRaw, impagasRaw, mostradorRaw, cobrosPorDiaRaw, pagosPonderadosRaw, cobradoMesRaw, cobrosMensualesRaw] = await Promise.all([
     admin.rpc('cobros_por_semana', { p_desde: desdeCobros })
       .then(r => (r.data ?? []) as { semana: string; metodo: string; monto: number; movimientos: number }[]),
@@ -363,6 +378,7 @@ export async function cargarDatosAdministracion() {
     ),
     ultimaFecha: semanasCobro.length > 0 ? semanasCobro[semanasCobro.length - 1].semana : null,
     confirmadoEstaSemana: semanasCobro.find(s => s.semana === lunesEstaSemana)?.total ?? 0,
+    pagosRecientes: await pagosRecientesP,
   }
 
   // ── Series del modelo ──────────────────────────────────────────────────────

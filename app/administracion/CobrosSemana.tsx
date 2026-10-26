@@ -34,11 +34,10 @@ function descargarCsv(nombre: string, filas: (string | number)[][]) {
 const etiquetaEstado = (s: SemanaCobro) => (s.estado === 'en_curso' ? 'Esta semana' : s.estado === 'pasada' ? 'Semana pasada' : null)
 
 export default function CobrosSemana({ cobros, hoyISO }: { cobros: DatosCobros; hoyISO: string }) {
-  const datos = useMemo(() => {
-    const pagosPorDia: Record<string, number> = {}
-    for (const [fecha, v] of Object.entries(cobros.calendario.realesPorDia)) pagosPorDia[fecha] = v.credito
-    return armarCobrosSemanales({ pendientes: cobros.proyeccion.pendientes, pagosPorDia, hoyISO })
-  }, [cobros, hoyISO])
+  const datos = useMemo(
+    () => armarCobrosSemanales({ pendientes: cobros.proyeccion.pendientes, pagos: cobros.pagosRecientes, hoyISO }),
+    [cobros, hoyISO]
+  )
 
   const enCurso = datos.semanas.find(s => s.estado === 'en_curso') ?? datos.semanas[0]
   const [lunesSel, setLunesSel] = useState(enCurso?.lunes)
@@ -86,7 +85,7 @@ export default function CobrosSemana({ cobros, hoyISO }: { cobros: DatosCobros; 
             <CalendarDays size={16} style={{ color: C.gold }} /> Pagos de clientes, semana a semana
           </h3>
           <p style={{ fontSize: 12, color: C.muted, marginTop: 3, lineHeight: 1.55, maxWidth: 640 }}>
-            Cada factura por cobrar cae en la semana en que vence (fecha de la factura + días de crédito). Lo que ya pasó es lo que entró de verdad. Montos con IVA: lo que llega al banco.
+            Sólo venta de fábrica: sin mostrador PDV, ferias, BaseCamp ni enlatado móvil. Cada factura por cobrar cae en la semana en que vence (fecha de la factura + días de crédito); lo que ya pasó es lo que entró de verdad. Montos con IVA: lo que llega al banco.
           </p>
         </div>
         <button
@@ -296,7 +295,7 @@ export default function CobrosSemana({ cobros, hoyISO }: { cobros: DatosCobros; 
             {pagosAtrasados && <TriangleAlert size={12} style={{ verticalAlign: '-2px', marginRight: 4 }} />}
             Pagos cargados hasta el {datos.ultimoPago ? fFechaLarga(datos.ultimoPago) : '—'}
             {pagosAtrasados ? ': los días posteriores pueden mostrar $0 aunque hayan pagado.' : '.'}
-            {' '}Sólo cuenta facturas ya despachadas; lo que se venda de aquí en adelante aparece cuando se despache. No incluye mostrador ni BaseCamp (se cobran al contado).
+            {' '}Sólo cuenta facturas ya despachadas; lo que se venda de aquí en adelante aparece cuando se despache.
           </p>
         </div>
       </div>

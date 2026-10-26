@@ -140,6 +140,9 @@ export interface DatosCobros {
    *  cobrado más lo que `proyeccion.semanas[0]` todavía espera para el
    *  resto de la semana. */
   confirmadoEstaSemana: number
+  /** Pagos uno a uno (cobros_erp) desde el lunes de la semana pasada, con su cliente:
+   *  CobrosSemana deja sólo la venta de fábrica (sin PDV, BaseCamp ni enlatado). */
+  pagosRecientes: { fecha: string; cliente: string; monto: number }[]
   /** Pagos por día y datos del calendario de entradas (CobrosSemana usa realesPorDia). */
   calendario: DatosCalendario
 }

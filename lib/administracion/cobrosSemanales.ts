@@ -15,11 +15,20 @@
  *   · Lo vencido ANTES de esta semana no cae en ninguna: no hay fecha en que
  *     se pueda esperar, va aparte como "vencido sin pagar".
  *
+ * Sólo VENTA DE FÁBRICA (pedido de Claudio, 26-oct-2026): fuera el mostrador PDV,
+ * las ferias, BaseCamp y demás cuentas propias, y el enlatado móvil (EWU, Bundor),
+ * tanto en lo que entró como en lo que falta por cobrar.
+ *
  * Todo en bruto (con IVA/ILA): es lo que llega al banco. Código puro.
  */
 import { lunesDe } from './finanzas'
 import { semanaISO, siguienteHabil, sumarDiasISO } from './calendarioEntradas'
 import type { FacturaCalendario } from './proyeccionCobros'
+import { esClienteCredito } from './cajaCobrada'
+import { esEnlatado } from './cajaCobradaDatos'
+
+/** Venta de fábrica: cliente a crédito (sin PDV, ferias, BaseCamp ni cuentas propias) que no es enlatado móvil. */
+export const esVentaFabrica = (cliente: string | null | undefined) => esClienteCredito(cliente) && !esEnlatado(cliente)
 
 export interface FacturaDelDia {
   cliente: string
@@ -65,21 +74,27 @@ export interface CobrosSemanales {
   ultimoPago: string | null
 }
 
-export function armarCobrosSemanales({ pendientes, pagosPorDia, hoyISO, semanasAtras = 1, minSemanasAdelante = 5 }: {
+export function armarCobrosSemanales({ pendientes, pagos, hoyISO, semanasAtras = 1, minSemanasAdelante = 5 }: {
   pendientes: FacturaCalendario[]
-  /** Pagos de clientes con crédito por día (fecha → monto). */
-  pagosPorDia: Record<string, number>
+  /** Pagos recibidos (cobros_erp), uno por fila; acá se dejan sólo los de venta de fábrica. */
+  pagos: { fecha: string; cliente: string; monto: number }[]
   hoyISO: string
   semanasAtras?: number
   minSemanasAdelante?: number
 }): CobrosSemanales {
   const lunesHoy = lunesDe(hoyISO)
 
+  const pagosPorDia: Record<string, number> = {}
+  for (const p of pagos) {
+    if (!esVentaFabrica(p.cliente)) continue
+    pagosPorDia[p.fecha] = (pagosPorDia[p.fecha] ?? 0) + p.monto
+  }
+
   const porDia = new Map<string, FacturaDelDia[]>()
   const vencidoAntes = { monto: 0, facturas: 0 }
   let ultimoLunes = sumarDiasISO(lunesHoy, (minSemanasAdelante - 1) * 7)
   for (const p of pendientes) {
-    if (p.bruto <= 0) continue
+    if (p.bruto <= 0 || !esVentaFabrica(p.cliente)) continue
     const dia = siguienteHabil(p.fechaEsperadaPactada)
     if (dia < lunesHoy) { vencidoAntes.monto += p.bruto; vencidoAntes.facturas++; continue }
     const lista = porDia.get(dia) ?? []

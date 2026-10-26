@@ -19,7 +19,11 @@ describe('armarCobrosSemanales', () => {
       f('C', '2026-10-30', 3000), // vence el viernes
       f('D', '2026-10-31', 4000), // vence sábado → se cobra el lunes 2-nov
     ],
-    pagosPorDia: { '2026-10-23': 500, '2026-10-26': 700, '2026-10-28': 300 },
+    pagos: [
+      { fecha: '2026-10-23', cliente: 'Teja Market', monto: 500 },
+      { fecha: '2026-10-26', cliente: 'El Growler', monto: 700 },
+      { fecha: '2026-10-28', cliente: 'Bar 55', monto: 300 },
+    ],
   })
   const semana = (lunes: string) => r.semanas.find(s => s.lunes === lunes)!
 
@@ -46,6 +50,28 @@ describe('armarCobrosSemanales', () => {
     expect(pasada.estado).toBe('pasada')
     expect(pasada.entro).toBe(500)
     expect(pasada.porCobrar).toBe(0)
+  })
+
+  it('deja fuera PDV, BaseCamp y enlatado móvil (pagos y facturas)', () => {
+    const otro = armarCobrosSemanales({
+      hoyISO: hoy,
+      pendientes: [
+        { ...f('E', '2026-10-30', 9000), cliente: 'EWU Ginger Beer' },
+        { ...f('G', '2026-10-30', 8000), cliente: 'BaseCamp El Regreso' },
+        f('H', '2026-10-30', 100),
+      ],
+      pagos: [
+        { fecha: '2026-10-26', cliente: 'Cliente PDV', monto: 1 },
+        { fecha: '2026-10-26', cliente: 'EWU Ginger Beer', monto: 2 },
+        { fecha: '2026-10-26', cliente: 'Cervecera Bundor SPA', monto: 4 },
+        { fecha: '2026-10-26', cliente: 'BaseCamp El Regreso', monto: 8 },
+        { fecha: '2026-10-26', cliente: 'Cliente Feria', monto: 16 },
+        { fecha: '2026-10-26', cliente: 'Teja Market', monto: 32 },
+      ],
+    })
+    const s = otro.semanas.find(x => x.estado === 'en_curso')!
+    expect(s.entro).toBe(32)
+    expect(s.porCobrar).toBe(100)
   })
 
   it('muestra al menos 5 semanas hacia adelante y el último pago cargado', () => {
