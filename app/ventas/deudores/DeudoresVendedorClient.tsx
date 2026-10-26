@@ -430,10 +430,11 @@ function ResumenCarteras({ filas, total, activo, onSelect }: {
 }
 
 // ── Tarjeta compacta (móvil) ───────────────────────────────────────────────────
-function DeudorCard({ d, abierto, onToggle, onWA }: {
-  d: Deudor; abierto: boolean; onToggle: () => void; onWA: (t: WATarget) => void
+function DeudorCard({ d, abierto, onToggle }: {
+  d: Deudor; abierto: boolean; onToggle: () => void
 }) {
   const avatar = avatarColorDe(d.nombre_fantasia)
+  const [waAbierto, setWaAbierto] = useState(false)
 
   // Estimado rápido (external_fecha + dias_pago), calculado de la propia fila
   // para poder mostrarlo en la lista sin desplegar nada ni pedir datos al
@@ -518,6 +519,26 @@ function DeudorCard({ d, abierto, onToggle, onWA }: {
 
       {abierto && (
         <div style={{ borderTop: `1px solid ${MC.border}`, padding: '12px 14px' }}>
+          {/* Cobrar por WhatsApp va PRIMERO, como en escritorio (pedido de
+              Claudio, 26-oct-2026): antes quedaba al fondo, debajo de todo el
+              detalle de facturas, y en el celular no se encontraba. */}
+          <div style={{ display: 'flex', gap: 7, marginBottom: 12 }}>
+            <button onClick={e => { e.stopPropagation(); setWaAbierto(true) }}
+              style={{ flex: 1, minHeight: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                background: MC.greenSoft, border: `1px solid rgba(5,150,105,0.25)`,
+                borderRadius: 10, color: MC.whatsapp, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+              <MessageCircle size={16} /> Cobrar por WhatsApp
+            </button>
+            {d.telefono && (
+              <a href={`tel:${d.telefono}`} onClick={e => e.stopPropagation()} aria-label="Llamar"
+                style={{ minHeight: 44, width: 44, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: MC.blueSoft, border: `1px solid rgba(37,99,235,0.25)`,
+                  borderRadius: 10, color: MC.blue, flexShrink: 0 }}>
+                <Phone size={16} />
+              </a>
+            )}
+          </div>
+
           {/* Mora exacta + contacto + facturas vencidas con su detalle */}
           <PanelCobranza cliente={d.nombre_fantasia} tema="claro" onDatos={setCobranza} />
 
@@ -556,24 +577,14 @@ function DeudorCard({ d, abierto, onToggle, onWA }: {
               </div>
             ))}
           </div>
-
-          <div style={{ display: 'flex', gap: 7 }}>
-            <button onClick={e => { e.stopPropagation(); onWA(waTarget) }}
-              style={{ flex: 1, minHeight: 38, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                background: MC.greenSoft, border: `1px solid rgba(5,150,105,0.25)`,
-                borderRadius: 10, color: MC.whatsapp, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-              <MessageCircle size={14} /> Cobrar por WhatsApp
-            </button>
-            {d.telefono && (
-              <a href={`tel:${d.telefono}`} onClick={e => e.stopPropagation()}
-                style={{ minHeight: 38, width: 38, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: MC.blueSoft, border: `1px solid rgba(37,99,235,0.25)`,
-                  borderRadius: 10, color: MC.blue, flexShrink: 0 }}>
-                <Phone size={15} />
-              </a>
-            )}
-          </div>
         </div>
+      )}
+
+      {/* El modal vive en la tarjeta (no en la lista) para leer el detalle en
+          vivo: si se abre antes de que lleguen las facturas, al llegar se
+          rearma el mensaje (key) con N° de factura, vencimiento y días. */}
+      {waAbierto && (
+        <WAModal key={cobranza ? 'con-facturas' : 'sin-facturas'} target={waTarget} onClose={() => setWaAbierto(false)} />
       )}
     </div>
   )
@@ -750,7 +761,6 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clien
   const isDesktop = useIsDesktop()
   const { user } = useUser()
   const [showSettings, setShowSettings] = useState(false)
-  const [waTarget, setWaTarget] = useState<WATarget | null>(null)
   const [showSaldoNoVencido, setShowSaldoNoVencido] = useState(false)
 
   // 'todos' = las 4 carteras sumadas; o el nombre canónico de un vendedor.
@@ -1024,7 +1034,7 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clien
           </div>
         ) : (
           filtrados.map(d => (
-            <DeudorCard key={d.id} d={d} abierto={expandedRow === d.id} onToggle={() => setExpandedRow(expandedRow === d.id ? null : d.id)} onWA={setWaTarget} />
+            <DeudorCard key={d.id} d={d} abierto={expandedRow === d.id} onToggle={() => setExpandedRow(expandedRow === d.id ? null : d.id)} />
           ))
         )}
 
@@ -1038,7 +1048,6 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clien
       {showSettings && (
         <SettingsPanel onClose={() => setShowSettings(false)} userName={user?.nombre ?? ''} userEmail={user?.email ?? ''} avatarUrl={user?.avatarUrl ?? undefined} />
       )}
-      {waTarget && <WAModal target={waTarget} onClose={() => setWaTarget(null)} />}
       {showSaldoNoVencido && (
         <SaldoNoVencidoModal deudores={base} isAdmin={isAdmin} tema="claro" onClose={() => setShowSaldoNoVencido(false)} />
       )}

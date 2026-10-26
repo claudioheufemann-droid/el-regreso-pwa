@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import {
   ChevronLeft, ChevronDown, ChevronRight, ArrowRight, Droplet, Users, ShoppingBag,
   DollarSign, AlertTriangle, TrendingUp, TrendingDown, Calendar, CheckCircle2, Truck, RefreshCw,
-  Building2, Boxes, Loader2, Search, X,
+  Building2, Boxes, Loader2, Search, X, Target,
 } from 'lucide-react'
 import SettingsPanel from '@/components/ui/SettingsPanel'
 import { Skeleton } from '@/components/ui/States'
@@ -13,7 +13,7 @@ import NotificationsBell from '@/components/ui/NotificationsBell'
 import MiComision from './MiComision'
 import MiComisionVendedor from '@/app/terreno/MiComisionVendedor'
 import { etiquetaVendedor, inicialesVendedor } from '@/lib/types'
-import { RANGOS, type RangoKey, type HoyData, type VendedorRango, type DatosRango } from './hoyTypes'
+import { RANGOS, type RangoKey, type HoyData, type VendedorRango, type DatosRango, type MetaPeriodo } from './hoyTypes'
 
 /**
  * Vista principal de Ventas — tema CLARO, propio de esta pantalla.
@@ -1428,8 +1428,56 @@ function FilaVendedor({ v, pos, total, desde, hasta, porEntrega, mostrarAnio, an
 }
 
 // ── Vista ────────────────────────────────────────────────────────────────────
-export default function VentasHoyClient({ data, veComision = false, veComisionVendedor = false }: {
-  data: HoyData; veComision?: boolean; veComisionVendedor?: boolean
+// Acceso a Metas desde Ventas: la meta del período 24→23 en curso con su
+// avance, y un toque lleva al detalle (/ventas/metas-temporada). Mismos cortes
+// de color que la pantalla Metas: <50 rojo, 50–80 naranjo, ≥80 verde.
+function TarjetaMetaPeriodo({ meta, onAbrir }: { meta: MetaPeriodo; onAbrir: () => void }) {
+  const pct = meta.metaNeto > 0 ? (100 * meta.realNeto) / meta.metaNeto : 0
+  const color = pct < 50 ? C.red : pct < 80 ? '#EA580C' : C.green
+  const dia = (s: string) => new Date(`${s}T12:00:00`).getTime()
+  const hoy = dia(new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' }).format(new Date()))
+  const totalDias = Math.round((dia(meta.hasta) - dia(meta.desde)) / 86400000) + 1
+  const diaActual = Math.min(totalDias, Math.max(1, Math.round((hoy - dia(meta.desde)) / 86400000) + 1))
+  const peso = (n: number) => '$' + Math.round(n).toLocaleString('es-CL')
+  return (
+    <button
+      onClick={onAbrir}
+      aria-label={`Ver metas de ${meta.nombre}`}
+      style={{
+        display: 'block', width: '100%', textAlign: 'left', cursor: 'pointer', font: 'inherit',
+        background: C.card, border: `1px solid ${C.line}`, borderRadius: 16, padding: '14px 16px',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ width: 28, height: 28, borderRadius: 8, background: C.blueSoft, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <Target size={15} color={C.blue} />
+        </span>
+        <p style={{ flex: 1, minWidth: 0, fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: '.05em' }}>
+          {meta.vendedores > 1 ? 'META DEL EQUIPO' : 'MI META'} · {meta.nombre.toUpperCase()}
+        </p>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 12, fontWeight: 700, color: C.blue, flexShrink: 0 }}>
+          Ver metas <ChevronRight size={14} />
+        </span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
+        <p style={{ fontSize: 13, color: C.muted, minWidth: 0 }}>
+          <span style={{ fontSize: 20, fontWeight: 800, color: C.text, letterSpacing: '-0.4px' }}>{peso(meta.realNeto)}</span>
+          {' '}de {peso(meta.metaNeto)}
+        </p>
+        <span style={{ fontSize: 20, fontWeight: 800, color }}>{Math.floor(pct).toLocaleString('es-CL')}%</span>
+      </div>
+      <div style={{ height: 6, borderRadius: 3, background: C.line, overflow: 'hidden', marginTop: 8 }}>
+        <div style={{ width: `${Math.min(100, pct)}%`, height: '100%', background: color, borderRadius: 3, transition: 'width .4s' }} />
+      </div>
+      <p style={{ fontSize: 11, color: C.faint, marginTop: 6 }}>
+        Venta neta · día {diaActual} de {totalDias} del período
+      </p>
+    </button>
+  )
+}
+
+export default function VentasHoyClient({ data, veComision = false, veComisionVendedor = false, metaPeriodo = null }: {
+  data: HoyData; veComision?: boolean; veComisionVendedor?: boolean; metaPeriodo?: MetaPeriodo | null
 }) {
   const router = useRouter()
   // Desktop usa un layout de dos columnas (grid) para aprovechar el ancho de
@@ -1937,6 +1985,8 @@ export default function VentasHoyClient({ data, veComision = false, veComisionVe
           gap: isDesktop ? 20 : 14, alignItems: 'start',
         }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: isDesktop ? 20 : 14, minWidth: 0 }}>
+
+        {metaPeriodo && <TarjetaMetaPeriodo meta={metaPeriodo} onAbrir={() => router.push('/ventas/metas-temporada')} />}
 
         {/* "Lo que gano yo" + hero de ventas, uno al lado del otro cuando el
             ancho alcanza (auto-fit: si no entran los 480px mínimos, caen a

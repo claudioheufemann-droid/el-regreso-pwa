@@ -191,3 +191,15 @@ export interface HoyData {
   ultimaSync: string | null
   usuario: { nombre: string; iniciales: string; avatarUrl: string | null } | null
 }
+
+/** Meta del período 24→23 en curso (plan de temporada) para la tarjeta de /ventas. */
+export interface MetaPeriodo {
+  /** "Noviembre" */
+  nombre: string
+  desde: string
+  hasta: string
+  metaNeto: number
+  realNeto: number
+  /** 1 = la del vendedor; >1 = suma del equipo (admin). */
+  vendedores: number
+}

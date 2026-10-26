@@ -1,5 +1,9 @@
+import { cookies } from 'next/headers'
 import { getServerUser } from '@/lib/auth'
+import { createClient } from '@/lib/supabase/server'
 import { provinciasDeRegion } from '@/lib/regiones'
+import { TEMPORADA, normalizarPeriodo, type FilaVista } from './metas-temporada/tipos'
+import type { MetaPeriodo } from './hoyTypes'
 import { VENDEDORES_CONTRATO_TERCERA } from '@/lib/comisionesVendedor'
 import { getHoyData } from './hoyData'
 import { escalarModoDemo } from '@/lib/ventas/modoDemo'
@@ -40,11 +44,43 @@ export default async function VentasHoyPage({
   const contratoTercera = (VENDEDORES_CONTRATO_TERCERA as readonly string[])
   const veComisionVendedor = !!appUser?.vendedoresErp.some(v => contratoTercera.includes(v))
 
+  const impersonadoId = appUser?.impersonando ? (await cookies()).get('impersonar_vendedor')?.value : undefined
+  const metaPeriodo = appUser ? await metaDelPeriodoEnCurso(impersonadoId) : null
+
   return (
     <VentasHoyClient
       data={escalarModoDemo(data, appUser?.demoFactorLitros)}
       veComision={!!appUser?.veComisionGerente}
       veComisionVendedor={veComisionVendedor}
+      metaPeriodo={metaPeriodo}
     />
   )
+}
+
+/**
+ * Meta del período 24→23 en curso según el plan de temporada (la misma vista
+ * que /ventas/metas-temporada). Pedido de Claudio (26-oct-2026): Nicol no
+ * encontraba sus metas desde la pantalla Ventas en el celular — ahora la
+ * pantalla muestra la del período y lleva a Metas con un toque.
+ * Cliente de SESIÓN: la RLS acota (vendedor = la suya, admin = el equipo).
+ */
+async function metaDelPeriodoEnCurso(impersonadoId?: string): Promise<MetaPeriodo | null> {
+  const supabase = await createClient()
+  const hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' }).format(new Date())
+  let q = supabase.from('plan_metas_periodo_avance').select('*')
+    .eq('temporada', TEMPORADA).lte('fecha_inicio', hoy).gte('fecha_fin', hoy)
+  if (impersonadoId) q = q.eq('user_id', impersonadoId)
+  const { data, error } = await q
+  if (error || !data?.length) return null
+  const filas = data.map(r => normalizarPeriodo(r as FilaVista))
+  const metaNeto = filas.reduce((s, f) => s + f.metaNeto, 0)
+  if (metaNeto <= 0) return null
+  return {
+    nombre: filas[0].nombre,
+    desde: filas[0].fechaInicio,
+    hasta: filas[0].fechaFin,
+    metaNeto,
+    realNeto: filas.reduce((s, f) => s + f.realNeto, 0),
+    vendedores: filas.length,
+  }
 }
