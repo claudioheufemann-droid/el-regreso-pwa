@@ -2,8 +2,8 @@
 -- al tocar una región en "Ranking por vendedor" se ve a quién le vendió y
 -- cuál es el cliente nuevo. Mismas reglas que plan_metas_avance /
 -- plan_metas_periodo_avance: excluidos fuera, venta por fecha_pedido (incluye
--- lo no entregado), cliente nuevo = primer pedido del cliente o primero tras
--- más de 730 días sin pedidos (con cualquier vendedor), abierto por este vendedor.
+-- lo no entregado). La regla de cliente nuevo cambió a "nunca había comprado":
+-- ver plan_metas_cliente_nuevo_nunca_compro.sql, que redefine esta función.
 create or replace function public.plan_metas_detalle_clientes(p_user_id uuid, p_desde date, p_hasta date)
 returns table (
   cliente text, neto numeric, neto_por_entregar numeric, litros numeric,
