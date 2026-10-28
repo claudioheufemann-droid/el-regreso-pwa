@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { ArrowDown, ArrowUp, ChevronRight, Download } from 'lucide-react'
+import { ArrowDown, ArrowUp, ChevronDown, Download } from 'lucide-react'
 import {
   type FilaMeta, type Acumulado,
   clp, entero, pctTxt, pct,
@@ -14,6 +14,7 @@ import {
   FranjaAcumulado, PieTemporada, Titulo,
 } from './ui'
 import { etiquetaVendedor, nombreCorto } from '@/lib/types'
+import DetalleClientes from './DetalleClientes'
 
 export interface VendedorPlan {
   userId: string
@@ -145,6 +146,8 @@ const COLS_RANKING =
   'grid-cols-[20px_minmax(0,1fr)_auto_16px] lg:grid-cols-[24px_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,0.8fr)_72px_minmax(0,1.1fr)_64px_20px]'
 
 function TablaRanking({ ranking, nombre, onElegir }: { ranking: FilaRanking[]; nombre: string; onElegir: (id: string) => void }) {
+  // Tocar una región abre a quién le vendió (y el cliente nuevo); "Ver metas de…" dentro lleva a su vista.
+  const [abierto, setAbierto] = useState<string | null>(null)
   return (
     <div>
       <div className={`hidden ${COLS_RANKING} gap-x-4 border-b border-[var(--cc-line)] px-3 pb-2 text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--cc-ink-3)] lg:grid`}>
@@ -157,11 +160,12 @@ function TablaRanking({ ranking, nombre, onElegir }: { ranking: FilaRanking[]; n
         const nivel = a ? nivelDeSemana(a) : null
         const pAcum = pct(r.acum.realNeto, r.acum.metaNeto)
         return (
+          <div key={r.userId}>
           <button
-            key={r.userId}
             type="button"
-            onClick={() => onElegir(r.userId)}
-            className={`grid w-full ${COLS_RANKING} min-h-[60px] items-center gap-x-4 border-b border-[var(--cc-line-soft)] px-3 py-2.5 text-left hover:bg-[var(--cc-card-2)] lg:min-h-[52px] lg:py-2`}
+            onClick={() => setAbierto(abierto === r.userId ? null : r.userId)}
+            aria-expanded={abierto === r.userId}
+            className={`grid w-full ${COLS_RANKING} min-h-[60px] items-center gap-x-4 border-b border-[var(--cc-line-soft)] px-3 py-2.5 text-left hover:bg-[var(--cc-card-2)] lg:min-h-[52px] lg:py-2 ${abierto === r.userId ? 'bg-[var(--cc-card-2)]' : ''}`}
           >
             <span className="text-[14px] font-bold tabular-nums text-[var(--cc-ink-3)]">{i + 1}</span>
 
@@ -211,8 +215,22 @@ function TablaRanking({ ranking, nombre, onElegir }: { ranking: FilaRanking[]; n
                 <>{entero(a.realClientes)}<span className="font-medium text-[var(--cc-ink-2)]">/{entero(a.metaClientes)}</span></>
               )}
             </span>
-            <ChevronRight size={17} className="justify-self-end text-[var(--cc-ink-2)]" />
+            <ChevronDown
+              size={17}
+              className={`justify-self-end text-[var(--cc-ink-2)] transition-transform ${abierto === r.userId ? 'rotate-180' : ''}`}
+            />
           </button>
+          {abierto === r.userId && a && (
+            <DetalleClientes
+              userId={r.userId}
+              desde={a.fechaInicio}
+              hasta={a.fechaFin}
+              nombre={a.nombre.toLowerCase().startsWith('semana') ? `la ${a.nombre.toLowerCase()}` : a.nombre}
+              etiqueta={etiquetaVendedor(r.vendedor)}
+              onVerMetas={() => onElegir(r.userId)}
+            />
+          )}
+          </div>
         )
       })}
     </div>
