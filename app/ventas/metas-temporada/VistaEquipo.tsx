@@ -11,7 +11,7 @@ import {
 import {
   type Corte,
   BarraNivel, PctNivel, PorEntregar, ResumenSemana, SelectorSemana, opcionesSemana,
-  FranjaAcumulado, PieTemporada, Titulo,
+  FranjaAcumulado, PieTemporada, Titulo, TablaSemanas,
 } from './ui'
 import { etiquetaVendedor, nombreCorto } from '@/lib/types'
 import DetalleClientes from './DetalleClientes'
@@ -100,7 +100,7 @@ export default function VistaEquipo({
         >
           Ranking por vendedor
         </Titulo>
-        <TablaRanking ranking={ordenado} nombre={semanaRef?.nombre ?? ''} onElegir={onElegir} />
+        <TablaRanking ranking={ordenado} nombre={semanaRef?.nombre ?? ''} />
       </section>
 
       <MatrizSemaforos
@@ -145,8 +145,8 @@ function BotonOrden({ activo, desc, onClick, children }: { activo: boolean; desc
 const COLS_RANKING =
   'grid-cols-[20px_minmax(0,1fr)_auto_16px] lg:grid-cols-[24px_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,0.8fr)_72px_minmax(0,1.1fr)_64px_20px]'
 
-function TablaRanking({ ranking, nombre, onElegir }: { ranking: FilaRanking[]; nombre: string; onElegir: (id: string) => void }) {
-  // Tocar una región abre a quién le vendió (y el cliente nuevo); "Ver metas de…" dentro lleva a su vista.
+function TablaRanking({ ranking, nombre }: { ranking: FilaRanking[]; nombre: string }) {
+  // Tocar una región abre a quién le vendió (y el cliente nuevo); "Ver metas de…" despliega sus metas ahí mismo.
   const [abierto, setAbierto] = useState<string | null>(null)
   return (
     <div>
@@ -227,12 +227,28 @@ function TablaRanking({ ranking, nombre, onElegir }: { ranking: FilaRanking[]; n
               hasta={a.fechaFin}
               nombre={a.nombre.toLowerCase().startsWith('semana') ? `la ${a.nombre.toLowerCase()}` : a.nombre}
               etiqueta={etiquetaVendedor(r.vendedor)}
-              onVerMetas={() => onElegir(r.userId)}
+              metas={<MetasVendedor r={r} />}
             />
           )}
           </div>
         )
       })}
+    </div>
+  )
+}
+
+/** Lo central de la vista del vendedor (semanas/meses + acumulado), para desplegarlo dentro del ranking. */
+function MetasVendedor({ r }: { r: FilaRanking }) {
+  const semanas = [...r.enEscala].sort((a, b) => a.semana - b.semana)
+  const [abierta, setAbierta] = useState<number | null>(r.actual?.semana ?? null)
+  const porMes = semanas[0]?.tipo === 'periodo'
+  return (
+    <div className="flex flex-col">
+      <p className="pb-2 text-[13px] font-bold text-[var(--cc-ink)]">{porMes ? 'Meses de la temporada (24→23)' : 'Semanas de la temporada'}</p>
+      <TablaSemanas semanas={semanas} abierta={abierta} onToggle={n => setAbierta(abierta === n ? null : n)} />
+      <div className="mt-4">
+        <FranjaAcumulado a={r.acum} />
+      </div>
     </div>
   )
 }

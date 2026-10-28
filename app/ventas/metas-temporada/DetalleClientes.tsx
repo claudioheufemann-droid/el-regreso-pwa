@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ChevronRight, RefreshCw, Sparkles, Truck } from 'lucide-react'
+import { ChevronDown, RefreshCw, Sparkles, Truck } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { clp, litros, entero, fechaCorta } from './tipos'
 
@@ -26,10 +26,13 @@ type FilaRpc = Record<string, string | number | boolean | null>
 const cache = new Map<string, ClienteDetalle[]>()
 
 export default function DetalleClientes({
-  userId, desde, hasta, nombre, etiqueta, onVerMetas,
+  userId, desde, hasta, nombre, etiqueta, metas,
 }: {
-  userId: string; desde: string; hasta: string; nombre: string; etiqueta: string; onVerMetas: () => void
+  userId: string; desde: string; hasta: string; nombre: string; etiqueta: string
+  /** Metas del vendedor; se despliegan aquí mismo (pedido: no cambiar de pantalla). */
+  metas: React.ReactNode
 }) {
+  const [verMetas, setVerMetas] = useState(false)
   const clave = `${userId}|${desde}|${hasta}`
   // El error se guarda con su clave: al cambiar de semana se vuelve a "cargando".
   const [fallo, setFallo] = useState<{ clave: string; mensaje: string } | null>(null)
@@ -141,11 +144,16 @@ export default function DetalleClientes({
 
       <button
         type="button"
-        onClick={onVerMetas}
+        onClick={() => setVerMetas(!verMetas)}
+        aria-expanded={verMetas}
         className="mt-2 inline-flex min-h-[40px] items-center gap-1 text-[13px] font-bold text-[var(--m-oro-texto)] hover:underline"
       >
-        Ver metas de {etiqueta} <ChevronRight size={14} />
+        {verMetas ? 'Ocultar metas' : 'Ver metas'} de {etiqueta}
+        <ChevronDown size={14} className={`transition-transform duration-200 ${verMetas ? 'rotate-180' : ''}`} />
       </button>
+      {verMetas && (
+        <div className="mt-1 rounded-[10px] border border-[var(--cc-line)] bg-[var(--cc-card)] px-3 pb-4 pt-3 lg:px-4">{metas}</div>
+      )}
     </div>
   )
 }
