@@ -7,10 +7,12 @@ import {
   ComposedChart, Bar, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer, ReferenceLine,
 } from 'recharts'
-import { TrendingUp, Wallet, AlertTriangle, ChevronLeft, Target, Sparkles, Bot } from 'lucide-react'
+import { TrendingUp, Wallet, AlertTriangle, ChevronLeft, Target, Sparkles, Bot, Droplets } from 'lucide-react'
 import type { SerieFinanzas, AvanceCiclo, ResumenDeuda, ForecastCliente, DatosCobros, SaldoBanco } from './page'
 import CajaSection, { type FrescuraDato } from './CajaSection'
 import CobranzaSection from './CobranzaSection'
+import LitrosSection from './LitrosSection'
+import type { DatosLitrosCobro } from '@/lib/administracion/litrosCobro'
 import type { DatosCajaCobrada, EscenariosCaja } from '@/lib/administracion/cajaCobradaDatos'
 import { lunesDe } from '@/lib/administracion/finanzas'
 import { inicioDeCiclo, finDeCiclo } from '@/lib/produccion/reglas'
@@ -29,6 +31,8 @@ interface Props {
   /** Caja real cobrada: el único motor de "cuánto entra y cuándo" del módulo. */
   cajaCobrada: DatosCajaCobrada
   escenariosCaja: EscenariosCaja
+  /** Litros pagados (y de qué ciclo vienen) y litros por pagar semana a semana: pestaña principal. */
+  litrosCobro: DatosLitrosCobro
   saldoActual: { fecha: string; total: number; porBanco: SaldoBanco[] } | null
   hayCompras: boolean
   frescura: FrescuraDato[]
@@ -267,20 +271,22 @@ function VistaForecastSerie({ fc, hoyISO, subtitulo }: { fc: ForecastCliente; ho
 
 /** Cada pestaña contesta UNA pregunta; es el título del encabezado. */
 const PREGUNTA_TAB = {
+  litros: '¿Cuántos litros nos pagaron y cuántos vienen?',
   caja: '¿Cuánta plata vamos a tener?',
   cobranza: '¿A quién hay que cobrarle?',
   ventas: '¿Cuánto vamos a vender y comprar?',
 } as const
 
 export default function AdministracionClient({
-  series, avance, mtd, deuda, ultimaCorrida, cajaCobrada, escenariosCaja, saldoActual, hayCompras, frescura, hoyISO,
+  series, avance, mtd, deuda, ultimaCorrida, cajaCobrada, escenariosCaja, litrosCobro, saldoActual, hayCompras, frescura, hoyISO,
   deudoresDetalle, clientesPorVendedor, maquilaPorCliente, barrilesFuera, forecastClientes, forecastCompras, cobros, pagadoPorCiclo,
 }: Props) {
   const router = useRouter()
   // Tres pestañas, una por pregunta (auditoría del 2-oct-2026; antes eran cinco con
   // tres modelos distintos de cobro): Caja = ¿cuánta plata vamos a tener?, Cobranza =
   // ¿a quién llamar?, Ventas y forecast = ¿cuánto vamos a vender y comprar?
-  const [tab, setTab] = useState<'caja' | 'cobranza' | 'ventas'>('caja')
+  // Desde el 27-oct-2026 la principal es Litros: lo pagado y por pagar en la unidad de la bolsa.
+  const [tab, setTab] = useState<'litros' | 'caja' | 'cobranza' | 'ventas'>('litros')
   const [clienteForecast, setClienteForecast] = useState(forecastClientes[0]?.nombre ?? null)
   const [proveedorCompras, setProveedorCompras] = useState(forecastCompras[0]?.nombre ?? null)
   const [serieId, setSerieId] = useState('general::')
@@ -380,6 +386,7 @@ export default function AdministracionClient({
           {/* Pestañas subrayadas (la del medio de la app: igual que Producción). */}
           <nav aria-label="Secciones de Finanzas" style={{ display: 'flex', gap: 2, marginTop: 10, overflowX: 'auto', overflowY: 'hidden', scrollbarWidth: 'none' }}>
             {([
+              ['litros', 'Litros pagados', Droplets],
               ['caja', 'Caja', Wallet],
               ['cobranza', 'Cobranza', Target],
               ['ventas', 'Ventas y forecast', TrendingUp],
@@ -405,6 +412,9 @@ export default function AdministracionClient({
       </header>
 
       <div key={tab} className="adm-enter" style={{ maxWidth: 1400, margin: '0 auto', padding: '22px clamp(12px, 4vw, 32px) 60px' }}>
+        {/* ══════════════ LITROS ══════════════ */}
+        {tab === 'litros' && <LitrosSection datos={litrosCobro} hoyISO={hoyISO} />}
+
         {/* ══════════════ CAJA ══════════════ */}
         {tab === 'caja' && (
           <CajaSection datos={cajaCobrada} escenarios={escenariosCaja} cobros={cobros} saldoActual={saldoActual} hayCompras={hayCompras} frescura={frescura} hoyISO={hoyISO} />

@@ -1,6 +1,7 @@
 import 'server-only'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { construirCajaCobrada, construirEscenarios } from '@/lib/administracion/cajaCobradaDatos'
+import { construirCajaCobrada, construirEscenarios, perfilesDeEntrada } from '@/lib/administracion/cajaCobradaDatos'
+import { construirLitrosCobro, type FilaLitrosPago } from '@/lib/administracion/litrosCobro'
 import { PARAMETROS_CAJA } from '@/lib/administracion/cajaCobrada'
 import { cicloEnCursoISO, inicioDeCiclo, finDeCiclo } from '@/lib/produccion/reglas'
 import type { FilaPagadoCiclo } from '@/lib/administracion/pagadoPorCiclo'
@@ -8,7 +9,7 @@ import { armarDatosCalendario } from '@/lib/administracion/calendarioEntradas'
 import { resumenMensualForecast } from '@/lib/administracion/forecastMensual'
 import { esIngresoReal, normalizarNombreCliente, brutoDeFila, lunesDe, categoriaNormalizada, BANCOS, type FilaVentaFinanzas, type BancoId } from '@/lib/administracion/finanzas'
 import { semanasRodantes, calcularDiasPagoProveedores, type EntradaCompra } from '@/lib/administracion/flujoSemanal'
-import { proyectarCobros, type PlazoCliente } from '@/lib/administracion/proyeccionCobros'
+import { armarFacturasPendientes, proyectarCobros, type PlazoCliente } from '@/lib/administracion/proyeccionCobros'
 import { vendedorCanonico, grupoCarteraDe, CLIENTES_FORECAST_INDIVIDUAL, NOMBRE_RESTAURANTE_FORECAST, NOMBRE_COMPRAS_TOTAL } from '@/lib/types'
 import { calcularMaquila, conVencimientoReal } from '@/lib/deudaComercial'
 import { barrilesFueraPorCartera } from '@/lib/barrilesFuera'
@@ -82,6 +83,26 @@ export async function cargarDatosAdministracion() {
     return filas
   })()
 
+  // ── Litros pagados (pestaña Litros): pagos convertidos a litros de su factura, desde el
+  // inicio del ciclo de hace dos (ciclo en curso + 2 anteriores, y las 6 semanas del gráfico).
+  const litrosPagosP = (async () => {
+    const [a, m] = ciclo.slice(0, 7).split('-').map(Number)
+    const hace2 = new Date(Date.UTC(a, m - 1 - 2, 1)).toISOString().slice(0, 10)
+    const filas: FilaLitrosPago[] = []
+    for (let offset = 0; ; offset += PAGE) {
+      const { data } = await admin.rpc('litros_pagados_por_pago', { p_desde: inicioDeCiclo(hace2) })
+        .order('fecha').order('cliente').order('vendedor').range(offset, offset + PAGE - 1)
+      const lote = (data ?? []) as { fecha: string; cliente: string; vendedor: string; ciclo_origen: string | null; estimado: boolean; monto: number; litros: number | null }[]
+      filas.push(...lote.map(f => ({
+        fecha: String(f.fecha).slice(0, 10), cliente: f.cliente ?? '', vendedor: f.vendedor || 'Sin vendedor',
+        cicloOrigen: f.ciclo_origen ? String(f.ciclo_origen).slice(0, 10) : null, estimado: !!f.estimado,
+        monto: Number(f.monto) || 0, litros: f.litros == null ? null : Number(f.litros),
+      })))
+      if (lote.length < PAGE) break
+    }
+    return filas
+  })()
+
   // Ventana de ventas a traer: cubre el ciclo en curso (para el MTD) y, hacia
   // atrás, el plazo de pago más largo del maestro de clientes (90 días) más un
   // margen — una entrega de hace 90 días con 90 de plazo recién vence hoy.
@@ -121,7 +142,7 @@ export async function cargarDatosAdministracion() {
       const lotes = await Promise.all(
         Array.from({ length: paginas }, (_, i) =>
           admin.from('ventas')
-            .select('nombre_fantasia, producto, categoria_producto, envase, litros, total_sin_impuesto, fecha_pedido, fecha_entrega, entregado, numero_factura, fecha_entrega_estimada, fecha_facturacion')
+            .select('nombre_fantasia, producto, categoria_producto, envase, litros, total_sin_impuesto, fecha_pedido, fecha_entrega, entregado, numero_factura, fecha_entrega_estimada, fecha_facturacion, vendedor_actual')
             .gte('fecha_pedido', desdeVentas)
             .order('id', { ascending: true })
             .range(i * PAGE, i * PAGE + PAGE - 1)
@@ -669,6 +690,17 @@ export async function cargarDatosAdministracion() {
   // Escenarios mensuales: base calibrado ± error medido del backtest.
   const escenariosCaja = construirEscenarios(cajaCobrada, cobrosMensualesRaw, hoyISO)
 
+  // ── Litros pagados y por pagar (pestaña Litros): mismo perfil de pago y mismas facturas
+  // impagas que la Caja, contados en litros. ──
+  const litrosCobro = construirLitrosCobro({
+    hoyISO,
+    pagos: await litrosPagosP,
+    ventas: ventasRaw,
+    porFactura: armarFacturasPendientes({ ventas: ventasRaw, facturasImpagas: entradaCaja.facturasImpagas, saldoErp: entradaCaja.saldoErp }).porFactura,
+    perfiles: perfilesDeEntrada(entradaCaja).perfiles,
+    forecastLitros: forecastLitrosRaw,
+  })
+
   // ── Datos al día (pestaña Caja): de qué fecha es cada fuente. Lo que se carga a
   // mano envejece sin aviso; acá se ve y se enlaza a donde se carga. ──
   const maxFecha = (xs: (string | null | undefined)[]) => xs.reduce<string | null>((m, x) => (x && (!m || x > m) ? String(x).slice(0, 10) : m), null)
@@ -694,6 +726,7 @@ export async function cargarDatosAdministracion() {
   return {
     cajaCobrada,
     escenariosCaja,
+    litrosCobro,
     series,
     avance,
     mtd: mtdGeneral,

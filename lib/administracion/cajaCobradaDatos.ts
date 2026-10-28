@@ -130,10 +130,12 @@ export const esEnlatado = (nombre: string | null | undefined) => /ewu ginger bee
  * litros, cae al forecast en $ de Finanzas. El escenario "ritmo de los últimos 3 meses" se
  * retiró: el backtest mostró que arrastra la estacionalidad con retraso (+50% desde abril).
  */
-export function construirCajaCobrada(e: Entrada): DatosCajaCobrada {
-  const { hoyISO, hastaISO } = e
-
-  // ── Perfiles de pago ──
+/**
+ * Perfil de pago de cada cliente (plazo pactado + desvío medido) a partir de las fichas,
+ * el informe Deudores y los pagos ponderados. Compartido por la Caja (en pesos) y por la
+ * pestaña Litros (litrosCobro.ts), para que ambas esperen cada pago en la misma fecha.
+ */
+export function perfilesDeEntrada(e: Pick<Entrada, 'clientes' | 'deudores' | 'pagos' | 'pactadoPorDefecto'>) {
   const pactado = new Map<string, number>()
   for (const c of e.clientes) {
     const k = normalizarNombreCliente(c.nombre_fantasia)
@@ -152,6 +154,14 @@ export function construirCajaCobrada(e: Entrada): DatosCajaCobrada {
     if (grupoCarteraDe(d.vendedor) === 'vendedor') carteraErp += Number(d.saldo_total) || 0
   }
   const perfiles = perfilesPago({ pagos: e.pagos, pactadoPorCliente: pactado, morosos, pactadoPorDefecto: e.pactadoPorDefecto })
+  return { perfiles, pactado, vendedorDe, vencidaErpDe, carteraErp }
+}
+
+export function construirCajaCobrada(e: Entrada): DatosCajaCobrada {
+  const { hoyISO, hastaISO } = e
+
+  // ── Perfiles de pago ──
+  const { perfiles, pactado, vendedorDe, vencidaErpDe, carteraErp } = perfilesDeEntrada(e)
 
   // ── Etapa 1: confirmados ──
   const { porFactura } = armarFacturasPendientes({ ventas: e.ventas, facturasImpagas: e.facturasImpagas, saldoErp: e.saldoErp })

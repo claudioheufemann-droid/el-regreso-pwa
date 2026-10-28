@@ -68,3 +68,12 @@ El módulo sigue siendo **claro a propósito** (pedido del usuario, 10-sep-2026)
 - Datos: RPC `pagado_por_ciclo(p_desde)` (migración `finanzas_pagado_por_ciclo.sql`), una fila por ciclo · vendedor · cliente · estado; se pide paginado en `cargarDatos.ts`. Lógica pura en `lib/administracion/pagadoPorCiclo.ts` (con test).
 - Reglas: pagada = la factura tiene cualquier pago en `cobros_erp` (pocos parciales); vencida = entrega + `clientes.dias_pago` < hoy; sin `dias_pago` → "sin plazo". PDV, BaseCamp y cuentas internas fuera con `esClienteExcluido` (regla de Ventas: no son cobranza).
 - Validado contra SQL a mano para sep-26: 9.254 L, 3.668 L pagados (40%), 2.546 L vencidos en 64 clientes.
+
+## Pestaña principal "Litros pagados" (27-oct-2026)
+
+Desde el 27-oct-2026 es la pestaña por defecto (`tab='litros'`, `app/administracion/LitrosSection.tsx`). Responde "¿cuántos litros nos pagaron y cuántos vienen?" en litros, la unidad de la bolsa de vendedores.
+
+- **Tres cifras:** pagados en el ciclo en curso (separados en ventas del mismo ciclo, arrastrados y sin factura), litros por pagar hoy (al día y atrasados) y litros que entran las próximas 8 semanas (facturas + venta proyectada + recupero de atrasadas).
+- **Semana a semana:** 6 semanas pagadas y 8 esperadas, con gráfico, tabla y CSV.
+- **De dónde vienen:** selector de ciclo (en curso y 2 anteriores), barra por origen y tabla por vendedor (`vendedorCanonico`), con lo que cada uno tiene por pagar.
+- Motor: `lib/administracion/litrosCobro.ts`, alimentado en `cargarDatos.ts` (`litrosCobro`). Reglas en `03_REGLAS_NEGOCIO_Y_ALGORITMOS.md`.
