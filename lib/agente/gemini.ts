@@ -88,7 +88,6 @@ async function llamarGemini(
   const orden = modeloVigente
     ? [modeloVigente, ...PARAMETROS.modelos.filter(m => m !== modeloVigente)]
     : [...PARAMETROS.modelos]
-  let ultimoEstado = 0
 
   const pedir = (modelo: string, nivelRazonamiento: boolean, signal: AbortSignal) => fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelo)}:generateContent`,
@@ -112,46 +111,62 @@ async function llamarGemini(
     }
   )
 
-  for (const modelo of orden) {
-    const t0 = Date.now()
-    const restante = Math.min(PARAMETROS.timeoutLlamadaMs, (opciones.limite ?? Infinity) - t0)
-    if (restante < 3000) break
-    // Un solo timeout cubre el reintento sin thinkingLevel y la lectura del cuerpo.
-    const signal = AbortSignal.timeout(restante)
-    let res: Response
-    try {
-      res = await pedir(modelo, true, signal)
-      if (res.status === 400 && /gemini-3/i.test(modelo)) {
-        console.error(`[agente] ${modelo} rechazó thinkingLevel (400): se reintenta sin él`, (await res.text().catch(() => '')).slice(0, 300))
-        res = await pedir(modelo, false, signal)
-      }
-      if (res.ok) {
-        const data = await res.json() as RespuestaGemini
-        modeloVigente = modelo
-        console.info(`[agente] ${modelo} respondió en ${Date.now() - t0} ms`)
-        return { data, modelo }
-      }
-    } catch (e) {
-      if (!esTimeout(e)) throw e
-      console.error(`[agente] ${modelo} no respondió en ${Date.now() - t0} ms: se prueba el siguiente`)
-      // Si era el vigente, la próxima pregunta parte por otro modelo en vez de volver a esperarlo.
-      if (modeloVigente === modelo) modeloVigente = null
-      ultimoEstado = 504
-      continue
+  // Estados de error de cada modelo (504 = no respondió a tiempo). Si TODOS fallaron por
+  // saturación de Google (5xx), se espera un poco y se reintenta la lista mientras quede tiempo.
+  const estados: number[] = []
+  for (let intento = 0; intento < 3; intento++) {
+    if (intento > 0) {
+      const espera = 2000 * intento
+      if ((opciones.limite ?? Infinity) - Date.now() < espera + 8000) break
+      console.info(`[agente] Gemini saturado: reintento ${intento} en ${espera} ms`)
+      await new Promise(r => setTimeout(r, espera))
     }
-    ultimoEstado = res.status
-    const detalle = await res.text().catch(() => '')
-    console.error(`[agente] Gemini ${modelo} respondió ${res.status} tras ${Date.now() - t0} ms`, detalle.slice(0, 200))
-    // Modelo no disponible para la clave (404), cuota agotada de ESE modelo (429),
-    // permiso (403) o saturación (5xx): se prueba el siguiente de la lista.
-    if ([403, 404, 429, 500, 502, 503].includes(res.status)) continue
-    throw new ErrorAgente('Gemini rechazó la solicitud. Revisa los registros del servidor.', 502)
+    estados.length = 0
+    for (const modelo of orden) {
+      const t0 = Date.now()
+      const restante = Math.min(PARAMETROS.timeoutLlamadaMs, (opciones.limite ?? Infinity) - t0)
+      if (restante < 3000) break
+      // Un solo timeout cubre el reintento sin thinkingLevel y la lectura del cuerpo.
+      const signal = AbortSignal.timeout(restante)
+      let res: Response
+      try {
+        res = await pedir(modelo, true, signal)
+        if (res.status === 400 && /gemini-3/i.test(modelo)) {
+          console.error(`[agente] ${modelo} rechazó thinkingLevel (400): se reintenta sin él`, (await res.text().catch(() => '')).slice(0, 300))
+          res = await pedir(modelo, false, signal)
+        }
+        if (res.ok) {
+          const data = await res.json() as RespuestaGemini
+          modeloVigente = modelo
+          console.info(`[agente] ${modelo} respondió en ${Date.now() - t0} ms`)
+          return { data, modelo }
+        }
+      } catch (e) {
+        if (!esTimeout(e)) throw e
+        console.error(`[agente] ${modelo} no respondió en ${Date.now() - t0} ms: se prueba el siguiente`)
+        // Si era el vigente, la próxima pregunta parte por otro modelo en vez de volver a esperarlo.
+        if (modeloVigente === modelo) modeloVigente = null
+        estados.push(504)
+        continue
+      }
+      estados.push(res.status)
+      const detalle = await res.text().catch(() => '')
+      console.error(`[agente] Gemini ${modelo} respondió ${res.status} tras ${Date.now() - t0} ms`, detalle.slice(0, 200))
+      // Modelo no disponible para la clave (404), cuota agotada de ESE modelo (429),
+      // permiso (403) o saturación (5xx): se prueba el siguiente de la lista.
+      if ([403, 404, 429, 500, 502, 503].includes(res.status)) continue
+      throw new ErrorAgente('Gemini rechazó la solicitud. Revisa los registros del servidor.', 502)
+    }
+    const saturado = estados.length > 0 && estados.every(e => e >= 500 && e !== 504)
+    if (!saturado) break
   }
 
-  if (ultimoEstado === 504 || ultimoEstado === 0) throw errorTiempo()
-  if (ultimoEstado === 429) throw new ErrorAgente('Se agotó la cuota gratuita de Gemini por ahora. Intenta de nuevo en un minuto.', 429)
-  if (ultimoEstado === 403) throw new ErrorAgente('Gemini no aceptó la clave. Revisa que GEMINI_API_KEY sea válida y esté habilitada.', 502)
-  if (ultimoEstado === 404) throw new ErrorAgente('Ninguno de los modelos de Gemini configurados está disponible para esta clave (ver lib/agente/sistema.ts).', 502)
+  // El mensaje sigue la causa más útil para el usuario, no la del último modelo probado.
+  if (estados.length === 0 || estados.includes(504)) throw errorTiempo()
+  if (estados.some(e => e >= 500)) throw new ErrorAgente('Gemini (Google) está saturado en este momento. Intenta de nuevo en un minuto.', 503)
+  if (estados.includes(429)) throw new ErrorAgente('Se agotó la cuota gratuita de Gemini por ahora. Intenta de nuevo en un minuto.', 429)
+  if (estados.includes(403)) throw new ErrorAgente('Gemini no aceptó la clave. Revisa que GEMINI_API_KEY sea válida y esté habilitada.', 502)
+  if (estados.every(e => e === 404)) throw new ErrorAgente('Ninguno de los modelos de Gemini configurados está disponible para esta clave (ver lib/agente/sistema.ts).', 502)
   throw new ErrorAgente('El servicio de IA no respondió. Intenta de nuevo.', 502)
 }
 

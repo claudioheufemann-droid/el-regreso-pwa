@@ -20,9 +20,10 @@ import { indiceMapa } from './mapa'
  * AGENTE_MODELO (opcional) se prueba primero.
  * Flash-Lite va primero por velocidad: el 29-oct-2026 3.8 Flash quedó disponible
  * para la clave y tardaba 14 s a más de 60 s por ronda, así que el asistente
- * superaba el tope de Vercel y no contestaba nada.
+ * superaba el tope de Vercel y no contestaba nada. 2.5 Flash se sacó ese mismo
+ * día: Google ya responde 404 "no longer available to new users".
  */
-const MODELOS = [...new Set([process.env.AGENTE_MODELO, 'gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-2.5-flash'].filter((m): m is string => !!m))]
+const MODELOS = [...new Set([process.env.AGENTE_MODELO, 'gemini-3.5-flash-lite', 'gemini-3.8-flash'].filter((m): m is string => !!m))]
 
 export const PARAMETROS = {
   /** Proveedor gratuito: Google Gemini (tier gratis de AI Studio). */
