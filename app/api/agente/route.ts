@@ -72,7 +72,10 @@ export async function POST(req: NextRequest) {
       }).then(() => undefined, () => undefined)
 
     try {
-      const r = await responderPregunta({ historial, pregunta, contexto, apiKey, ctx: { admin, hoyISO, usuarioId: user.id, conversacionId: conv.id, alcance } })
+      const r = await responderPregunta({
+        historial, pregunta, contexto, apiKey, limite: t0 + PARAMETROS.presupuestoMs,
+        ctx: { admin, hoyISO, usuarioId: user.id, conversacionId: conv.id, alcance },
+      })
       const nombres = [...new Set(r.herramientas.map(h => h.nombre))]
       await Promise.all([
         guardarMensaje(admin, conv.id, { rol: 'agente', texto: r.respuesta, herramientas: nombres }),

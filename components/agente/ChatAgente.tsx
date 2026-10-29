@@ -68,7 +68,12 @@ export function useChatAgente() {
       })
       const data = await res.json().catch(() => ({}))
       if (data.conversacion_id) setConversacionId(data.conversacion_id)
-      if (!res.ok) throw new Error(data.error ?? 'No se pudo consultar al asistente.')
+      if (!res.ok) {
+        // Sin JSON = Vercel cortó la función (504) o se cayó antes de responder.
+        throw new Error(data.error ?? (res.status === 504
+          ? 'El asistente tardó demasiado en responder. Intenta de nuevo.'
+          : `No se pudo consultar al asistente (error ${res.status}).`))
+      }
       setMensajes(m => [...m, {
         rol: 'agente', texto: data.respuesta,
         herramientas: [...new Set<string>((data.herramientas ?? []).map((h: { nombre: string }) => h.nombre))],

@@ -18,8 +18,11 @@ import { indiceMapa } from './mapa'
  * prueba en orden y usa el primero disponible para la clave; cada modelo tiene
  * además su propia cuota gratuita, así que si uno se agota pasa al siguiente.
  * AGENTE_MODELO (opcional) se prueba primero.
+ * Flash-Lite va primero por velocidad: el 29-oct-2026 3.8 Flash quedó disponible
+ * para la clave y tardaba 14 s a más de 60 s por ronda, así que el asistente
+ * superaba el tope de Vercel y no contestaba nada.
  */
-const MODELOS = [...new Set([process.env.AGENTE_MODELO, 'gemini-3.8-flash', 'gemini-3.5-flash-lite', 'gemini-2.5-flash'].filter((m): m is string => !!m))]
+const MODELOS = [...new Set([process.env.AGENTE_MODELO, 'gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-2.5-flash'].filter((m): m is string => !!m))]
 
 export const PARAMETROS = {
   /** Proveedor gratuito: Google Gemini (tier gratis de AI Studio). */
@@ -31,6 +34,10 @@ export const PARAMETROS = {
   maxTokensRespuesta: 8192,
   /** Tope de rondas modelo→herramienta por pregunta (evita bucles y gasto de cuota). */
   maxRondasHerramientas: 6,
+  /** Tiempo total para contestar una pregunta. Bajo el maxDuration (60 s) de /api/agente para alcanzar a guardar y avisar en vez de que Vercel corte sin respuesta. */
+  presupuestoMs: 50_000,
+  /** Tope por llamada a Gemini: si un modelo se cuelga se pasa al siguiente. */
+  timeoutLlamadaMs: 35_000,
   /** Al acumular tantos mensajes sin resumir, se condensan los viejos en `resumen` (el texto completo queda guardado en la base). Lo no resumido viaja literal al modelo. */
   umbralResumen: 12,
   /** Cuántos mensajes recientes se conservan literales tras resumir. */

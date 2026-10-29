@@ -35,6 +35,11 @@ export class ErrorAgente extends Error {
   }
 }
 
+const errorTiempo = () =>
+  new ErrorAgente('El asistente tardó demasiado en responder. Intenta de nuevo o acota la pregunta (una zona, un vendedor o menos días).', 504)
+
+const esTimeout = (e: unknown) => e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError')
+
 interface ParteGemini {
   text?: string
   functionCall?: { name: string; args?: Record<string, unknown> }
@@ -78,17 +83,18 @@ let modeloVigente: string | null = null
 
 async function llamarGemini(
   apiKey: string, system: string, contents: ContenidoGemini[],
-  opciones: { herramientas: boolean; maxTokens: number; modoVendedor?: boolean }
+  opciones: { herramientas: boolean; maxTokens: number; modoVendedor?: boolean; limite?: number }
 ): Promise<{ data: RespuestaGemini; modelo: string }> {
   const orden = modeloVigente
     ? [modeloVigente, ...PARAMETROS.modelos.filter(m => m !== modeloVigente)]
     : [...PARAMETROS.modelos]
   let ultimoEstado = 0
 
-  const pedir = (modelo: string, nivelRazonamiento: boolean) => fetch(
+  const pedir = (modelo: string, nivelRazonamiento: boolean, signal: AbortSignal) => fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelo)}:generateContent`,
     {
       method: 'POST',
+      signal,
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },
@@ -108,16 +114,30 @@ async function llamarGemini(
 
   for (const modelo of orden) {
     const t0 = Date.now()
-    let res = await pedir(modelo, true)
-    if (res.status === 400 && /gemini-3/i.test(modelo)) {
-      console.error(`[agente] ${modelo} rechazó thinkingLevel (400): se reintenta sin él`, (await res.text().catch(() => '')).slice(0, 300))
-      res = await pedir(modelo, false)
-    }
-
-    if (res.ok) {
-      modeloVigente = modelo
-      console.info(`[agente] ${modelo} respondió en ${Date.now() - t0} ms`)
-      return { data: await res.json() as RespuestaGemini, modelo }
+    const restante = Math.min(PARAMETROS.timeoutLlamadaMs, (opciones.limite ?? Infinity) - t0)
+    if (restante < 3000) break
+    // Un solo timeout cubre el reintento sin thinkingLevel y la lectura del cuerpo.
+    const signal = AbortSignal.timeout(restante)
+    let res: Response
+    try {
+      res = await pedir(modelo, true, signal)
+      if (res.status === 400 && /gemini-3/i.test(modelo)) {
+        console.error(`[agente] ${modelo} rechazó thinkingLevel (400): se reintenta sin él`, (await res.text().catch(() => '')).slice(0, 300))
+        res = await pedir(modelo, false, signal)
+      }
+      if (res.ok) {
+        const data = await res.json() as RespuestaGemini
+        modeloVigente = modelo
+        console.info(`[agente] ${modelo} respondió en ${Date.now() - t0} ms`)
+        return { data, modelo }
+      }
+    } catch (e) {
+      if (!esTimeout(e)) throw e
+      console.error(`[agente] ${modelo} no respondió en ${Date.now() - t0} ms: se prueba el siguiente`)
+      // Si era el vigente, la próxima pregunta parte por otro modelo en vez de volver a esperarlo.
+      if (modeloVigente === modelo) modeloVigente = null
+      ultimoEstado = 504
+      continue
     }
     ultimoEstado = res.status
     const detalle = await res.text().catch(() => '')
@@ -128,6 +148,7 @@ async function llamarGemini(
     throw new ErrorAgente('Gemini rechazó la solicitud. Revisa los registros del servidor.', 502)
   }
 
+  if (ultimoEstado === 504 || ultimoEstado === 0) throw errorTiempo()
   if (ultimoEstado === 429) throw new ErrorAgente('Se agotó la cuota gratuita de Gemini por ahora. Intenta de nuevo en un minuto.', 429)
   if (ultimoEstado === 403) throw new ErrorAgente('Gemini no aceptó la clave. Revisa que GEMINI_API_KEY sea válida y esté habilitada.', 502)
   if (ultimoEstado === 404) throw new ErrorAgente('Ninguno de los modelos de Gemini configurados está disponible para esta clave (ver lib/agente/sistema.ts).', 502)
@@ -163,6 +184,8 @@ export async function responderPregunta(opts: {
   contexto: string
   apiKey: string
   ctx: ContextoConsulta
+  /** Hora (epoch ms) en que hay que dejar de intentar: ver PARAMETROS.presupuestoMs. */
+  limite: number
 }): Promise<RespuestaAgente> {
   const system = construirSystemPrompt()
   const contents: ContenidoGemini[] = [
@@ -176,7 +199,10 @@ export async function responderPregunta(opts: {
   const devolver = (respuesta: string): RespuestaAgente => ({ respuesta, herramientas, uso })
 
   for (let ronda = 0; ronda <= PARAMETROS.maxRondasHerramientas; ronda++) {
-    const { data, modelo } = await llamarGemini(opts.apiKey, system, contents, { herramientas: true, maxTokens: PARAMETROS.maxTokensRespuesta, modoVendedor: !!opts.ctx.alcance })
+    if (opts.limite - Date.now() < 3000) throw errorTiempo()
+    const { data, modelo } = await llamarGemini(opts.apiKey, system, contents, {
+      herramientas: true, maxTokens: PARAMETROS.maxTokensRespuesta, modoVendedor: !!opts.ctx.alcance, limite: opts.limite,
+    })
     sumarUso(uso, data.usageMetadata, modelo)
     uso.rondas = ronda + 1
 
