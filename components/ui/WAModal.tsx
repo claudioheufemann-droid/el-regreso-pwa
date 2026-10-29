@@ -63,21 +63,17 @@ const DATOS_TRANSFERENCIA = [
 ].join('\n')
 
 /**
- * Mensaje de cobranza. Va con nombre de la persona, no sólo el del local: es
- * la diferencia entre un mensaje que se lee y uno que se ignora. Si todavía no
- * hay contacto cargado, saluda al local y sigue funcionando igual.
+ * Mensaje de cobranza. Tono de persona, no de sistema: saluda sin nombrar al
+ * local y pide el pago en vez de exigirlo (pedido de Claudio, 2026-10-29).
  */
 function mensajeCobranza(t: WATarget): string {
-  const empresa = t.nombre
-  const saludo = t.contacto?.trim()
-    ? `Hola ${t.contacto.trim()}, de ${empresa}.`
-    : `Hola, ${empresa}.`
-
   const dias = t.diasVencida ?? 0
-  const cuanto = dias > 0
-    ? `hace ${dias} ${dias === 1 ? 'día' : 'días'}`
-    : 'pendiente'
-  const monto = t.montoVencido ? ` por un monto de ${CLP.format(t.montoVencido)}` : ''
+  const monto = t.montoVencido ? ` de ${CLP.format(t.montoVencido)}` : ''
+  const pago = t.diasVencida === 0
+    ? `un pago${monto} que vence hoy`
+    : dias > 0
+      ? `un pago${monto}, que venció hace ${dias} ${dias === 1 ? 'día' : 'días'}`
+      : `un pago${monto}`
 
   // Como máximo 4 documentos: más que eso el mensaje se vuelve un muro de
   // texto en el celular y se pierde justo lo que uno quiere que lean.
@@ -85,14 +81,12 @@ function mensajeCobranza(t: WATarget): string {
   const resto = (t.documentos?.length ?? 0) - docs.length
   const detalle = docs.length
     ? '\n\n' + docs
-        .map(d => `• Factura N° ${d.numeroFactura ? d.numeroFactura.replace(/^0+/, '') : `(pedido ${d.pedido.replace(/^0+/, '')}, sin facturar aún)`} del ${fFecha(d.fechaEmision)} — ${d.diasMora === 0 ? `vence hoy, ${fFecha(d.fechaVencimiento)}` : `venció el ${fFecha(d.fechaVencimiento)} (${d.diasMora} ${d.diasMora === 1 ? 'día' : 'días'})`} — ${CLP.format(d.monto)}`)
+        .map(d => `• Factura N° ${d.numeroFactura ? d.numeroFactura.replace(/^0+/, '') : `(pedido ${d.pedido.replace(/^0+/, '')}, sin facturar aún)`} del ${fFecha(d.fechaEmision)} — ${d.diasMora === 0 ? `vence hoy, ${fFecha(d.fechaVencimiento)}` : `venció el ${fFecha(d.fechaVencimiento)}`} — ${CLP.format(d.monto)}`)
         .join('\n') +
       (resto > 0 ? `\n• y ${resto} documento${resto === 1 ? '' : 's'} más` : '')
     : ''
 
-  const deuda = t.diasVencida === 0 ? 'una deuda que vence hoy' : `una deuda vencida ${cuanto}`
-
-  return `${saludo} Te escribo desde El Regreso Beer porque tienes ${deuda}${monto}.${detalle}\n\nNecesitamos que puedas regularizarla lo antes posible.\n\n${DATOS_TRANSFERENCIA}\n\nSi ya hiciste la transferencia, mándame el comprobante y la descontamos al tiro. ¡Gracias!`
+  return `Hola, ¿cómo estás? Te escribo de El Regreso Beer.\n\nRevisando las cuentas vi que quedó pendiente ${pago}${detalle ? ':' : '.'}${detalle}\n\n¿Me ayudas a regularizarlo cuando puedas? Te dejo los datos para transferir:\n\n${DATOS_TRANSFERENCIA}\n\nSi ya lo pagaste, mándame el comprobante y lo descuento al tiro. ¡Muchas gracias!`
 }
 
 export function generarMensajeWA(t: WATarget): string {
