@@ -34,10 +34,10 @@ export const PARAMETROS = {
   maxTokensRespuesta: 8192,
   /** Tope de rondas modelo→herramienta por pregunta (evita bucles y gasto de cuota). */
   maxRondasHerramientas: 6,
-  /** Tiempo total para contestar una pregunta. Bajo el maxDuration (60 s) de /api/agente para alcanzar a guardar y avisar en vez de que Vercel corte sin respuesta. */
-  presupuestoMs: 50_000,
+  /** Tiempo total para contestar una pregunta. Bajo el maxDuration (120 s) de /api/agente para alcanzar a guardar y avisar en vez de que Vercel corte sin respuesta. */
+  presupuestoMs: 105_000,
   /** Tope por llamada a Gemini: si un modelo se cuelga se pasa al siguiente. */
-  timeoutLlamadaMs: 35_000,
+  timeoutLlamadaMs: 45_000,
   /** Al acumular tantos mensajes sin resumir, se condensan los viejos en `resumen` (el texto completo queda guardado en la base). Lo no resumido viaja literal al modelo. */
   umbralResumen: 12,
   /** Cuántos mensajes recientes se conservan literales tras resumir. */
@@ -94,6 +94,7 @@ export const GLOSARIO = [
 export const EJEMPLOS = [
   // Sólo los casos de ruteo que no se deducen de la descripción de la herramienta.
   { pregunta: '¿Cuánto vendió Claudio en septiembre y a cuántos clientes?', herramienta: 'ventas_resumen con vendedor' },
+  { pregunta: '¿Qué clientes deberían comprar esta semana en Santiago?', herramienta: 'clientes_proximos_a_pedir con zona "Metropolitana" (una sola llamada, sin SQL)' },
   { pregunta: '¿Qué productos se venden más en Valdivia que en Osorno?', herramienta: 'consultar_sql (cruces sin herramienta propia)' },
   { pregunta: '¿Cuánto proyectamos vender en el PDV en diciembre?', herramienta: 'mapa_datos(area finanzas) → consultar_sql sobre forecast_finanzas' },
   { pregunta: '¿Qué secciones tiene el módulo de Producción?', herramienta: 'mapa_datos(modulo produccion), responder con nombres de pantalla' },

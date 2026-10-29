@@ -12,7 +12,8 @@ import { accionesDeConversacion, correosDeConversacion, listasDeConversacion } f
 import { accesoAsistente } from '@/lib/agente/alcance'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60
+// Gemini gratis a veces tarda 30-45 s por llamada: 60 s no alcanzaba para 2-3 rondas.
+export const maxDuration = 120
 
 /**
  * POST /api/agente  { mensaje: string, conversacion_id?: uuid }

@@ -1,10 +1,19 @@
 import { type Consulta, entero, redondear, sumarDiasISO, texto } from './_base'
-import { esClienteExcluido } from '@/lib/types'
+import { ETIQUETA_CARTERA, esClienteExcluido, etiquetaVendedor } from '@/lib/types'
 import { LIMITES_CORREO, nombresDeVendedores, resolverVendedor } from '../correos'
 import { filtroVendedor, notaAlcance } from '../alcance'
 
 /** Carteras que no son un vendedor al que avisar. */
 const CARTERA_SIN_VENDEDOR = /^(inactivo|no indica|incobrable|transici|equipo ventas|cervecer|online$)/i
+
+/** Zona como la nombra la gente → cartera (nombre canónico de ETIQUETA_CARTERA). */
+const ZONAS: [RegExp, string][] = [
+  [/metropolitana|rm|santiago|stgo/i, 'Yadro Fabijancic'],
+  [/lagos|puerto montt/i, 'Marion Meza'],
+  [/r[ií]os|valdivia/i, 'Nicol Delgado'],
+  [/araucan|temuco/i, 'Marcelo Diaz'],
+  [/retail/i, 'Claudio Heufemann'],
+]
 
 const diasEntre = (a: string, b: string) =>
   Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000)
@@ -30,6 +39,7 @@ export const clientesProximosAPedir: Consulta = {
   parametros: [
     { nombre: 'dias', tipo: 'integer', descripcion: 'Ventana hacia adelante en días (1-30). Por defecto 7.' },
     { nombre: 'vendedor', tipo: 'string', descripcion: 'Filtra por vendedor (nombre o parte). Opcional.' },
+    { nombre: 'zona', tipo: 'string', descripcion: 'Filtra por zona/cartera: Metropolitana (RM, Santiago), Los Lagos, Los Ríos, Araucanía o Retail. Opcional.' },
     { nombre: 'atrasados_dias', tipo: 'integer', descripcion: 'Incluye también a los que debían pedir hasta N días atrás y no han pedido (0-30). Por defecto 0.' },
   ],
   async ejecutar(args, ctx) {
@@ -38,6 +48,12 @@ export const clientesProximosAPedir: Consulta = {
     const filtro = filtroVendedor(ctx, texto(args.vendedor))
     const desde = sumarDiasISO(ctx.hoyISO, -atrasados)
     const hasta = sumarDiasISO(ctx.hoyISO, dias)
+    const zonaPedida = texto(args.zona)
+    const cartera = zonaPedida ? ZONAS.find(([re]) => re.test(zonaPedida))?.[1] : undefined
+    if (zonaPedida && !cartera) {
+      return { error: `Zona "${zonaPedida}" no reconocida. Zonas: ${Object.values(ETIQUETA_CARTERA).map(e => e.corta).join(', ')}.` }
+    }
+    const etiquetaZona = cartera ? ETIQUETA_CARTERA[cartera].larga : null
 
     const [{ data, error }, nombreVendedor] = await Promise.all([
       ctx.admin.rpc('get_client_scores', { p_vendedor: null }),
@@ -51,6 +67,7 @@ export const clientesProximosAPedir: Consulta = {
       // Vendedor como se llama en la app (une "nicol.delgado@…" con "Nicol Delgado"); se filtra por ambos nombres.
       .map(f => ({ ...f, vendedor: nombreVendedor(f.vendedor_actual) ?? 'Sin vendedor' }))
       .filter(f => filtro(f.vendedor_actual, f.vendedor))
+      .filter(f => !etiquetaZona || etiquetaVendedor(f.vendedor) === etiquetaZona || etiquetaVendedor(f.vendedor_actual) === etiquetaZona)
       .sort((a, b) => a.siguiente_compra_estimada!.localeCompare(b.siguiente_compra_estimada!))
 
     const clientes = filas.slice(0, 60).map(f => {
@@ -59,6 +76,7 @@ export const clientesProximosAPedir: Consulta = {
       return {
         cliente: f.nombre_fantasia,
         vendedor: f.vendedor,
+        zona: etiquetaVendedor(f.vendedor),
         proxima_compra_estimada: f.siguiente_compra_estimada,
         en_dias: enDias,
         atrasado: enDias < 0,
@@ -76,6 +94,7 @@ export const clientesProximosAPedir: Consulta = {
 
     return {
       ventana: { desde, hasta },
+      ...(etiquetaZona ? { zona: etiquetaZona } : {}),
       total: filas.length,
       por_vendedor: Object.fromEntries([...porVendedor].sort((a, b) => b[1] - a[1])),
       clientes,

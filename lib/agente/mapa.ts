@@ -81,7 +81,7 @@ export const AREAS: AreaMapa[] = [
     ],
     cruces: [
       'Todo por nombre_fantasia. Cartera de un vendedor = clientes.vendedor (o client_scores.vendedor_actual = el de su última venta).',
-      'Quién debería comprar pronto: client_scores con alert_level in (\'proximo\',\'vencido\',\'critico\') o siguiente_compra_estimada <= current_date + 7, ordenado por score desc; agrupar por vendedor_actual. Ya trae dias_sin_compra y ciclo: no recalcular desde ventas.',
+      'Quién debería comprar pronto (por zona, vendedor o toda la empresa): herramienta clientes_proximos_a_pedir, NO consultar_sql. Por debajo usa client_scores.siguiente_compra_estimada; ya trae dias_sin_compra y ciclo: no recalcular desde ventas.',
     ],
     trampas: [
       'RUT, correo, teléfono y dirección están bloqueados.',
