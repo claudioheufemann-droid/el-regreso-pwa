@@ -51,6 +51,17 @@ const CLP = new Intl.NumberFormat('es-CL', {
   style: 'currency', currency: 'CLP', minimumFractionDigits: 0, maximumFractionDigits: 0,
 })
 
+/** Datos bancarios para que el cliente pueda pagar sin tener que pedirlos.
+ *  Los asteriscos son negrita en WhatsApp. */
+const DATOS_TRANSFERENCIA = [
+  '*Datos para transferencia:*',
+  'El Regreso Beer Company SpA',
+  'RUT 77.068.999-6',
+  'Banco de Chile / Cuenta Corriente',
+  'N° 00-250-20268-09',
+  'admin@elregresobeer.com',
+].join('\n')
+
 /**
  * Mensaje de cobranza. Va con nombre de la persona, no sólo el del local: es
  * la diferencia entre un mensaje que se lee y uno que se ignora. Si todavía no
@@ -81,7 +92,7 @@ function mensajeCobranza(t: WATarget): string {
 
   const deuda = t.diasVencida === 0 ? 'una deuda que vence hoy' : `una deuda vencida ${cuanto}`
 
-  return `${saludo} Te escribo desde El Regreso Beer porque tienes ${deuda}${monto}.${detalle}\n\nNecesitamos que puedas regularizarla lo antes posible. Si ya hiciste la transferencia, mándame el comprobante y la descontamos al tiro. ¡Gracias!`
+  return `${saludo} Te escribo desde El Regreso Beer porque tienes ${deuda}${monto}.${detalle}\n\nNecesitamos que puedas regularizarla lo antes posible.\n\n${DATOS_TRANSFERENCIA}\n\nSi ya hiciste la transferencia, mándame el comprobante y la descontamos al tiro. ¡Gracias!`
 }
 
 export function generarMensajeWA(t: WATarget): string {
@@ -106,7 +117,7 @@ export function generarMensajeWA(t: WATarget): string {
       return `Hola! Hace un tiempo que no nos coordinamos y quería pasarme a saludar. ¿Cómo están con el stock? Tenemos novedades en el portafolio y me gustaría contarte. ¿Cuándo es buen momento para hablar?`
 
     case 'gris':
-      return `Hola! ¿Cómo va? Quería pasarte a dejar tu pedido semanal, pero veo que nos quedó pendiente la factura anterior en el sistema. ¿Te mando los datos bancarios del Banco de Chile para regularizar y te despacho al tiro para que no te quedes sin stock? ¡Avísame!`
+      return `Hola! ¿Cómo va? Quería pasarte a dejar tu pedido semanal, pero veo que nos quedó pendiente la factura anterior en el sistema. Te dejo los datos para regularizar y te despacho al tiro para que no te quedes sin stock:\n\n${DATOS_TRANSFERENCIA}\n\nMándame el comprobante y coordinamos. ¡Avísame!`
 
     case 'rm_urgente':
       return `Hola! Te escribo rápido porque estoy cerrando el camión de los despachos que sale hoy a las 4:00 PM para Santiago. Saqué la cuenta de tu consumo y creo que si no te mando stock hoy, vas a andar súper justo de ${producto} para los próximos días. ¿Te anoto ${litros} al tiro antes de que cierre el despacho y te llega mañana mismo?`
