@@ -201,6 +201,53 @@ export function acumuladoTemporada(filas: FilaMeta[]) {
   return acumular(filas.filter(f => f.semana <= tope))
 }
 
+const diaUTC = (iso: string) => {
+  const { y, m, d } = partes(iso)
+  return Date.UTC(y, m - 1, d) / 86_400_000
+}
+
+/** Días calendario que comparten [a1, a2] y [b1, b2], ambos inclusive (0 si no se cruzan). */
+function diasEnComun(a1: string, a2: string, b1: string, b2: string) {
+  const desde = Math.max(diaUTC(a1), diaUTC(b1))
+  const hasta = Math.min(diaUTC(a2), diaUTC(b2))
+  return Math.max(0, hasta - desde + 1)
+}
+
+/** Período 24→23 que se mide junto a una semana: el que contiene hoy, o el borde más cercano de la semana. */
+export function periodoDeSemana(periodos: FilaMeta[], semana: FilaMeta, hoy: string) {
+  const ref = semana.fechaFin < hoy ? semana.fechaFin : semana.fechaInicio > hoy ? semana.fechaInicio : hoy
+  return periodos.find(p => p.fechaInicio <= ref && ref <= p.fechaFin) ?? null
+}
+
+/**
+ * Acumulado del período 24→23 a la fecha: lo vendido en el período contra la
+ * meta que correspondía hasta hoy. La meta de cada semana se prorratea por día
+ * calendario, igual que la vista arma la meta del período, así que en un
+ * período cerrado da exactamente la meta del mes. `corte` = último día contado.
+ */
+export function acumuladoPeriodo(periodo: FilaMeta, semanas: FilaMeta[], hoy: string): Acumulado & { corte: string } {
+  const corte = hoy < periodo.fechaFin ? hoy : periodo.fechaFin
+  const meta = { metaNeto: 0, metaLitros: 0, metaClientes: 0 }
+  if (corte >= periodo.fechaInicio) {
+    for (const s of semanas) {
+      const dias = diasEnComun(s.fechaInicio, s.fechaFin, periodo.fechaInicio, corte)
+      if (!dias) continue
+      const parte = dias / (diaUTC(s.fechaFin) - diaUTC(s.fechaInicio) + 1)
+      meta.metaNeto += s.metaNeto * parte
+      meta.metaLitros += s.metaLitros * parte
+      meta.metaClientes += s.metaClientes * parte
+    }
+  }
+  return {
+    ...meta,
+    realNeto: periodo.realNeto,
+    realNetoPorEntregar: periodo.realNetoPorEntregar,
+    realLitros: periodo.realLitros,
+    realClientes: periodo.realClientes,
+    corte,
+  }
+}
+
 /** Las dos últimas semanas cerradas en rojo → hay que ajustar el plan con gerencia. */
 export function dosRojasSeguidas(filas: FilaMeta[]) {
   const cerradas = filas.filter(f => f.estado === 'cerrada').sort((a, b) => a.semana - b.semana)

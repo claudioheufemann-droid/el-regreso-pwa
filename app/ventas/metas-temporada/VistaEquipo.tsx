@@ -5,7 +5,7 @@ import { ArrowDown, ArrowUp, ChevronDown, Download } from 'lucide-react'
 import {
   type FilaMeta, type Acumulado,
   clp, entero, pctTxt, pct,
-  semanaEnCurso, semanaTope, acumular, acumuladoTemporada,
+  semanaEnCurso, semanaTope, acumular, acumuladoTemporada, acumuladoPeriodo, periodoDeSemana, fechaCorta,
   nivelPorPct, nivelDeSemana, NIVEL_COLOR, NIVEL_BARRA, NIVEL_LABEL,
 } from './tipos'
 import {
@@ -30,7 +30,16 @@ interface FilaRanking extends VendedorPlan {
   enEscala: FilaMeta[]
   /** Fila de la semana/período elegido en el selector (no necesariamente el en curso). */
   actual: FilaMeta | null
+  /** Acumulado de la temporada (para el despliegue de sus metas). */
   acum: Acumulado
+  /** Acumulado del período 24→23 que se está midiendo, a la fecha (null si aún no parte). */
+  acumPeriodo: (Acumulado & { corte: string; nombre: string }) | null
+}
+
+/** Período 24→23 de lo elegido: el mismo mes, o el que contiene la semana elegida. */
+function periodoMedido(v: VendedorPlan, actual: FilaMeta | null, hoy: string) {
+  if (!actual) return null
+  return actual.tipo === 'periodo' ? actual : periodoDeSemana(v.periodos, actual, hoy)
 }
 
 type Orden = 'semana' | 'acumulado'
@@ -53,15 +62,21 @@ export default function VistaEquipo({
   const ranking: FilaRanking[] = useMemo(
     () => vendedores.map(v => {
       const enEscala = escala === 'periodo' ? v.periodos : v.filas
-      return { ...v, enEscala, actual: enEscala.find(f => f.semana === semana) ?? null, acum: acumuladoTemporada(v.filas) }
+      const actual = enEscala.find(f => f.semana === semana) ?? null
+      const periodo = periodoMedido(v, actual, hoy)
+      const acumPeriodo = periodo && periodo.estado !== 'futura'
+        ? { ...acumuladoPeriodo(periodo, v.filas, hoy), nombre: periodo.nombre }
+        : null
+      return { ...v, enEscala, actual, acum: acumuladoTemporada(v.filas), acumPeriodo }
     }),
-    [vendedores, escala, semana],
+    [vendedores, escala, semana, hoy],
   )
 
   const [orden, setOrden] = useState<Orden>('semana')
   const [desc, setDesc] = useState(true)
   const ordenado = useMemo(() => {
-    const valor = (r: FilaRanking) => (orden === 'semana' ? r.actual?.pctNeto ?? -1 : pct(r.acum.realNeto, r.acum.metaNeto))
+    const valor = (r: FilaRanking) =>
+      orden === 'semana' ? r.actual?.pctNeto ?? -1 : r.acumPeriodo ? pct(r.acumPeriodo.realNeto, r.acumPeriodo.metaNeto) : -1
     return [...ranking].sort((a, b) => (desc ? valor(b) - valor(a) : valor(a) - valor(b)))
   }, [ranking, orden, desc])
 
@@ -148,17 +163,21 @@ const COLS_RANKING =
 function TablaRanking({ ranking, nombre }: { ranking: FilaRanking[]; nombre: string }) {
   // Tocar una región abre a quién le vendió (y el cliente nuevo); "Ver metas de…" despliega sus metas ahí mismo.
   const [abierto, setAbierto] = useState<string | null>(null)
+  const ref = ranking.find(r => r.acumPeriodo)?.acumPeriodo
   return (
     <div>
       <div className={`hidden ${COLS_RANKING} gap-x-4 border-b border-[var(--cc-line)] px-3 pb-2 text-[12px] font-semibold uppercase tracking-[0.04em] text-[var(--cc-ink-3)] lg:grid`}>
         <span>#</span><span>Vendedor</span><span>{nombre} · Ventas / Meta</span><span /><span>Avance</span>
-        <span>Acumulado temporada</span><span className="text-right">Clientes</span><span />
+        <span title="Venta del período 24→23 contra la meta que correspondía hasta hoy">
+          {ref ? `Acum. ${ref.nombre} al ${fechaCorta(ref.corte)}` : 'Acumulado del período'}
+        </span><span className="text-right">Clientes</span><span />
       </div>
       {ranking.map((r, i) => {
         const a = r.actual
         const futura = a?.estado === 'futura'
         const nivel = a ? nivelDeSemana(a) : null
-        const pAcum = pct(r.acum.realNeto, r.acum.metaNeto)
+        const ap = r.acumPeriodo
+        const pAcum = ap ? pct(ap.realNeto, ap.metaNeto) : 0
         return (
           <div key={r.userId}>
           <button
@@ -187,7 +206,7 @@ function TablaRanking({ ranking, nombre }: { ranking: FilaRanking[]; nombre: str
               <span className="hidden lg:block">{a && !futura && <BarraNivel valor={a.pctNeto} alto={7} />}</span>
               {/* En móvil, el acumulado va en una tercera línea */}
               <span className="truncate text-[12px] font-medium tabular-nums text-[var(--cc-ink-2)] lg:hidden">
-                Acum. {clp(r.acum.realNeto)} · <PctNivel valor={pAcum} />
+                {ap ? <>Acum. al {fechaCorta(ap.corte)} {clp(ap.realNeto)} / {clp(ap.metaNeto)} · <PctNivel valor={pAcum} /></> : 'Acum. —'}
               </span>
             </span>
 
@@ -205,8 +224,17 @@ function TablaRanking({ ranking, nombre }: { ranking: FilaRanking[]; nombre: str
               </span>
             </span>
 
-            <span className="hidden truncate text-[14px] font-medium tabular-nums text-[var(--cc-ink-2)] lg:block">
-              <strong className="font-bold text-[var(--cc-ink)]">{clp(r.acum.realNeto)}</strong> · <PctNivel valor={pAcum} />
+            <span className="hidden min-w-0 flex-col lg:flex">
+              {ap ? (
+                <>
+                  <span className="truncate text-[14px] font-medium tabular-nums text-[var(--cc-ink-2)]">
+                    <strong className="font-bold text-[var(--cc-ink)]">{clp(ap.realNeto)}</strong> · <PctNivel valor={pAcum} />
+                  </span>
+                  <span className="truncate text-[12px] font-medium tabular-nums text-[var(--cc-ink-2)]">meta a la fecha {clp(ap.metaNeto)}</span>
+                </>
+              ) : (
+                <span className="text-[14px] text-[var(--cc-ink-3)]">—</span>
+              )}
             </span>
             <span className="hidden text-right text-[14px] font-bold tabular-nums text-[var(--cc-ink)] lg:block">
               {!a ? '—' : futura ? (
@@ -364,7 +392,7 @@ function exportarCsv(ranking: FilaRanking[]) {
     'Territorio', 'Vendedor', 'Semana / mes', 'Desde', 'Hasta',
     'Meta neto', 'Real neto', 'Por entregar neto', '% neto', 'Meta litros', 'Real litros', '% litros',
     'Meta clientes nuevos', 'Real clientes nuevos', 'Nivel',
-    'Acum meta neto', 'Acum real neto', 'Acum % neto',
+    'Acum período', 'Acum hasta', 'Acum meta neto a la fecha', 'Acum real neto', 'Acum % neto',
   ]
   const filas = ranking.map(r => {
     const a = r.actual
@@ -373,7 +401,9 @@ function exportarCsv(ranking: FilaRanking[]) {
       a ? Math.round(a.metaNeto) : '', a ? Math.round(a.realNeto) : '', a ? Math.round(a.realNetoPorEntregar) : '', a ? dec(a.pctNeto) : '',
       a ? dec(a.metaLitros) : '', a ? dec(a.realLitros) : '', a ? dec(a.pctLitros) : '',
       a?.metaClientes ?? '', a?.realClientes ?? '', a && a.estado !== 'futura' ? NIVEL_LABEL[nivelPorPct(a.pctNeto)] : '',
-      Math.round(r.acum.metaNeto), Math.round(r.acum.realNeto), dec(pct(r.acum.realNeto, r.acum.metaNeto)),
+      ...(r.acumPeriodo
+        ? [r.acumPeriodo.nombre, r.acumPeriodo.corte, Math.round(r.acumPeriodo.metaNeto), Math.round(r.acumPeriodo.realNeto), dec(pct(r.acumPeriodo.realNeto, r.acumPeriodo.metaNeto))]
+        : ['', '', '', '', '']),
     ]
   })
   const escapar = (v: string | number) => {
