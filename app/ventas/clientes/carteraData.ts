@@ -3,7 +3,8 @@ import { createServerClient } from '@supabase/ssr'
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase/config'
 import { esClienteExcluido, vendedorCanonico } from '@/lib/types'
 import { formatLocalidad } from '@/lib/format'
-import { CARTERAS, ACTIVO_DIAS, type ClienteCartera, type CarteraKey } from './carteraTipos'
+import { regionDeProvincia } from '@/lib/regiones'
+import { CARTERAS, ACTIVO_DIAS, carteraDeRegion, type ClienteCartera, type CarteraKey } from './carteraTipos'
 
 // Cliente sin cookies → apto para unstable_cache (mismo patrón que lib/misionesCache.ts).
 function anon() {
@@ -56,11 +57,21 @@ const getClientesCached = unstable_cache(
 
 export const CARTERA_DE_VENDEDOR = new Map<string, CarteraKey>(CARTERAS.map(c => [c.vendedor, c.key]))
 
-/** Cartera = vendedor asignado en el maestro; si ese no es una cartera vigente
- *  (Inactivo, Incobrable, ex-vendedores, vacío), el vendedor de su última compra. */
-function carteraDe(asignado: string | null, ultimoVendedor: string | null): CarteraKey {
+/** Valores con que el ERP marca a un cliente SIN dueño (no es una persona ni
+ *  una cuenta aparte como Incobrable, CERVECERÍA o Douglas Koenig). */
+const SIN_DUENO = new Set(['', 'inactivo', 'no indica'])
+const sinDueno = (v: string | null) => SIN_DUENO.has((v ?? '').trim().toLowerCase())
+
+/** Cartera = vendedor asignado en el maestro; si ese no es una cartera vigente,
+ *  el vendedor de su última compra. Si el cliente quedó sin dueño en el ERP
+ *  (Inactivo / sin vendedor), va a la zona de su provincia: son clientes de
+ *  esa región que el vendedor de la zona puede recuperar (pedido de Claudio,
+ *  30-oct-2026: "cada vendedor ve lo de su región"). Incobrables, Douglas,
+ *  CERVECERÍA, etc. quedan en "Otros". */
+function carteraDe(asignado: string | null, ultimoVendedor: string | null, provincia: string | null): CarteraKey {
   return CARTERA_DE_VENDEDOR.get(vendedorCanonico(asignado))
     ?? CARTERA_DE_VENDEDOR.get(vendedorCanonico(ultimoVendedor))
+    ?? (sinDueno(asignado) && sinDueno(ultimoVendedor) ? carteraDeRegion(regionDeProvincia(provincia)) : null)
     ?? 'otros'
 }
 
@@ -90,7 +101,7 @@ export async function getCartera(): Promise<ClienteCartera[]> {
       localidad: formatLocalidad(c?.localidad_entrega || c?.localidad || r?.localidad || '') || null,
       provincia: c?.provincia || r?.provincia || null,
       telefono: c?.telefono ?? null,
-      cartera: carteraDe(c?.vendedor ?? null, r?.ultimo_vendedor ?? null),
+      cartera: carteraDe(c?.vendedor ?? null, r?.ultimo_vendedor ?? null, c?.provincia || r?.provincia || null),
       vendedorErp: c?.vendedor || r?.ultimo_vendedor || null,
       estado: !r ? 'sin_compras' : (diasSinComprar ?? 0) <= ACTIVO_DIAS ? 'activo' : 'inactivo',
       primeraCompra: r?.primera_compra ?? null,
@@ -151,4 +162,13 @@ function unificarComunas(clientes: ClienteCartera[]) {
     canonica.set(k, mejor[0])
   }
   for (const c of clientes) if (c.localidad) c.localidad = canonica.get(claveComuna(c.localidad)) ?? c.localidad
+}
+
+/** Zona que puede ver un usuario que NO es admin: la de su región (users.region)
+ *  y, si no tiene, la de su nombre en el ERP. null = no tiene zona. Fuente
+ *  única para la lista (/ventas/clientes) y la ficha (/ventas/clientes/[id]). */
+export function miCarteraDe(user: { region: string | null; vendedoresErp: string[] } | null): CarteraKey | null {
+  if (!user) return null
+  return carteraDeRegion(user.region)
+    ?? (user.vendedoresErp.length ? CARTERA_DE_VENDEDOR.get(vendedorCanonico(user.vendedoresErp[0])) ?? null : null)
 }

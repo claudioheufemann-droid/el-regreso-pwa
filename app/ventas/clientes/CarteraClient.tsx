@@ -228,7 +228,7 @@ export default function CarteraClient({ clientes, carterasVisibles, hoyISO }: Pr
 
   const pctActivos = resumen.total ? (resumen.activos / resumen.total) * 100 : 0
   const tituloLista = buscando
-    ? `${lista.length} ${lista.length === 1 ? 'resultado' : 'resultados'} en toda la empresa`
+    ? `${lista.length} ${lista.length === 1 ? 'resultado' : 'resultados'} ${unaSolaCartera ? 'en tu zona' : 'en toda la empresa'}`
     : `${estado === 'activo' ? 'Activos' : estado === 'inactivo' ? 'Inactivos' : 'Todos'}${comuna ? ` en ${comuna}` : ''} · ${lista.length}`
 
   return (
@@ -252,7 +252,9 @@ export default function CarteraClient({ clientes, carterasVisibles, hoyISO }: Pr
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.5px', lineHeight: 1.1 }}>Clientes</h1>
-            <p style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Cartera de la empresa · activo = compró en los últimos 2 años</p>
+            <p style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
+              {unaSolaCartera ? `Tus clientes de ${infoCartera(carterasVisibles[0]).nombre}` : 'Cartera de la empresa'} · activo = compró en los últimos 2 años
+            </p>
           </div>
           <button onClick={exportar} disabled={lista.length === 0} style={{
             display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 40, padding: '0 14px', flexShrink: 0,
@@ -263,6 +265,17 @@ export default function CarteraClient({ clientes, carterasVisibles, hoyISO }: Pr
           </button>
         </div>
 
+        {/* Usuario sin zona (no admin y sin región ni nombre de vendedor en el ERP) */}
+        {carterasVisibles.length === 0 && (
+          <Card>
+            <div style={{ fontSize: 15, fontWeight: 700 }}>No tienes una zona asignada</div>
+            <p style={{ fontSize: 13, color: C.muted, marginTop: 6 }}>
+              Esta pantalla muestra los clientes de la región de cada vendedor. Pide a un administrador que te asigne tu región.
+            </p>
+          </Card>
+        )}
+
+        {carterasVisibles.length > 0 && (<>
         {/* Buscador global */}
         <div style={{ position: 'relative' }}>
           <Search size={17} color={C.faint} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
@@ -460,6 +473,7 @@ export default function CarteraClient({ clientes, carterasVisibles, hoyISO }: Pr
             Ver {Math.min(PAGINA, lista.length - visibles)} más · quedan {lista.length - visibles}
           </button>
         )}
+        </>)}
       </div>
     </div>
   )

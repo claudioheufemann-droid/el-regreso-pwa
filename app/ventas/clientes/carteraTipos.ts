@@ -21,6 +21,18 @@ export const CARTERAS: { key: Exclude<CarteraKey, 'otros'>; vendedor: string; no
  *  vigente: Inactivo, Incobrable, Douglas Koenig, CERVECERÍA, sin vendedor… */
 export const CARTERA_OTROS = { key: 'otros' as const, nombre: 'Otros', color: '#8A847D' }
 
+/** Región operativa (users.region / lib/regiones.ts) → zona de esta pantalla. */
+const CARTERA_DE_REGION: Record<string, Exclude<CarteraKey, 'otros'>> = {
+  'Metropolitana': 'rm',
+  'La Araucanía':  'araucania',
+  'Los Ríos':      'rios',
+  'Los Lagos':     'lagos',
+}
+
+export function carteraDeRegion(region: string | null | undefined): Exclude<CarteraKey, 'otros'> | null {
+  return region ? CARTERA_DE_REGION[region] ?? null : null
+}
+
 export function infoCartera(key: CarteraKey) {
   return CARTERAS.find(c => c.key === key) ?? CARTERA_OTROS
 }

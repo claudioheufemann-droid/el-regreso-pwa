@@ -1,20 +1,20 @@
 import { getServerUser } from '@/lib/auth'
-import { vendedorCanonico } from '@/lib/types'
 import CarteraClient from './CarteraClient'
 import { CARTERAS } from './carteraTipos'
-import { getCartera, CARTERA_DE_VENDEDOR } from './carteraData'
+import { getCartera, miCarteraDe } from './carteraData'
 
 export const dynamic = 'force-dynamic'
 
 export default async function ClientesPage() {
   const [appUser, clientes] = await Promise.all([getServerUser(), getCartera()])
 
-  // Admin ve toda la empresa; un vendedor sólo su cartera (misma regla que
-  // tenía esta pantalla antes y que aplica la ficha /ventas/clientes/[id]).
-  const miCartera = appUser?.vendedoresErp?.length
-    ? CARTERA_DE_VENDEDOR.get(vendedorCanonico(appUser.vendedoresErp[0])) ?? null
-    : null
-  const visibles = appUser?.isAdmin ? clientes : clientes.filter(c => c.cartera === miCartera)
+  // Admin ve toda la empresa. Un vendedor ve SÓLO los clientes de su región
+  // (pedido de Claudio, 30-oct-2026): la zona sale de users.region y, si no
+  // tiene, de su nombre en el ERP. El filtro va acá, en el servidor, así que
+  // al celular del vendedor nunca llegan clientes de otra zona.
+  // "Ver como vendedor" del admin entra por la misma rama (isAdmin = false).
+  const miCartera = appUser?.isAdmin ? null : miCarteraDe(appUser)
+  const visibles = appUser?.isAdmin ? clientes : miCartera ? clientes.filter(c => c.cartera === miCartera) : []
 
   return (
     <CarteraClient

@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getServerUser } from '@/lib/auth'
 import { notFound } from 'next/navigation'
-import { vendedorCanonico } from '@/lib/types'
+import { getCartera, miCarteraDe } from '../carteraData'
 import ClienteDetalleClient from './ClienteDetalleClient'
 
 export default async function ClienteDetallePage({ params }: { params: Promise<{ id: string }> }) {
@@ -18,22 +18,21 @@ export default async function ClienteDetallePage({ params }: { params: Promise<{
 
   if (!cliente) notFound()
 
-  // La lista de /ventas/clientes ya viene acotada a la cartera del vendedor,
+  // La lista de /ventas/clientes ya viene acotada a la zona del vendedor,
   // pero esta ficha se puede pedir directo por URL/id — sin este chequeo,
   // cualquier vendedor podía ver el detalle completo (contactos, deuda,
   // historial de ventas) de un cliente que no es suyo con solo cambiar el
   // número en la URL.
   //
-  // vendedorCanonico(appUser.nombre) — el nombre de LOGIN, no el del ERP —
-  // era el bug real acá: para Marcelo D. (login "Marcelo D.", ERP "Marcelo
-  // Diaz") esto NUNCA calzaba y su propia ficha de cliente le tiraba 404.
-  // Fix: partir de vendedoresErp (ver AppUser en lib/auth.ts), como ya hace
-  // /ventas/clientes/page.tsx.
-  const miVendedorCanonico = appUser?.vendedoresErp?.length
-    ? vendedorCanonico(appUser.vendedoresErp[0])
-    : '__sin_vendedor__'
-  if (!appUser?.isAdmin && vendedorCanonico(cliente.vendedor) !== miVendedorCanonico) {
-    notFound()
+  // Misma regla que la lista (miCarteraDe + la cartera calculada en
+  // getCartera): desde el 30-oct-2026 el vendedor ve los clientes de su
+  // REGIÓN, incluidos los que el ERP dejó sin dueño ("Inactivo") en sus
+  // provincias. Antes se comparaba sólo clientes.vendedor, y esos clientes
+  // de la lista le daban 404 al abrir "Ficha completa".
+  if (!appUser?.isAdmin) {
+    const miCartera = miCarteraDe(appUser)
+    const enCartera = (await getCartera()).find(c => c.id === cliente.id)
+    if (!miCartera || enCartera?.cartera !== miCartera) notFound()
   }
 
   // Todas las queries en paralelo — antes scoreRow y estadoRow eran secuenciales (800ms perdidos)
