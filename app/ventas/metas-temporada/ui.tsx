@@ -7,6 +7,7 @@ import {
   clp, litros, entero, pctTxt, pct, rangoFechas, fechaCorta, semanaTope, diasHabilesRestantes,
   nivelPorPct, nivelDeSemana, NIVEL_COLOR, NIVEL_BARRA, NIVEL_FONDO, NIVEL_LABEL,
 } from './tipos'
+import { ClientesDelCorte, nombreEnFrase } from './DetalleClientes'
 
 /**
  * Piezas visuales de Metas (tema claro). Una sola fuente para la vista del
@@ -515,6 +516,13 @@ function DetalleProductos({ id, fila }: { id: string; fila: FilaMeta }) {
           </div>
         )
       })}
+      {/* A quién le vendió y qué (igual que al tocar una región en el ranking del equipo). */}
+      {!futura && (
+        <div className="mt-3 border-t border-[var(--cc-line)] pt-3">
+          <p className={`pb-2 ${CABECERA}`}>Clientes</p>
+          <ClientesDelCorte userId={fila.userId} desde={fila.fechaInicio} hasta={fila.fechaFin} nombre={nombreEnFrase(fila)} />
+        </div>
+      )}
     </div>
   )
 }

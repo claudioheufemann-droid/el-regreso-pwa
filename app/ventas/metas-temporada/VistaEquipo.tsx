@@ -14,7 +14,7 @@ import {
   FranjaAcumulado, PieTemporada, Titulo, TablaSemanas,
 } from './ui'
 import { etiquetaVendedor, nombreCorto } from '@/lib/types'
-import DetalleClientes from './DetalleClientes'
+import DetalleClientes, { nombreEnFrase } from './DetalleClientes'
 
 export interface VendedorPlan {
   userId: string
@@ -225,7 +225,7 @@ function TablaRanking({ ranking, nombre }: { ranking: FilaRanking[]; nombre: str
               userId={r.userId}
               desde={a.fechaInicio}
               hasta={a.fechaFin}
-              nombre={a.nombre.toLowerCase().startsWith('semana') ? `la ${a.nombre.toLowerCase()}` : a.nombre}
+              nombre={nombreEnFrase(a)}
               etiqueta={etiquetaVendedor(r.vendedor)}
               metas={<MetasVendedor r={r} />}
             />
