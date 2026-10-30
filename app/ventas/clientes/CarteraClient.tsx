@@ -2,8 +2,8 @@
 
 import { useMemo, useState, useCallback, useEffect } from 'react'
 import Link from 'next/link'
-import { Search, X, Download, ChevronDown, MapPin, ExternalLink, RotateCw } from 'lucide-react'
-import AppHeader from '@/components/ui/AppHeader'
+import { useRouter } from 'next/navigation'
+import { Search, X, Download, ChevronDown, ChevronLeft, MapPin, ExternalLink, RotateCw } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import {
   ACTIVO_DIAS, CARTERAS, CARTERA_OTROS, infoCartera,
@@ -19,17 +19,34 @@ interface Props {
 type FiltroEstado = 'activo' | 'inactivo' | 'todos'
 type Orden = 'reciente' | 'historico' | 'ultimo_anio' | 'nombre'
 
+// ── Paleta clara — pedido de Claudio (30-oct-2026): esta pantalla con fondo
+// blanco. Mismos valores que Ventas > Hoy (const C de VentasHoyClient.tsx)
+// para que las dos se vean como un mismo módulo.
+const C = {
+  bg: '#F1F5F9',
+  card: '#FFFFFF',
+  soft: '#F8FAFC',
+  text: '#0F172A',
+  muted: '#64748B',
+  faint: '#94A3B8',
+  line: '#E2E8F0',
+  blue: '#2563EB',
+  blueSoft: '#EFF6FF',
+  green: '#059669',
+  greenSoft: '#ECFDF5',
+  amber: '#D97706',
+  orange: '#EA580C',
+  red: '#DC2626',
+  redSoft: '#FEF2F2',
+}
+
 const PAGINA = 60
 const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
 
 // ── Formato ─────────────────────────────────────────────────────────────────
 const fLitros = (n: number) => `${n.toLocaleString('es-CL', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L`
+/** Monto siempre completo, nunca "$2,9 M": mismo criterio que Ventas > Hoy. */
 const fPesos = (n: number) => `$${Math.round(n).toLocaleString('es-CL')}`
-function fPesosCorto(n: number): string {
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toLocaleString('es-CL', { maximumFractionDigits: 1 })} M`
-  if (n >= 1_000) return `$${Math.round(n / 1_000).toLocaleString('es-CL')} mil`
-  return fPesos(n)
-}
 function fFecha(iso: string | null): string {
   if (!iso) return '—'
   const [y, m, d] = iso.slice(0, 10).split('-')
@@ -46,31 +63,31 @@ function fHace(dias: number | null): string {
   if (dias === 1) return 'Ayer'
   if (dias < 45) return `Hace ${dias} días`
   if (dias < 365) return `Hace ${Math.round(dias / 30)} meses`
-  const anios = dias / 365
-  return `Hace ${anios.toLocaleString('es-CL', { maximumFractionDigits: 1 })} años`
+  return `Hace ${(dias / 365).toLocaleString('es-CL', { maximumFractionDigits: 1 })} años`
 }
-function fFrecuencia(ciclo: number | null, compras: number): string {
+/** Versión corta para columnas "Compra cada": "~4 semanas", "Una vez". */
+function fCada(ciclo: number | null, compras: number): string {
   if (compras === 0) return '—'
-  if (ciclo === null) return 'Compró una vez'
-  if (ciclo <= 10) return `Cada ~${ciclo} días`
-  if (ciclo < 60) return `Cada ~${Math.round(ciclo / 7)} semanas`
-  return `Cada ~${Math.round(ciclo / 30)} meses`
+  if (ciclo === null) return 'Una vez'
+  if (ciclo <= 10) return `~${ciclo} días`
+  if (ciclo < 60) return `~${Math.round(ciclo / 7)} semanas`
+  return `~${Math.round(ciclo / 30)} meses`
 }
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
 /** Color del "hace X" según cuán reciente fue la última compra. */
 function colorRecencia(dias: number | null): string {
-  if (dias === null) return 'var(--muted)'
-  if (dias <= 60) return 'var(--green)'
-  if (dias <= 180) return '#FACC15'
-  if (dias <= ACTIVO_DIAS) return 'var(--orange)'
-  return 'var(--muted)'
+  if (dias === null) return C.faint
+  if (dias <= 60) return C.green
+  if (dias <= 180) return C.amber
+  if (dias <= ACTIVO_DIAS) return C.orange
+  return C.faint
 }
 
 const ESTADO_INFO: Record<EstadoCliente, { label: string; color: string }> = {
-  activo:      { label: 'Activo',       color: 'var(--green)' },
-  inactivo:    { label: 'Inactivo',     color: 'var(--muted)' },
-  sin_compras: { label: 'Sin compras',  color: '#4A4540' },
+  activo:      { label: 'Activo',      color: C.green },
+  inactivo:    { label: 'Inactivo',    color: '#CBD5E1' },
+  sin_compras: { label: 'Sin compras', color: '#E2E8F0' },
 }
 
 function conteo(lista: ClienteCartera[]) {
@@ -83,8 +100,24 @@ function conteo(lista: ClienteCartera[]) {
   return { total: lista.length, activos, inactivos: inactivos + sinCompras, sinCompras }
 }
 
+// Tabla de zonas: nombre · activos · inactivos · total (cabe en 375 px sin cortar "Metropolitana")
+const COLS_ZONA = 'minmax(0, 1fr) 54px 64px 50px'
+
+// Columnas del listado en escritorio: cliente · última compra · frecuencia · 12 meses · histórico · flecha
+const COLS_DESK = 'minmax(0, 2.4fr) minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.1fr) 20px'
+
+// `display` no lo toca el reset global de globals.css, así que el cambio
+// celular/escritorio puede ir en clases; el espaciado va siempre inline.
+const CSS = `
+.ct-desk{display:none}
+@media (min-width:900px){.ct-desk{display:grid}.ct-mob{display:none}}
+.ct-row{background:transparent}
+.ct-row:hover{background:${C.soft}}
+`
+
 // ── Componente ──────────────────────────────────────────────────────────────
 export default function CarteraClient({ clientes, carterasVisibles, hoyISO }: Props) {
+  const router = useRouter()
   const unaSolaCartera = carterasVisibles.length === 1
   const [cartera, setCartera] = useState<CarteraKey | 'todas'>(unaSolaCartera ? carterasVisibles[0] : 'todas')
   const [estado, setEstado] = useState<FiltroEstado>('activo')
@@ -184,259 +217,297 @@ export default function CarteraClient({ clientes, carterasVisibles, hoyISO }: Pr
     XLSX.writeFile(wb, `Clientes_${zona}_${hoyISO}.xlsx`)
   }, [lista, buscando, nombreZona, hoyISO])
 
-  const tarjetasCartera: { key: CarteraKey; nombre: string; color: string }[] = [
-    ...CARTERAS.filter(c => carterasVisibles.includes(c.key)),
-    ...(carterasVisibles.includes('otros') && (porCartera.get('otros')?.length ?? 0) > 0 ? [CARTERA_OTROS] : []),
+  const filasZona: { key: CarteraKey | 'todas'; nombre: string; color: string; datos: ReturnType<typeof conteo> }[] = [
+    { key: 'todas', nombre: 'Todas', color: C.text, datos: conteo(clientes) },
+    ...CARTERAS.filter(c => carterasVisibles.includes(c.key))
+      .map(c => ({ key: c.key, nombre: c.nombre, color: c.color, datos: conteo(porCartera.get(c.key) ?? []) })),
+    ...(carterasVisibles.includes('otros') && (porCartera.get('otros')?.length ?? 0) > 0
+      ? [{ key: CARTERA_OTROS.key, nombre: CARTERA_OTROS.nombre, color: CARTERA_OTROS.color, datos: conteo(porCartera.get('otros') ?? []) }]
+      : []),
   ]
 
   const pctActivos = resumen.total ? (resumen.activos / resumen.total) * 100 : 0
+  const tituloLista = buscando
+    ? `${lista.length} ${lista.length === 1 ? 'resultado' : 'resultados'} en toda la empresa`
+    : `${estado === 'activo' ? 'Activos' : estado === 'inactivo' ? 'Inactivos' : 'Todos'}${comuna ? ` en ${comuna}` : ''} · ${lista.length}`
 
   return (
-    <div style={{
-      maxWidth: 1100, margin: '0 auto', width: '100%', padding: '0 16px',
-      paddingBottom: 'max(96px, calc(80px + env(safe-area-inset-bottom)))',
-    }}>
-      <AppHeader eyebrow="Ventas · Cartera" title="Clientes" />
+    <div style={{ background: C.bg, minHeight: '100dvh', flex: 1, color: C.text, overflowX: 'clip' }}>
+      <style>{CSS}</style>
+      <div style={{
+        maxWidth: 1100, margin: '0 auto', padding: '14px 16px',
+        paddingBottom: 'max(96px, calc(80px + env(safe-area-inset-bottom)))',
+        display: 'flex', flexDirection: 'column', gap: 14,
+      }}>
+        {/* Volver — mismo botón que Ventas > Hoy */}
+        <button onClick={() => router.push('/')} aria-label="Volver" style={{
+          display: 'inline-flex', alignItems: 'center', gap: 4, alignSelf: 'flex-start',
+          background: C.card, border: `1px solid ${C.line}`, borderRadius: 100, padding: '7px 14px 7px 10px',
+          color: C.text, fontSize: 13, fontWeight: 700, cursor: 'pointer', minHeight: 36,
+        }}>
+          <ChevronLeft size={17} strokeWidth={2.5} color={C.blue} /> Volver
+        </button>
 
-      {/* ── Buscador global ───────────────────────────────────────────── */}
-      <div style={{ position: 'relative', marginTop: 14 }}>
-        <Search size={17} color="var(--muted)" style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
-        <input
-          value={query}
-          onChange={e => { setQuery(e.target.value); setVisibles(PAGINA); setAbierto(null) }}
-          placeholder="Buscar cliente, razón social o comuna…"
-          aria-label="Buscar cliente"
-          style={{
-            width: '100%', height: 48, borderRadius: 14, padding: '0 44px 0 42px',
-            background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--cream)',
-            fontSize: 15, outline: 'none',
-          }}
-        />
-        {buscando && (
-          <button onClick={() => setQuery('')} aria-label="Limpiar búsqueda" style={{
-            position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)',
-            width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            background: 'none', border: 'none', cursor: 'pointer',
+        {/* Encabezado */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h1 style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.5px', lineHeight: 1.1 }}>Clientes</h1>
+            <p style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Cartera de la empresa · activo = compró en los últimos 2 años</p>
+          </div>
+          <button onClick={exportar} disabled={lista.length === 0} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 40, padding: '0 14px', flexShrink: 0,
+            borderRadius: 12, cursor: 'pointer', background: C.card, border: `1px solid ${C.line}`,
+            color: C.text, fontSize: 13, fontWeight: 700, opacity: lista.length === 0 ? 0.4 : 1,
           }}>
-            <X size={17} color="var(--muted)" />
+            <Download size={15} color={C.green} /> Excel
           </button>
-        )}
-      </div>
+        </div>
 
-      {!buscando && (
-        <>
-          {/* ── Resumen de la zona elegida ──────────────────────────────── */}
-          <section style={{
-            marginTop: 14, padding: '16px 16px 14px', borderRadius: 18,
-            background: 'linear-gradient(160deg, rgba(212,175,55,0.10), rgba(212,175,55,0.02) 55%), var(--surface)',
-            border: '1px solid rgba(212,175,55,0.18)',
-          }}>
-            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: 'var(--gold)' }}>
-              {nombreZona}
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8, marginTop: 10 }}>
-              <BigStat label="Clientes" valor={resumen.total} color="var(--cream)" />
-              <BigStat label="Activos" valor={resumen.activos} color="var(--green)" />
-              <BigStat label="Inactivos" valor={resumen.inactivos} color="#A8A29E" />
-            </div>
-            <div style={{ height: 6, borderRadius: 6, background: 'rgba(255,255,255,0.06)', marginTop: 12, overflow: 'hidden' }}>
-              <div style={{ width: `${pctActivos}%`, height: '100%', borderRadius: 6, background: 'var(--green)', transition: 'width .4s var(--spring)' }} />
-            </div>
-            <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 8, lineHeight: 1.45 }}>
-              {Math.round(pctActivos)}% activos · Activo = compró en los últimos 2 años
-              {resumen.sinCompras > 0 && <> · {resumen.sinCompras} inactivos nunca han comprado</>}
-            </div>
-          </section>
-
-          {/* ── Carteras por vendedor/zona ──────────────────────────────── */}
-          {!unaSolaCartera && (
-            <section style={{ marginTop: 14 }}>
-              <SectionLabel>Por zona</SectionLabel>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 8 }}>
-                <ZonaCard
-                  nombre="Todas" color="var(--gold)" activa={cartera === 'todas'}
-                  {...conteo(clientes)} onClick={() => elegirCartera('todas')}
-                />
-                {tarjetasCartera.map(z => (
-                  <ZonaCard
-                    key={z.key} nombre={z.nombre} color={z.color} activa={cartera === z.key}
-                    {...conteo(porCartera.get(z.key) ?? [])} onClick={() => elegirCartera(z.key)}
-                  />
-                ))}
-              </div>
-            </section>
+        {/* Buscador global */}
+        <div style={{ position: 'relative' }}>
+          <Search size={17} color={C.faint} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+          <input
+            value={query}
+            onChange={e => { setQuery(e.target.value); setVisibles(PAGINA); setAbierto(null) }}
+            placeholder="Buscar cliente, razón social o comuna…"
+            aria-label="Buscar cliente"
+            style={{
+              width: '100%', height: 46, borderRadius: 12, padding: '0 44px 0 42px',
+              background: C.card, border: `1px solid ${C.line}`, color: C.text, fontSize: 15, outline: 'none',
+            }}
+          />
+          {buscando && (
+            <button onClick={() => setQuery('')} aria-label="Limpiar búsqueda" style={{
+              position: 'absolute', right: 2, top: '50%', transform: 'translateY(-50%)',
+              width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'none', border: 'none', cursor: 'pointer',
+            }}>
+              <X size={17} color={C.muted} />
+            </button>
           )}
+        </div>
 
-          {/* ── Dónde vendemos ─────────────────────────────────────────── */}
-          {comunas.length > 0 && (
-            <section style={{ marginTop: 16 }}>
-              <SectionLabel>
-                <MapPin size={12} style={{ marginRight: 4, verticalAlign: -1 }} />
-                Dónde vendemos · {comunas.length} {comunas.length === 1 ? 'comuna' : 'comunas'}
-              </SectionLabel>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {comunas.slice(0, 18).map(([nombre, n]) => {
-                  const activa = comuna === nombre
+        {!buscando && (
+          <>
+            {/* Resumen de la zona elegida */}
+            <Card>
+              <Eyebrow>{nombreZona}</Eyebrow>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', marginTop: 10 }}>
+                <BigStat label="Clientes" valor={resumen.total} color={C.text} />
+                <BigStat label="Activos" valor={resumen.activos} color={C.green} borde />
+                <BigStat label="Inactivos" valor={resumen.inactivos} color={C.muted} borde />
+              </div>
+              <div style={{ height: 6, borderRadius: 6, background: C.line, marginTop: 14, overflow: 'hidden' }}>
+                <div style={{ width: `${pctActivos}%`, height: '100%', borderRadius: 6, background: C.green, transition: 'width .4s' }} />
+              </div>
+              <p style={{ fontSize: 12, color: C.muted, marginTop: 8 }}>
+                {Math.round(pctActivos)}% activos
+                {resumen.sinCompras > 0 && <> · {resumen.sinCompras} de los inactivos nunca han comprado</>}
+              </p>
+            </Card>
+
+            {/* Clientes por zona — tabla, tocar una fila filtra todo */}
+            {!unaSolaCartera && (
+              <Card pad={0}>
+                <div style={{ padding: '14px 16px 8px' }}><Eyebrow>Clientes por zona</Eyebrow></div>
+                <div style={{
+                  display: 'grid', gridTemplateColumns: COLS_ZONA, gap: 8,
+                  padding: '6px 16px', fontSize: 11, fontWeight: 700, color: C.faint, textTransform: 'uppercase', letterSpacing: 0.4,
+                  borderBottom: `1px solid ${C.line}`,
+                }}>
+                  <span>Zona</span><span style={{ textAlign: 'right' }}>Activos</span>
+                  <span style={{ textAlign: 'right' }}>Inactivos</span><span style={{ textAlign: 'right' }}>Total</span>
+                </div>
+                {filasZona.map((z, i) => {
+                  const activa = cartera === z.key
                   return (
-                    <button key={nombre} onClick={() => { setComuna(activa ? null : nombre); setEstado('activo'); setVisibles(PAGINA) }} style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 34, padding: '0 12px',
-                      borderRadius: 100, cursor: 'pointer', fontSize: 12.5, fontWeight: 600,
-                      background: activa ? 'var(--gold-dim)' : 'rgba(255,255,255,0.04)',
-                      border: `1px solid ${activa ? 'rgba(212,175,55,0.45)' : 'var(--border)'}`,
-                      color: activa ? 'var(--gold)' : 'var(--cream)',
+                    <button key={z.key} onClick={() => elegirCartera(z.key)} aria-pressed={activa} className={activa ? undefined : 'ct-row'} style={{
+                      width: '100%', display: 'grid', gridTemplateColumns: COLS_ZONA, gap: 8, alignItems: 'center',
+                      padding: '0 14px 0 16px', minHeight: 46, border: 'none', cursor: 'pointer', textAlign: 'left',
+                      borderTop: i === 0 ? 'none' : `1px solid ${C.line}`,
+                      background: activa ? C.blueSoft : undefined,
+                      boxShadow: activa ? `inset 3px 0 0 ${C.blue}` : 'none',
                     }}>
-                      {nombre}
-                      <span style={{ fontSize: 11, fontWeight: 800, color: activa ? 'var(--gold)' : 'var(--muted)' }}>{n}</span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: 4, background: z.color, flexShrink: 0 }} />
+                        <span style={{ fontSize: 14, fontWeight: activa ? 800 : 600, color: activa ? C.blue : C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{z.nombre}</span>
+                      </span>
+                      <Num v={z.datos.activos} color={C.green} bold />
+                      <Num v={z.datos.inactivos} color={C.muted} />
+                      <Num v={z.datos.total} color={C.text} />
                     </button>
                   )
                 })}
-                {comunas.length > 18 && (
-                  <span style={{ alignSelf: 'center', fontSize: 12, color: 'var(--muted)', padding: '0 4px' }}>
-                    +{comunas.length - 18} más (usa el buscador)
-                  </span>
-                )}
-              </div>
-            </section>
-          )}
-        </>
-      )}
+              </Card>
+            )}
 
-      {/* ── Barra de filtros del listado ─────────────────────────────────── */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginTop: 18 }}>
-        {!buscando && (
-          <div role="tablist" style={{ display: 'flex', padding: 3, borderRadius: 12, background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)' }}>
-            {(['activo', 'inactivo', 'todos'] as const).map(e => (
-              <button key={e} role="tab" aria-selected={estado === e}
-                onClick={() => { setEstado(e); setVisibles(PAGINA); setAbierto(null) }}
-                style={{
-                  minHeight: 36, padding: '0 14px', borderRadius: 9, border: 'none', cursor: 'pointer',
-                  fontSize: 13, fontWeight: 700,
-                  background: estado === e ? 'rgba(255,255,255,0.10)' : 'transparent',
-                  color: estado === e ? 'var(--cream)' : 'var(--muted)',
-                }}>
-                {e === 'activo' ? 'Activos' : e === 'inactivo' ? 'Inactivos' : 'Todos'}
-              </button>
-            ))}
-          </div>
+            {/* Dónde vendemos */}
+            {comunas.length > 0 && (
+              <Card>
+                <Eyebrow>
+                  <MapPin size={12} style={{ marginRight: 4, verticalAlign: -1 }} />
+                  Dónde vendemos · {comunas.length} {comunas.length === 1 ? 'comuna' : 'comunas'} con clientes activos
+                </Eyebrow>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+                  {comunas.slice(0, 20).map(([nombre, n]) => {
+                    const activa = comuna === nombre
+                    return (
+                      <button key={nombre} onClick={() => { setComuna(activa ? null : nombre); setEstado('activo'); setVisibles(PAGINA); setAbierto(null) }} style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 34, padding: '0 11px',
+                        borderRadius: 100, cursor: 'pointer', fontSize: 13, fontWeight: 600,
+                        background: activa ? C.blue : C.soft,
+                        border: `1px solid ${activa ? C.blue : C.line}`,
+                        color: activa ? '#FFFFFF' : C.text,
+                      }}>
+                        {nombre}
+                        <span style={{ fontSize: 11.5, fontWeight: 800, color: activa ? '#DBEAFE' : C.muted }}>{n}</span>
+                      </button>
+                    )
+                  })}
+                  {comunas.length > 20 && (
+                    <span style={{ alignSelf: 'center', fontSize: 12, color: C.muted, padding: '0 4px' }}>
+                      +{comunas.length - 20} más (usa el buscador)
+                    </span>
+                  )}
+                </div>
+              </Card>
+            )}
+          </>
         )}
-        <div style={{ position: 'relative' }}>
-          <select value={orden} onChange={e => setOrden(e.target.value as Orden)} aria-label="Ordenar" style={{
-            appearance: 'none', minHeight: 42, padding: '0 34px 0 12px', borderRadius: 12, cursor: 'pointer',
-            background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', color: 'var(--cream)',
-            fontSize: 13, fontWeight: 600,
-          }}>
-            <option value="reciente">Última compra</option>
-            <option value="historico">Mayor compra histórica</option>
-            <option value="ultimo_anio">Mayor compra 12 meses</option>
-            <option value="nombre">Nombre A-Z</option>
-          </select>
-          <ChevronDown size={15} color="var(--muted)" style={{ position: 'absolute', right: 11, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
-        </div>
-        <button onClick={exportar} disabled={lista.length === 0} style={{
-          marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 42, padding: '0 14px',
-          borderRadius: 12, cursor: 'pointer', background: 'var(--gold-dim)', border: '1px solid rgba(212,175,55,0.3)',
-          color: 'var(--gold)', fontSize: 13, fontWeight: 700, opacity: lista.length === 0 ? 0.4 : 1,
-        }}>
-          <Download size={15} /> Excel
-        </button>
-      </div>
 
-      <div style={{ fontSize: 12, color: 'var(--muted)', margin: '12px 2px 8px' }}>
-        {buscando
-          ? `${lista.length} ${lista.length === 1 ? 'resultado' : 'resultados'} en toda la empresa`
-          : `${lista.length} ${lista.length === 1 ? 'cliente' : 'clientes'}${comuna ? ` en ${comuna}` : ''}`}
-        {comuna && !buscando && (
-          <button onClick={() => setComuna(null)} style={{ marginLeft: 8, background: 'none', border: 'none', color: 'var(--gold)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-            Quitar comuna
+        {/* Listado */}
+        <Card pad={0}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, padding: '12px 16px', borderBottom: `1px solid ${C.line}` }}>
+            <div style={{ flex: '1 1 160px', minWidth: 0 }}>
+              <div style={{ fontSize: 15, fontWeight: 800 }}>{tituloLista}</div>
+              {comuna && !buscando && (
+                <button onClick={() => setComuna(null)} style={{ background: 'none', border: 'none', padding: 0, color: C.blue, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                  Quitar filtro de comuna
+                </button>
+              )}
+            </div>
+            {!buscando && (
+              <div role="tablist" style={{ display: 'flex', gap: 2, padding: 3, borderRadius: 10, background: C.line }}>
+                {(['activo', 'inactivo', 'todos'] as const).map(e => (
+                  <button key={e} role="tab" aria-selected={estado === e}
+                    onClick={() => { setEstado(e); setVisibles(PAGINA); setAbierto(null) }}
+                    style={{
+                      minHeight: 34, padding: '0 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                      fontSize: 13, fontWeight: 700,
+                      background: estado === e ? C.card : 'transparent',
+                      color: estado === e ? C.text : C.muted,
+                      boxShadow: estado === e ? '0 1px 2px rgba(15,23,42,.08)' : 'none',
+                    }}>
+                    {e === 'activo' ? 'Activos' : e === 'inactivo' ? 'Inactivos' : 'Todos'}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div style={{ position: 'relative' }}>
+              <select value={orden} onChange={e => setOrden(e.target.value as Orden)} aria-label="Ordenar" style={{
+                appearance: 'none', minHeight: 40, padding: '0 32px 0 12px', borderRadius: 10, cursor: 'pointer',
+                background: C.card, border: `1px solid ${C.line}`, color: C.text, fontSize: 13, fontWeight: 600,
+              }}>
+                <option value="reciente">Última compra</option>
+                <option value="historico">Mayor compra histórica</option>
+                <option value="ultimo_anio">Mayor compra 12 meses</option>
+                <option value="nombre">Nombre A-Z</option>
+              </select>
+              <ChevronDown size={15} color={C.muted} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+            </div>
+          </div>
+
+          {lista.length === 0 ? (
+            <div style={{ padding: '36px 16px', textAlign: 'center' }}>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>
+                {buscando ? 'No encontramos ese cliente' : 'No hay clientes en este filtro'}
+              </div>
+              <div style={{ fontSize: 13, color: C.muted, marginTop: 6 }}>
+                {buscando ? 'Prueba con parte del nombre o la comuna.' : 'Cambia a "Todos" o elige otra zona.'}
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Encabezado de columnas (sólo escritorio) */}
+              <div className="ct-desk" style={{
+                gridTemplateColumns: COLS_DESK, gap: 12, padding: '8px 16px', background: C.soft,
+                borderBottom: `1px solid ${C.line}`, fontSize: 11, fontWeight: 700, color: C.faint,
+                textTransform: 'uppercase', letterSpacing: 0.4,
+              }}>
+                <span>Cliente</span><span>Última compra</span><span>Compra cada</span>
+                <span style={{ textAlign: 'right' }}>Últimos 12 meses</span>
+                <span style={{ textAlign: 'right' }}>Histórico</span><span />
+              </div>
+              {lista.slice(0, visibles).map((c, i) => (
+                <FilaCliente
+                  key={c.nombre}
+                  c={c}
+                  primera={i === 0}
+                  mostrarZona={buscando || cartera === 'todas'}
+                  abierta={abierto === c.nombre}
+                  onToggle={() => setAbierto(abierto === c.nombre ? null : c.nombre)}
+                />
+              ))}
+            </>
+          )}
+        </Card>
+
+        {lista.length > visibles && (
+          <button onClick={() => setVisibles(v => v + PAGINA)} style={{
+            width: '100%', minHeight: 46, borderRadius: 12, cursor: 'pointer',
+            background: C.card, border: `1px solid ${C.line}`, color: C.blue, fontSize: 14, fontWeight: 700,
+          }}>
+            Ver {Math.min(PAGINA, lista.length - visibles)} más · quedan {lista.length - visibles}
           </button>
         )}
       </div>
-
-      {/* ── Listado ─────────────────────────────────────────────────────── */}
-      {lista.length === 0 ? (
-        <div style={{ padding: '36px 16px', textAlign: 'center', borderRadius: 16, background: 'var(--surface)', border: '1px solid var(--border)' }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--cream)' }}>
-            {buscando ? 'No encontramos ese cliente' : 'No hay clientes en este filtro'}
-          </div>
-          <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 6 }}>
-            {buscando ? 'Prueba con parte del nombre o la comuna.' : 'Cambia a "Todos" o elige otra zona.'}
-          </div>
-        </div>
-      ) : (
-        <div style={{ borderRadius: 16, background: 'var(--surface)', border: '1px solid var(--border)', overflow: 'hidden' }}>
-          {lista.slice(0, visibles).map((c, i) => (
-            <FilaCliente
-              key={c.nombre}
-              c={c}
-              primera={i === 0}
-              mostrarZona={buscando || cartera === 'todas'}
-              abierta={abierto === c.nombre}
-              onToggle={() => setAbierto(abierto === c.nombre ? null : c.nombre)}
-            />
-          ))}
-        </div>
-      )}
-      {lista.length > visibles && (
-        <button onClick={() => setVisibles(v => v + PAGINA)} style={{
-          width: '100%', minHeight: 46, marginTop: 10, borderRadius: 14, cursor: 'pointer',
-          background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border)', color: 'var(--cream)',
-          fontSize: 13.5, fontWeight: 700,
-        }}>
-          Ver {Math.min(PAGINA, lista.length - visibles)} más · quedan {lista.length - visibles}
-        </button>
-      )}
     </div>
   )
 }
 
 // ── Piezas ──────────────────────────────────────────────────────────────────
-function SectionLabel({ children }: { children: React.ReactNode }) {
+function Card({ children, pad = 16 }: { children: React.ReactNode; pad?: number }) {
   return (
-    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', color: 'var(--muted)', margin: '0 2px 8px' }}>
+    <section style={{
+      background: C.card, border: `1px solid ${C.line}`, borderRadius: 14, padding: pad, overflow: 'hidden',
+      boxShadow: '0 1px 2px rgba(15,23,42,.04)',
+    }}>
       {children}
-    </div>
+    </section>
   )
 }
 
-function BigStat({ label, valor, color }: { label: string; valor: number; color: string }) {
+function Eyebrow({ children }: { children: React.ReactNode }) {
+  return <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', color: C.muted }}>{children}</div>
+}
+
+function BigStat({ label, valor, color, borde }: { label: string; valor: number; color: string; borde?: boolean }) {
   return (
-    <div style={{ minWidth: 0 }}>
-      <div style={{ fontSize: 30, fontWeight: 900, color, lineHeight: 1.05, fontVariantNumeric: 'tabular-nums' }}>
+    <div style={{ minWidth: 0, paddingLeft: borde ? 14 : 0, borderLeft: borde ? `1px solid ${C.line}` : 'none' }}>
+      <div style={{ fontSize: 30, fontWeight: 800, color, lineHeight: 1.05, letterSpacing: '-0.5px', fontVariantNumeric: 'tabular-nums' }}>
         {valor.toLocaleString('es-CL')}
       </div>
-      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--muted)', marginTop: 3 }}>{label}</div>
+      <div style={{ fontSize: 12.5, fontWeight: 600, color: C.muted, marginTop: 3 }}>{label}</div>
     </div>
   )
 }
 
-function ZonaCard({ nombre, color, activa, total, activos, inactivos, onClick }: {
-  nombre: string; color: string; activa: boolean
-  total: number; activos: number; inactivos: number; onClick: () => void
-}) {
-  const pct = total ? (activos / total) * 100 : 0
+function Num({ v, color, bold }: { v: number; color: string; bold?: boolean }) {
   return (
-    <button onClick={onClick} aria-pressed={activa} style={{
-      textAlign: 'left', padding: '12px 12px 11px', borderRadius: 14, cursor: 'pointer', minHeight: 44,
-      background: activa ? 'rgba(255,255,255,0.07)' : 'var(--surface)',
-      border: `1px solid ${activa ? color : 'var(--border)'}`,
-      boxShadow: activa ? `0 0 0 1px ${color}33` : 'none',
-      transition: 'border-color .15s, background .15s',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-        <span style={{ width: 8, height: 8, borderRadius: 4, background: color, flexShrink: 0 }} />
-        <span style={{ fontSize: 13.5, fontWeight: 800, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nombre}</span>
-      </div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, marginTop: 8 }}>
-        <span style={{ fontSize: 22, fontWeight: 900, color: 'var(--green)', fontVariantNumeric: 'tabular-nums' }}>{activos}</span>
-        <span style={{ fontSize: 11.5, color: 'var(--muted)', fontWeight: 600 }}>activos</span>
-      </div>
-      <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 1 }}>
-        {inactivos} inactivos · {total} total
-      </div>
-      <div style={{ height: 3, borderRadius: 3, background: 'rgba(255,255,255,0.06)', marginTop: 8, overflow: 'hidden' }}>
-        <div style={{ width: `${pct}%`, height: '100%', background: 'var(--green)', opacity: 0.8 }} />
-      </div>
-    </button>
+    <span style={{ textAlign: 'right', fontSize: 14, fontWeight: bold ? 800 : 600, color, fontVariantNumeric: 'tabular-nums' }}>
+      {v.toLocaleString('es-CL')}
+    </span>
+  )
+}
+
+/** Etiqueta chica + valor, para los datos de cada fila en el celular. */
+function Campo({ label, valor, color, sub }: { label: string; valor: string; color?: string; sub?: string }) {
+  return (
+    <div style={{ minWidth: 0 }}>
+      <div style={{ fontSize: 10.5, fontWeight: 700, color: C.faint, textTransform: 'uppercase', letterSpacing: 0.3 }}>{label}</div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: color ?? C.text, marginTop: 2, fontVariantNumeric: 'tabular-nums', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{valor}</div>
+      {sub && <div style={{ fontSize: 11.5, color: C.muted, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub}</div>}
+    </div>
   )
 }
 
@@ -446,34 +517,61 @@ function FilaCliente({ c, primera, mostrarZona, abierta, onToggle }: {
   const zona = infoCartera(c.cartera)
   const etiquetaZona = c.cartera === 'otros' ? (c.vendedorErp ?? 'Sin vendedor') : zona.nombre
   const sub = [c.localidad, c.categoria, mostrarZona || c.cartera === 'otros' ? etiquetaZona : null].filter(Boolean).join(' · ')
+  const ultima = c.ultimaCompra ? fFecha(c.ultimaCompra) : 'Nunca compró'
+  const hace = c.ultimaCompra ? fHace(c.diasSinComprar) : undefined
+  const cada = fCada(c.cicloDias, c.compras)
+  const nCompras = c.compras > 0 ? `${c.compras} ${c.compras === 1 ? 'compra' : 'compras'}` : undefined
+
+  const nombre = (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+      <span title={ESTADO_INFO[c.estado].label} style={{ width: 9, height: 9, borderRadius: 5, flexShrink: 0, background: ESTADO_INFO[c.estado].color }} />
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 14.5, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.nombre}</div>
+        {sub && <div style={{ fontSize: 12, color: C.muted, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sub}</div>}
+      </div>
+    </div>
+  )
+  const flecha = <ChevronDown size={16} color={C.faint} style={{ flexShrink: 0, transform: abierta ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
+
   return (
-    <div style={{ borderTop: primera ? 'none' : '1px solid var(--row-sep)' }}>
-      <button onClick={onToggle} aria-expanded={abierta} style={{
-        width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', minHeight: 60,
-        background: abierta ? 'rgba(255,255,255,0.03)' : 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left',
+    <div style={{ borderTop: primera ? 'none' : `1px solid ${C.line}`, background: abierta ? C.soft : C.card }}>
+      <button onClick={onToggle} aria-expanded={abierta} className={abierta ? undefined : 'ct-row'} style={{
+        width: '100%', display: 'block', padding: '12px 16px', background: abierta ? 'transparent' : undefined, border: 'none', cursor: 'pointer', textAlign: 'left', color: C.text,
       }}>
-        <span title={ESTADO_INFO[c.estado].label} style={{
-          width: 9, height: 9, borderRadius: 5, flexShrink: 0, background: ESTADO_INFO[c.estado].color,
-          boxShadow: c.estado === 'activo' ? '0 0 8px rgba(74,222,128,0.45)' : 'none',
-        }} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--cream)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {c.nombre}
+        {/* Celular: nombre arriba y tres datos alineados debajo */}
+        <div className="ct-mob">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>{nombre}</div>
+            {flecha}
           </div>
-          {sub && (
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {mostrarZona && <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: 3, background: zona.color, marginRight: 6, verticalAlign: 1 }} />}
-              {sub}
-            </div>
-          )}
-        </div>
-        <div style={{ textAlign: 'right', flexShrink: 0 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 700, color: colorRecencia(c.diasSinComprar) }}>{fHace(c.diasSinComprar)}</div>
-          <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
-            {c.compras > 0 ? fPesosCorto(c.monto) : '—'}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px 12px', marginTop: 10, paddingLeft: 19 }}>
+            <Campo label="Última compra" valor={hace ?? ultima} color={colorRecencia(c.diasSinComprar)} sub={hace ? ultima : undefined} />
+            <Campo label="Compra cada" valor={cada} sub={nCompras} />
+            <Campo label="Últimos 12 meses" valor={fPesos(c.monto12m)} sub={fLitros(c.litros12m)} />
+            <Campo label="Histórico" valor={c.compras > 0 ? fPesos(c.monto) : '—'} sub={c.compras > 0 ? fLitros(c.litros) : undefined} />
           </div>
         </div>
-        <ChevronDown size={16} color="var(--muted)" style={{ flexShrink: 0, transform: abierta ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
+        {/* Escritorio: una fila con columnas */}
+        <div className="ct-desk" style={{ gridTemplateColumns: COLS_DESK, gap: 12, alignItems: 'center' }}>
+          {nombre}
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 600 }}>{ultima}</div>
+            {hace && <div style={{ fontSize: 12, fontWeight: 600, color: colorRecencia(c.diasSinComprar), marginTop: 1 }}>{hace}</div>}
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 600, color: c.compras ? C.text : C.faint }}>{cada}</div>
+            {nCompras && <div style={{ fontSize: 12, color: C.muted, marginTop: 1 }}>{nCompras}</div>}
+          </div>
+          <div style={{ textAlign: 'right', minWidth: 0 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{fPesos(c.monto12m)}</div>
+            <div style={{ fontSize: 12, color: C.muted, fontVariantNumeric: 'tabular-nums' }}>{fLitros(c.litros12m)}</div>
+          </div>
+          <div style={{ textAlign: 'right', minWidth: 0 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{fPesos(c.monto)}</div>
+            <div style={{ fontSize: 12, color: C.muted, fontVariantNumeric: 'tabular-nums' }}>{fLitros(c.litros)}</div>
+          </div>
+          {flecha}
+        </div>
       </button>
       {abierta && <FichaCliente c={c} />}
     </div>
@@ -487,7 +585,7 @@ function FichaCliente({ c }: { c: ClienteCartera }) {
   const [detalle, setDetalle] = useState<DetalleCliente | null>(() => cacheDetalle.get(c.nombre) ?? null)
   const [error, setError] = useState<string | null>(null)
   const [intento, setIntento] = useState(0)
-  const [pedido, setPedido] = useState(0)
+  const [sel, setSel] = useState(0)
   const cargando = !detalle && !error
 
   // Carga al abrir (una sola vez por cliente gracias al caché); `intento`
@@ -508,112 +606,118 @@ function FichaCliente({ c }: { c: ClienteCartera }) {
   const reintentar = () => { setError(null); setIntento(n => n + 1) }
 
   const maxLitrosAnio = Math.max(1, ...(detalle?.anios.map(a => a.litros) ?? [1]))
-  const pedidoSel = detalle?.compras[pedido] ?? null
+  const compraSel = detalle?.compras[sel] ?? null
+  const anioActual = new Date().getFullYear().toString()
 
   return (
-    <div style={{ padding: '4px 14px 16px 35px' }}>
-      {c.razonSocial && c.razonSocial !== c.nombre && (
-        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>{c.razonSocial}{c.provincia ? ` · ${c.provincia}` : ''}</div>
+    <div style={{ padding: '0 16px 16px' }}>
+      {/* Los datos clave ya están en la fila; acá va sólo lo que no cabe en ella. */}
+      <p style={{ fontSize: 12.5, color: C.muted, marginBottom: 10, paddingLeft: 19 }}>
+        {[
+          c.razonSocial && c.razonSocial !== c.nombre ? c.razonSocial : null,
+          c.provincia,
+          c.telefono,
+          c.primeraCompra ? `Cliente desde ${fMesAnio(c.primeraCompra)}` : 'Sin compras registradas',
+        ].filter(Boolean).join(' · ')}
+      </p>
+
+      {c.compras > 0 && cargando && (
+        <div style={{ display: 'grid', gap: 8 }}>
+          {[70, 90, 55].map((w, i) => <div key={i} className="ct-sk" style={{ height: 14, width: `${w}%`, borderRadius: 6 }} />)}
+          <style>{`@keyframes ctsh{0%{opacity:.5}50%{opacity:1}100%{opacity:.5}}.ct-sk{background:${C.line};animation:ctsh 1.2s ease-in-out infinite}`}</style>
+        </div>
+      )}
+      {error && (
+        <button onClick={reintentar} style={{
+          marginTop: 14, display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 40, padding: '0 14px',
+          borderRadius: 10, background: C.redSoft, border: `1px solid ${C.red}33`,
+          color: C.red, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+        }}>
+          <RotateCw size={14} /> {error} Reintentar
+        </button>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8 }}>
-        <Dato label="Compra histórica" valor={c.compras > 0 ? fPesos(c.monto) : '—'} sub={c.compras > 0 ? `${fLitros(c.litros)} · neto` : 'Sin compras registradas'} />
-        <Dato label="Últimos 12 meses" valor={c.monto12m > 0 ? fPesos(c.monto12m) : '$0'} sub={fLitros(c.litros12m)} />
-        <Dato label="Última compra" valor={fFecha(c.ultimaCompra)} sub={fHace(c.diasSinComprar)} color={colorRecencia(c.diasSinComprar)} />
-        <Dato label="Frecuencia" valor={fFrecuencia(c.cicloDias, c.compras)} sub={c.compras > 0 ? `${c.compras} ${c.compras === 1 ? 'compra' : 'compras'} · desde ${fMesAnio(c.primeraCompra)}` : ''} />
-      </div>
-
-      {c.compras > 0 && (
-        <>
-          {cargando && !detalle && (
-            <div style={{ display: 'grid', gap: 8, marginTop: 14 }}>
-              {[70, 90, 55].map((w, i) => <div key={i} className="ct-sk" style={{ height: 14, width: `${w}%`, borderRadius: 6 }} />)}
-              <style>{`@keyframes ctsh{0%{opacity:.35}50%{opacity:.8}100%{opacity:.35}}.ct-sk{background:#1A1A1A;animation:ctsh 1.2s ease-in-out infinite}`}</style>
+      {detalle && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12 }}>
+          {/* Qué compró en sus últimas compras */}
+          <Panel titulo="Qué compró">
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, padding: '0 12px 10px' }}>
+              {detalle.compras.map((p, i) => (
+                <button key={p.fecha} onClick={() => setSel(i)} style={{
+                  minHeight: 32, padding: '0 10px', borderRadius: 8, cursor: 'pointer', fontSize: 12.5, fontWeight: 700,
+                  background: sel === i ? C.blue : C.card,
+                  border: `1px solid ${sel === i ? C.blue : C.line}`,
+                  color: sel === i ? '#FFFFFF' : C.text,
+                }}>
+                  {fFecha(p.fecha).replace(/ \d{4}$/, '')}{p.fecha.slice(0, 4) !== anioActual ? ` ${p.fecha.slice(2, 4)}` : ''}
+                </button>
+              ))}
             </div>
-          )}
-          {error && (
-            <button onClick={reintentar} style={{
-              marginTop: 14, display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 40, padding: '0 14px',
-              borderRadius: 10, background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)',
-              color: 'var(--red)', fontSize: 13, fontWeight: 700, cursor: 'pointer',
-            }}>
-              <RotateCw size={14} /> {error} Reintentar
-            </button>
-          )}
-
-          {detalle && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16, marginTop: 16 }}>
-              {/* Qué compró (últimos pedidos) */}
-              <div style={{ minWidth: 0 }}>
-                <MiniLabel>Qué compró</MiniLabel>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 8 }}>
-                  {detalle.compras.map((p, i) => (
-                    <button key={p.fecha} onClick={() => setPedido(i)} style={{
-                      minHeight: 32, padding: '0 10px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700,
-                      background: pedido === i ? 'var(--gold-dim)' : 'rgba(255,255,255,0.04)',
-                      border: `1px solid ${pedido === i ? 'rgba(212,175,55,0.4)' : 'var(--border)'}`,
-                      color: pedido === i ? 'var(--gold)' : 'var(--cream)',
-                    }}>
-                      {fFecha(p.fecha).replace(/ \d{4}$/, '')}{p.fecha.slice(0, 4) !== new Date().getFullYear().toString() ? ` ${p.fecha.slice(2, 4)}` : ''}
-                    </button>
+            {compraSel && (
+              <>
+                <Tabla cols="minmax(0, 1fr) 70px 90px" head={['Producto', 'Litros', 'Neto']}>
+                  {compraSel.items.map((it, i) => (
+                    <FilaTabla key={i} cols="minmax(0, 1fr) 70px 90px">
+                      <span style={{ minWidth: 0 }}>
+                        <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.producto ?? '—'}</span>
+                        {it.envase && <span style={{ display: 'block', fontSize: 11.5, color: C.muted, marginTop: 1 }}>{it.envase}</span>}
+                      </span>
+                      <span style={{ textAlign: 'right', color: it.litros > 0 ? C.text : C.faint }}>{it.litros > 0 ? fLitros(it.litros) : '—'}</span>
+                      <span style={{ textAlign: 'right' }}>{fPesos(it.monto)}</span>
+                    </FilaTabla>
                   ))}
+                </Tabla>
+                <div style={{
+                  display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 70px 90px', gap: 8, padding: '9px 12px',
+                  borderTop: `1px solid ${C.line}`, fontSize: 13, fontWeight: 800, fontVariantNumeric: 'tabular-nums',
+                }}>
+                  <span style={{ minWidth: 0 }}>
+                    Total {fFecha(compraSel.fecha)}
+                    {compraSel.pedidos && <span style={{ fontWeight: 500, color: C.muted }}> · N° {compraSel.pedidos}</span>}
+                  </span>
+                  <span style={{ textAlign: 'right' }}>{fLitros(compraSel.litros)}</span>
+                  <span style={{ textAlign: 'right' }}>{fPesos(compraSel.monto)}</span>
                 </div>
-                {pedidoSel && (
-                  <div style={{ borderRadius: 12, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-subtle)', padding: '8px 12px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 12, color: 'var(--muted)', paddingBottom: 6, borderBottom: '1px solid var(--row-sep)' }}>
-                      <span>{fFecha(pedidoSel.fecha)}{pedidoSel.pedidos ? ` · N° ${pedidoSel.pedidos}` : ''}</span>
-                      <span style={{ fontWeight: 700, color: 'var(--cream)' }}>{fLitros(pedidoSel.litros)} · {fPesos(pedidoSel.monto)}</span>
-                    </div>
-                    {pedidoSel.items.map((it, i) => (
-                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '6px 0', fontSize: 12.5 }}>
-                        <span style={{ color: 'var(--cream)', minWidth: 0 }}>
-                          {it.producto ?? '—'}
-                          {it.envase && <span style={{ color: 'var(--muted)' }}> · {it.envase}</span>}
-                        </span>
-                        <span style={{ color: 'var(--muted)', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
-                          {it.litros > 0 ? fLitros(it.litros) : fPesos(it.monto)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              </>
+            )}
+          </Panel>
 
-              {/* Lo que más compra + por año */}
-              <div style={{ minWidth: 0 }}>
-                <MiniLabel>Lo que más compra</MiniLabel>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
+            <Panel titulo="Lo que más compra">
+              <Tabla cols="minmax(0, 1fr) 80px 54px" head={['Producto', 'Litros', 'Veces']}>
                 {detalle.productos.map(p => (
-                  <div key={p.producto} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, padding: '5px 0', fontSize: 12.5, borderBottom: '1px solid var(--row-sep)' }}>
-                    <span style={{ color: 'var(--cream)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.producto}</span>
-                    <span style={{ color: 'var(--muted)', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
-                      {fLitros(p.litros)} · {p.veces} {p.veces === 1 ? 'vez' : 'veces'}
-                    </span>
-                  </div>
+                  <FilaTabla key={p.producto} cols="minmax(0, 1fr) 80px 54px">
+                    <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.producto}</span>
+                    <span style={{ textAlign: 'right' }}>{fLitros(p.litros)}</span>
+                    <span style={{ textAlign: 'right', color: C.muted }}>{p.veces}</span>
+                  </FilaTabla>
                 ))}
+              </Tabla>
+            </Panel>
 
-                <div style={{ marginTop: 14 }}><MiniLabel>Compras por año</MiniLabel></div>
+            <Panel titulo="Compras por año">
+              <Tabla cols="44px minmax(0, 1fr) 76px 96px" head={['Año', '', 'Litros', 'Neto']}>
                 {detalle.anios.map(a => (
-                  <div key={a.anio} style={{ display: 'grid', gridTemplateColumns: '38px 1fr auto', alignItems: 'center', gap: 8, padding: '4px 0' }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--muted)' }}>{a.anio}</span>
-                    <div style={{ height: 8, borderRadius: 4, background: 'rgba(255,255,255,0.05)', overflow: 'hidden' }}>
-                      <div style={{ width: `${(a.litros / maxLitrosAnio) * 100}%`, height: '100%', borderRadius: 4, background: 'var(--gold)', opacity: 0.85 }} />
-                    </div>
-                    <span style={{ fontSize: 12, color: 'var(--cream)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                      {fLitros(a.litros)} <span style={{ color: 'var(--muted)' }}>· {fPesosCorto(a.monto)}</span>
+                  <FilaTabla key={a.anio} cols="44px minmax(0, 1fr) 76px 96px">
+                    <span style={{ fontWeight: 700 }}>{a.anio}</span>
+                    <span style={{ height: 8, borderRadius: 4, background: C.line, overflow: 'hidden', alignSelf: 'center' }}>
+                      <span style={{ display: 'block', width: `${(a.litros / maxLitrosAnio) * 100}%`, height: '100%', borderRadius: 4, background: C.blue }} />
                     </span>
-                  </div>
+                    <span style={{ textAlign: 'right' }}>{fLitros(a.litros)}</span>
+                    <span style={{ textAlign: 'right' }}>{fPesos(a.monto)}</span>
+                  </FilaTabla>
                 ))}
-              </div>
-            </div>
-          )}
-        </>
+              </Tabla>
+            </Panel>
+          </div>
+        </div>
       )}
 
       {c.id !== null && (
         <Link href={`/ventas/clientes/${c.id}`} style={{
-          display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 40, marginTop: 14, padding: '0 14px',
-          borderRadius: 10, background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)',
-          color: 'var(--cream)', fontSize: 13, fontWeight: 700, textDecoration: 'none',
+          display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 40, marginTop: 12, padding: '0 14px',
+          borderRadius: 10, background: C.card, border: `1px solid ${C.line}`,
+          color: C.blue, fontSize: 13, fontWeight: 700, textDecoration: 'none',
         }}>
           Ficha completa <ExternalLink size={13} />
         </Link>
@@ -622,16 +726,37 @@ function FichaCliente({ c }: { c: ClienteCartera }) {
   )
 }
 
-function MiniLabel({ children }: { children: React.ReactNode }) {
-  return <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 0.8, textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 8 }}>{children}</div>
+function Panel({ titulo, children }: { titulo: string; children: React.ReactNode }) {
+  return (
+    <div style={{ background: C.card, border: `1px solid ${C.line}`, borderRadius: 12, overflow: 'hidden', minWidth: 0 }}>
+      <div style={{ padding: '11px 12px 9px', fontSize: 11.5, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', color: C.muted }}>{titulo}</div>
+      {children}
+    </div>
+  )
 }
 
-function Dato({ label, valor, sub, color }: { label: string; valor: string; sub?: string; color?: string }) {
+function Tabla({ cols, head, children }: { cols: string; head: string[]; children: React.ReactNode }) {
   return (
-    <div style={{ padding: '10px 12px', borderRadius: 12, background: '#1A1A1A', border: '1px solid var(--border-subtle)', minWidth: 0 }}>
-      <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', color: 'var(--muted)' }}>{label}</div>
-      <div style={{ fontSize: 15, fontWeight: 800, color: color ?? 'var(--cream)', marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>{valor}</div>
-      {sub && <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{sub}</div>}
+    <div>
+      <div style={{
+        display: 'grid', gridTemplateColumns: cols, gap: 8, padding: '6px 12px', background: C.soft,
+        borderTop: `1px solid ${C.line}`, borderBottom: `1px solid ${C.line}`,
+        fontSize: 10.5, fontWeight: 700, color: C.faint, textTransform: 'uppercase', letterSpacing: 0.3,
+      }}>
+        {head.map((h, i) => <span key={i} style={{ textAlign: i === 0 ? 'left' : 'right' }}>{h}</span>)}
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function FilaTabla({ cols, children }: { cols: string; children: React.ReactNode }) {
+  return (
+    <div style={{
+      display: 'grid', gridTemplateColumns: cols, gap: 8, alignItems: 'center', padding: '8px 12px',
+      borderTop: `1px solid ${C.line}`, fontSize: 13, color: C.text, fontVariantNumeric: 'tabular-nums',
+    }}>
+      {children}
     </div>
   )
 }
