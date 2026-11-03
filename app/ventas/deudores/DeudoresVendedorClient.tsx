@@ -398,6 +398,9 @@ function FilaCarteraRow({ nombre, deudores, clientes, vencida, seleccionado, onC
         </p>
         <p style={{ fontSize: 11, color: MC.muted, marginTop: 1 }}>
           {deudores} deudor{deudores === 1 ? '' : 'es'}{clientes > 0 ? ` de ${clientes}` : ''}
+          {clientes > 0 && (
+            <strong style={{ color: MC.text, fontWeight: 800 }}> · {Math.round((deudores / clientes) * 100)}%</strong>
+          )}
         </p>
       </div>
       <div style={{ textAlign: 'right', flexShrink: 0 }}>
@@ -1447,6 +1450,9 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor, barriles
                 <p style={{ fontSize: 19, fontWeight: 900, color: TD.red }}>{formatCurrency(f.vencida)}</p>
                 <p style={{ fontSize: 12, color: TD.muted, marginTop: 3 }}>
                   {f.deudores} deudor{f.deudores === 1 ? '' : 'es'}{f.clientes > 0 ? ` de ${f.clientes}` : ''}
+                  {f.clientes > 0 && (
+                    <strong style={{ color: TD.text, fontWeight: 800 }}> · {Math.round((f.deudores / f.clientes) * 100)}%</strong>
+                  )}
                 </p>
               </button>
             )
