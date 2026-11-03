@@ -613,13 +613,6 @@ function DeudorCard({ d, abierto, onToggle }: {
             <p style={{ fontSize: 17, fontWeight: 800, color: colorMora.fg }}>
               {formatCurrency(d.deuda_comercial)}
             </p>
-            {/* La maquila se nombra, pero fuera del número: si no, el vendedor
-                cree que tiene que cobrar plata que no le corresponde. */}
-            {d.maquila_vencida > 0 && (
-              <p style={{ fontSize: 10, color: MC.faint, marginTop: 2 }}>
-                + {formatCurrency(Math.round(d.maquila_vencida))} de maquila
-              </p>
-            )}
           </div>
           <div style={{ textAlign: 'right' }}>
             <p style={{ fontSize: 9, color: MC.muted, fontWeight: 700, letterSpacing: '0.04em', marginBottom: 2 }}>SALDO TOTAL</p>
@@ -791,10 +784,10 @@ function FilaSaldoNoVencido({ d, monto, isAdmin, p, tema }: {
             </div>
           )}
           {error && <p style={{ fontSize: 12, color: '#DC2626' }}>{error}</p>}
-          {detalle && detalle.porVencer.length === 0 && !cargando && (
+          {detalle && detalle.porVencer.filter(doc => !doc.esMaquila).length === 0 && !cargando && (
             <p style={{ fontSize: 12, color: p.muted }}>Sin documentos identificados para este saldo.</p>
           )}
-          {detalle && detalle.porVencer.map(doc => (
+          {detalle && detalle.porVencer.filter(doc => !doc.esMaquila).map(doc => (
             <FilaDocumento key={doc.pedido} d={doc} p={pDoc} porVencer />
           ))}
         </div>
@@ -1605,11 +1598,6 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor, barriles
                       {isAdmin && <td style={{ padding: '12px 14px', color: TD.muted }}>{etiquetaVendedor(deudor.vendedor) || '—'}</td>}
                       <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 700, color: colorMora }}>
                         {formatCurrency(deudor.deuda_comercial)}
-                        {deudor.maquila_vencida > 0 && (
-                          <span style={{ display: 'block', fontSize: 11.5, fontWeight: 500, color: TD.muted }}>
-                            + {formatCurrency(Math.round(deudor.maquila_vencida))} maquila
-                          </span>
-                        )}
                       </td>
                       {/* Días exactos de mora del documento más antiguo impago. */}
                       <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 700, whiteSpace: 'nowrap',

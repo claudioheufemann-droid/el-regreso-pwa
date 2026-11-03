@@ -495,7 +495,7 @@ export default function DeudaClienteSection({ initialDeudores, clientesPorVended
                       {abierto && (
                         <tr key={`${d.id}-detalle`}>
                           <td colSpan={8} style={{ padding: '20px 24px', background: C.goldSoft, borderBottom: `1px solid ${C.line}`, borderLeft: `3px solid ${C.gold}` }}>
-                            <PanelCobranza cliente={d.nombre_fantasia} tema="claro" onDatos={setCobranza} />
+                            <PanelCobranza cliente={d.nombre_fantasia} tema="claro" onDatos={setCobranza} mostrarMaquila />
 
                             <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
                               <button onClick={e => { e.stopPropagation(); abrirWA(d) }}

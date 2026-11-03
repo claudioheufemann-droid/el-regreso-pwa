@@ -350,14 +350,22 @@ function popcount(n: number): number {
  * exhaustiva mientras el tramo tenga pocos documentos (el caso normal: 1 a 4);
  * si son muchos, greedy del más antiguo al más nuevo.
  */
-function subconjuntoQueSuma(docs: DocumentoVencido[], objetivo: number): DocumentoVencido[] | null {
+function subconjuntoQueSuma(
+  docs: DocumentoVencido[],
+  objetivo: number,
+  exigidos: ReadonlySet<string> = new Set(),
+): DocumentoVencido[] | null {
   const tol = Math.max(objetivo * TOLERANCIA_PCT, TOLERANCIA_MIN)
+  // Bits de los documentos de los que el subconjunto tiene que traer al menos
+  // uno (ver `documentosAncla`). 0 ⇒ sin exigencia.
+  const maskExigido = docs.reduce((m, d, i) => (exigidos.has(d.pedido) ? m | (1 << i) : m), 0)
 
   if (docs.length <= MAX_EXHAUSTIVO) {
     let mejor: DocumentoVencido[] | null = null
     let mejorDif = Infinity
     let mejorCant = Infinity
     for (let mask = 1; mask < 1 << docs.length; mask++) {
+      if (maskExigido && !(mask & maskExigido)) continue
       let suma = 0
       for (let i = 0; i < docs.length; i++) if (mask & (1 << i)) suma += docs[i].monto
       const dif = Math.abs(suma - objetivo)
@@ -380,7 +388,53 @@ function subconjuntoQueSuma(docs: DocumentoVencido[], objetivo: number): Documen
     elegidos.push(d)
     suma += d.monto
   }
+  if (exigidos.size > 0 && !elegidos.some(d => exigidos.has(d.pedido))) return null
   return Math.abs(suma - objetivo) <= tol ? elegidos : null
+}
+
+/**
+ * Documentos que pueden ser el "remito más antiguo con saldo" que informa el
+ * ERP (`external_fecha`): los emitidos en la ventana de holgura hasta esa
+ * fecha. Al menos uno de ellos TIENE que seguir impago — es el único dato del
+ * ERP a nivel de documento — así que la combinación que explique el tramo
+ * más antiguo debe incluirlo.
+ *
+ * Sin esta exigencia, en un tramo con muchas facturas casi siempre aparece
+ * alguna combinación de facturas YA PAGADAS que suma lo mismo que el saldo.
+ * Pasó con El Growler (2026-11-03): el ERP debía $1.400.000 del saldo de una
+ * maquila del 20-mar, y la app mostraba en su lugar cinco facturas de
+ * kombucha pagadas y conciliadas (23-mar a 2-jul) que por casualidad sumaban
+ * $1.396.559. Ninguna era del 20-mar: la combinación contradecía al ERP.
+ *
+ * El orden de la lista pone primero al más cercano a `external_fecha` (el
+ * remito sale el mismo día del pedido o 1 a 3 días después).
+ */
+function documentosAncla(candidatos: DocumentoVencido[], fechaDocumentoAntiguo: string | null): DocumentoVencido[] {
+  if (!fechaDocumentoAntiguo) return []
+  const desde = sumarDias(fechaDocumentoAntiguo, -HOLGURA_REMITO_DIAS)
+  return candidatos
+    .filter(d => d.diasMoraERP > 0 && d.fechaEmision >= desde && d.fechaEmision <= fechaDocumentoAntiguo)
+    .sort((a, b) => (a.fechaEmision < b.fechaEmision ? 1 : a.fechaEmision > b.fechaEmision ? -1 : 0))
+}
+
+/**
+ * De los pedidos que el ERP todavía no da por vencidos, los que explican su
+ * saldo no vencido. Primero una combinación exacta; si no hay (abono a
+ * cuenta), del más nuevo al más antiguo — lo último que se despachó es lo
+ * que con más probabilidad sigue sin pagarse.
+ */
+function elegirPorVencer(docs: DocumentoVencido[], saldoNoVencido: number): DocumentoVencido[] {
+  if (saldoNoVencido <= RESTO_MINIMO || docs.length === 0) return []
+  const exacto = subconjuntoQueSuma(docs, saldoNoVencido)
+  if (exacto) return exacto
+  const elegidos: DocumentoVencido[] = []
+  let restante = saldoNoVencido
+  for (const d of [...docs].sort((a, b) => a.diasMoraERP - b.diasMoraERP)) {
+    if (restante <= RESTO_MINIMO) break
+    elegidos.push(restante < d.monto ? { ...d, monto: restante, abonoParcial: true } : d)
+    restante -= d.monto
+  }
+  return elegidos
 }
 
 /**
@@ -507,22 +561,35 @@ export function reconstruirCobranza(
 
   // El calce contra los tramos usa la cuenta del ERP (desde el pedido): es la
   // que el ERP usó para repartir su plata. La mora real se aplica después.
-  const porVencer = candidatos.filter(d => d.diasMoraERP <= 0)
+  const deudaVencida = Number(deudor.deuda_vencida) || 0
+  // Lo que el ERP todavía no da por vencido es `saldo_total − deuda_vencida`.
+  // Antes se listaba como "por vencer" TODO pedido reciente, aunque ya
+  // estuviera pagado: El Growler paga al día y aparecía con dos facturas de
+  // octubre "aún no vencidas" con saldo no vencido $0 en el ERP.
+  const porVencer = elegirPorVencer(
+    candidatos.filter(d => d.diasMoraERP <= 0),
+    Math.max(0, (Number(deudor.saldo_total) || 0) - deudaVencida),
+  )
   const vencidos: DocumentoVencido[] = []
   const restoPorTramo: RestoTramo[] = []
   let conciliado = true
+
+  const anclas = documentosAncla(candidatos, fechaDocumentoAntiguo)
+  const pedidosAncla = new Set(anclas.map(d => d.pedido))
 
   for (const tramo of TRAMOS) {
     const objetivo = saldosTramo[tramo.key]
     if (objetivo <= 0) continue // tramo sin saldo ⇒ esos pedidos ya se pagaron
 
     const delTramo = candidatos.filter(d => tramoDeMora(d.diasMoraERP) === tramo.key)
+    // El tramo donde cae el remito más antiguo del ERP tiene que incluirlo.
+    const exigidos = new Set(delTramo.filter(d => pedidosAncla.has(d.pedido)).map(d => d.pedido))
     let asignado = 0
 
     if (delTramo.length === 0) {
       conciliado = false
     } else {
-      const exacto = subconjuntoQueSuma(delTramo, objetivo)
+      const exacto = subconjuntoQueSuma(delTramo, objetivo, exigidos)
       if (exacto) {
         vencidos.push(...exacto)
         asignado = exacto.reduce((s, d) => s + d.monto, 0)
@@ -530,10 +597,13 @@ export function reconstruirCobranza(
         // Sin combinación exacta: hubo abono parcial o nota de crédito. Se
         // toman del más antiguo al más nuevo hasta cubrir el saldo del tramo y
         // el último queda marcado como parcial, para que el vendedor sepa que
-        // ese documento ya tiene plata abonada.
+        // ese documento ya tiene plata abonada. Si el tramo tiene el remito
+        // más antiguo del ERP, ese va primero: es el que seguro tiene saldo.
         conciliado = false
         let restante = objetivo
-        for (const d of [...delTramo].sort((a, b) => b.diasMoraERP - a.diasMoraERP)) {
+        const ancla = anclas.find(d => exigidos.has(d.pedido))
+        const orden = [...delTramo].sort((a, b) => b.diasMoraERP - a.diasMoraERP)
+        for (const d of ancla ? [ancla, ...orden.filter(o => o !== ancla)] : orden) {
           if (restante <= 0) break
           const doc = restante < d.monto ? { ...d, monto: restante, abonoParcial: true } : d
           vencidos.push(doc)
@@ -563,8 +633,7 @@ export function reconstruirCobranza(
   // Sin este ajuste la pantalla haría cobrar plata de más. Se recorta desde el
   // documento más nuevo: la mora más antigua es la que el ERP confirma con
   // `external_fecha` y es la que más urge cobrar.
-  const deudaVencida = Number(deudor.deuda_vencida) || 0
-  let exceso = vencidos.reduce((s, d) => s + d.monto, 0) - deudaVencida
+  let exceso =vencidos.reduce((s, d) => s + d.monto, 0) - deudaVencida
   for (let i = vencidos.length - 1; i >= 0 && exceso > 1; i--) {
     const quita = Math.min(exceso, vencidos[i].monto)
     vencidos[i] = { ...vencidos[i], monto: vencidos[i].monto - quita, abonoParcial: true }

@@ -285,11 +285,17 @@ export function FilaDocumento({ d, p, porVencer = false }: {
 }
 
 // ── Panel ────────────────────────────────────────────────────────────────────
-export default function PanelCobranza({ cliente, tema = 'claro', onDatos }: {
+export default function PanelCobranza({ cliente, tema = 'claro', onDatos, mostrarMaquila = false }: {
   cliente: string
   tema?: 'claro' | 'oscuro'
   /** Se llama cuando llegan los datos, para que el padre arme el mensaje de WhatsApp. */
   onDatos?: (d: DatosCobranza) => void
+  /**
+   * La maquila (co-packing) no es del área comercial: en Ventas no se muestra
+   * en ninguna parte (pedido de Claudio, 2026-11-03). Administración, que sí
+   * la cobra, la ve en su propio bloque.
+   */
+  mostrarMaquila?: boolean
 }) {
   const p = tema === 'oscuro' ? OSCURO : CLARO
   const [datos, setDatos] = useState<DatosCobranza | null>(null)
@@ -356,15 +362,17 @@ export default function PanelCobranza({ cliente, tema = 'claro', onDatos }: {
   }
 
   const { detalle } = datos
-  const c = colorMora(detalle.diasMoraMaxima, p)
-  // La maquila va en su propio bloque: es plata del mismo cliente pero de otra
-  // línea de negocio (co-packing), y mezclarla infla lo que el vendedor cree
-  // que tiene que cobrar.
+  // La maquila va aparte (sólo en Administración): es plata del mismo cliente
+  // pero de otra línea de negocio (co-packing), y mezclarla infla lo que el
+  // vendedor cree que tiene que cobrar.
   const comerciales = detalle.vencidos.filter(d => !d.esMaquila)
-  const maquila = detalle.vencidos.filter(d => d.esMaquila)
-  // `vencidos` viene del más atrasado al más nuevo: el primero es el que fija
-  // los días de arriba.
-  const masAntiguo = detalle.vencidos[0] ?? null
+  const maquila = mostrarMaquila ? detalle.vencidos.filter(d => d.esMaquila) : []
+  const porVencer = mostrarMaquila ? detalle.porVencer : detalle.porVencer.filter(d => !d.esMaquila)
+  // `vencidos` viene del más atrasado al más nuevo: el primero comercial es el
+  // que fija los días de arriba (una maquila más vieja no cuenta).
+  const masAntiguo = comerciales[0] ?? null
+  const diasMora = masAntiguo ? masAntiguo.diasMora : detalle.diasMoraMaxima
+  const c = colorMora(diasMora, p)
 
   return (
     <div style={{ marginBottom: 12 }}>
@@ -372,12 +380,12 @@ export default function PanelCobranza({ cliente, tema = 'claro', onDatos }: {
       {datos.deudaComercial > 0 && (
         <div style={{ background: c.bg, border: `1px solid ${c.fg}30`, borderRadius: 12, padding: '12px 14px', marginBottom: 12 }}>
           <p style={{ fontSize: 9.5, color: p.muted, fontWeight: 700, letterSpacing: '0.05em' }}>
-            {detalle.diasMoraMaxima === 0 ? 'DEUDA VENCIDA' : 'DEUDA VENCIDA HACE'}
+            {diasMora === 0 ? 'DEUDA VENCIDA' : 'DEUDA VENCIDA HACE'}
           </p>
           <p style={{ fontSize: 26, fontWeight: 900, color: c.fg, letterSpacing: '-0.5px', lineHeight: 1.1, marginTop: 2 }}>
-            {detalle.diasMoraMaxima === 0
+            {diasMora === 0
               ? 'Vence hoy'
-              : <>{detalle.diasMoraMaxima} <span style={{ fontSize: 15, fontWeight: 700 }}>{detalle.diasMoraMaxima === 1 ? 'día' : 'días'}</span></>}
+              : <>{diasMora} <span style={{ fontSize: 15, fontWeight: 700 }}>{diasMora === 1 ? 'día' : 'días'}</span></>}
           </p>
           {masAntiguo ? (
             <p style={{ fontSize: 11.5, color: p.muted, marginTop: 4, lineHeight: 1.45 }}>
@@ -479,14 +487,14 @@ export default function PanelCobranza({ cliente, tema = 'claro', onDatos }: {
       {/* Saldo no vencido: plata que el cliente debe pero cuyo plazo todavía no
           se cumple. No hay que cobrarla, pero el mismo detalle por documento
           (producto, N° de pedido, N° de factura) sirve para tenerla ubicada. */}
-      {detalle.porVencer.length > 0 && (
+      {porVencer.length > 0 && (
         <div>
           <button onClick={() => setVerPorVencer(v => !v)}
             style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%',
               background: 'transparent', border: 'none', cursor: 'pointer', font: 'inherit', padding: '4px 0', marginBottom: verPorVencer ? 7 : 0 }}>
             <span style={{ fontSize: 11, color: p.faint, lineHeight: 1.45, textAlign: 'left' }}>
-              Además tiene {detalle.porVencer.length} documento{detalle.porVencer.length === 1 ? '' : 's'} aún no vencido
-              {detalle.porVencer.length === 1 ? '' : 's'} por {fPlata(detalle.porVencer.reduce((s, d) => s + d.monto, 0))}.
+              Además tiene {porVencer.length} documento{porVencer.length === 1 ? '' : 's'} aún no vencido
+              {porVencer.length === 1 ? '' : 's'} por {fPlata(porVencer.reduce((s, d) => s + d.monto, 0))}.
             </span>
             {verPorVencer
               ? <ChevronDown size={13} color={p.faint} style={{ flexShrink: 0, marginLeft: 8 }} />
@@ -494,7 +502,7 @@ export default function PanelCobranza({ cliente, tema = 'claro', onDatos }: {
           </button>
           {verPorVencer && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {detalle.porVencer.map(d => (
+              {porVencer.map(d => (
                 <FilaDocumento key={d.pedido} d={d} p={p} porVencer />
               ))}
             </div>
