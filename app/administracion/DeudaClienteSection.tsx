@@ -385,7 +385,12 @@ export default function DeudaClienteSection({ initialDeudores, clientesPorVended
               }}>
               <p style={{ fontSize: 11, fontWeight: 700, color: activo ? C.gold : C.muted, letterSpacing: '0.5px', textTransform: 'uppercase', marginBottom: 6 }}>{f.nombre}</p>
               <p style={{ fontSize: 17, fontWeight: 800, color: C.red }}>{formatCurrency(f.vencida)}</p>
-              <p style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>{f.deudores} deudor{f.deudores === 1 ? '' : 'es'}{f.clientes > 0 ? ` de ${f.clientes}` : ''}</p>
+              <p style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>
+                {f.deudores} deudor{f.deudores === 1 ? '' : 'es'}{f.clientes > 0 ? ` de ${f.clientes}` : ''}
+                {f.clientes > 0 && (
+                  <strong style={{ color: C.text, fontWeight: 800 }}> · {Math.round((f.deudores / f.clientes) * 100)}%</strong>
+                )}
+              </p>
             </button>
           )
         })}
