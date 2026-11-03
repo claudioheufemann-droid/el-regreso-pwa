@@ -38,7 +38,7 @@ export default async function HistorialPage() {
       ? supabase.from('users').select('id, nombre').order('nombre')
       : Promise.resolve({ data: [] }),
     clienteNombres.length
-      ? supabase.from('deudores').select('nombre_fantasia, saldo_total, deuda_vencida, ultimo_pago, fecha_ultima_compra, limite_cta_cte').in('nombre_fantasia', clienteNombres)
+      ? supabase.from('deudores_comercial').select('nombre_fantasia, saldo_total, deuda_vencida, ultimo_pago, fecha_ultima_compra, limite_cta_cte').in('nombre_fantasia', clienteNombres)
       : Promise.resolve({ data: [] }),
     // Historial de ventas por cliente desde tabla ventas (Excel)
     clienteNombres.length

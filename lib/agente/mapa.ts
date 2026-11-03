@@ -96,6 +96,7 @@ export const AREAS: AreaMapa[] = [
     herramientas: ['deuda_clientes', 'comportamiento_pago_cliente', 'cobros_resumen'],
     tablas: [
       'deudores (~400, FOTO ACTUAL, se reemplaza cada hora desde el ERP): nombre_fantasia, vendedor, saldo_total, deuda_vencida, deuda_menor_14_dias, deuda_entre_15_29_dias, deuda_entre_30_44_dias, deuda_entre_45_59_dias, deuda_entre_60_89_dias, deuda_mas_90_dias, barriles_adeudados, ultimo_pago, fecha_ultima_compra, dias_pago, limite_cta_cte',
+      'deudores_comercial (vista): mismas columnas que deudores pero SIN la maquila (co-packing a otras cervecerías, no es del área comercial) + maquila_vencida. Para preguntas de cobranza comercial, vendedores o cartera usar ESTA, no deudores.',
       'deudores_historial (foto diaria): snapshot_date + mismas columnas de deuda → evolución en el tiempo',
       'cobros_erp (~19 mil): pagos recibidos · fecha, cliente (= nombre_fantasia), monto, metodo, factura, guia, fecha_guia, dias_pago (días reales que tardó)',
     ],

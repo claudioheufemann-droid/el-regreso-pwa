@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import * as XLSX from 'xlsx'
+import { actualizarMaquilaDeudores } from '@/lib/deudaComercial'
 
 function getAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -224,6 +225,15 @@ export async function POST(req: Request) {
     const actualizados = nombresFantasia.filter(n => nombresExistentes.has(n)).length
 
     await snapshotDeudores(supabase, recordsToInsert as Record<string, unknown>[])
+
+    // Cuánto de la deuda nueva es maquila, para que la vista deudores_comercial
+    // la deje fuera en todas las pantallas comerciales. Si falla, la carga
+    // igual vale: la vista queda con el cálculo anterior.
+    try {
+      await actualizarMaquilaDeudores(supabase)
+    } catch (e) {
+      console.error('[deudores/upload] maquila:', e)
+    }
 
     await logSync(supabase, {
       origen: esCron ? 'automatico' : 'manual', ok: true,

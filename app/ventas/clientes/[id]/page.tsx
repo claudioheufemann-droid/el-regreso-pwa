@@ -62,7 +62,7 @@ export default async function ClienteDetallePage({ params }: { params: Promise<{
     // Service-role a propósito — ver lib/supabase/admin.ts. El chequeo de
     // cartera ya ocurrió arriba (notFound() si no es tu cliente).
     createAdminClient()
-      .from('deudores')
+      .from('deudores_comercial')
       .select('deuda_vencida, saldo_total, barriles_adeudados, ultimo_pago, deuda_menor_14_dias, deuda_entre_15_29_dias, deuda_entre_30_44_dias, deuda_entre_45_59_dias, deuda_entre_60_89_dias, deuda_mas_90_dias')
       .eq('nombre_fantasia', cliente.nombre_fantasia)
       .maybeSingle(),

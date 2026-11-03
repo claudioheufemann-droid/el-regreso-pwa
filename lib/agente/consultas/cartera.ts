@@ -35,7 +35,7 @@ export const deudaClientes: Consulta = {
     const cliente = texto(args.cliente) && terminoSeguro(texto(args.cliente)!)
     const vendedor = texto(args.vendedor) && terminoSeguro(texto(args.vendedor)!)
     const soloVencida = args.solo_vencida !== 'no'
-    let q = ctx.admin.from('deudores').select(
+    let q = ctx.admin.from('deudores_comercial').select(
       'nombre_fantasia, vendedor, saldo_total, deuda_vencida, deuda_menor_14_dias, deuda_entre_15_29_dias, ' +
       'deuda_entre_30_44_dias, deuda_entre_45_59_dias, deuda_entre_60_89_dias, deuda_mas_90_dias, ultimo_pago, limite_cta_cte, updated_at'
     )

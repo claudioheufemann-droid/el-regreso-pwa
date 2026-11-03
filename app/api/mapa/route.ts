@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
       .from('clientes')
       .select('nombre_fantasia, lat, lng, categoria, localidad_entrega, localidad, telefono, email, contacto'),
     supabase
-      .from('deudores')
+      .from('deudores_comercial')
       .select('nombre_fantasia, saldo_total, deuda_vencida, vendedor'),
   ])
 

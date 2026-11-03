@@ -16,7 +16,7 @@
  *   3. Sólo cuentan las carteras de VENDEDORES_CARTERA_COBRANZA.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { esLineaMaquila, reconstruirCobranza, sumarDias, type DeudorEntrada, type FilaVenta } from '@/lib/cobranza'
+import { esLineaMaquila, reconstruirCobranza, sumarDias, tramoDeMora, type DeudorEntrada, type FilaVenta, type TramoKey } from '@/lib/cobranza'
 import { VENDEDORES_CARTERA_COBRANZA, grupoCarteraDe, vendedorCanonico } from '@/lib/types'
 
 /**
@@ -187,6 +187,70 @@ export async function calcularMaquila(
   }
 
   return { maquilaPorCliente, soloMaquila, vencimientoPorCliente }
+}
+
+/**
+ * Recalcula `deudores_maquila`, de donde la vista `deudores_comercial` saca la
+ * plata a descontar (ver supabase/migrations/deudores_comercial_sin_maquila.sql).
+ * La llama /api/deudores/upload después de cada carga del ERP: así todas las
+ * pantallas comerciales —no sólo /ventas/deudores— dejan la maquila fuera
+ * leyendo la vista en vez de `deudores`. Devuelve cuántos clientes quedaron.
+ */
+export async function actualizarMaquilaDeudores(supabase: SupabaseClient): Promise<number> {
+  const inicio = new Date().toISOString()
+  const { data: filasMaquila, error: errMaquila } = await supabase
+    .from('ventas')
+    .select('nombre_fantasia')
+    .or('producto.ilike.%maquila%,producto.ilike.%latas finales%')
+  if (errMaquila) throw new Error(`maquila: ${errMaquila.message}`)
+  const nombres = [...new Set((filasMaquila ?? []).map(f => f.nombre_fantasia as string))]
+
+  const filas: Record<string, unknown>[] = []
+  if (nombres.length > 0) {
+    const [{ data: deudores, error: errDeudores }, { data: productos, error: errProductos }] = await Promise.all([
+      supabase.from('deudores').select('*').in('nombre_fantasia', nombres),
+      supabase.from('ventas').select('nombre_fantasia, producto').in('nombre_fantasia', nombres),
+    ])
+    if (errDeudores) throw new Error(`deudores: ${errDeudores.message}`)
+    if (errProductos) throw new Error(`ventas: ${errProductos.message}`)
+
+    const productosDe = new Map<string, string[]>()
+    for (const v of (productos ?? []) as { nombre_fantasia: string; producto: string }[]) {
+      productosDe.set(v.nombre_fantasia, [...(productosDe.get(v.nombre_fantasia) ?? []), v.producto])
+    }
+
+    const filasERP = (deudores ?? []) as DeudorRow[]
+    const ventasCobranza = await ventasParaCobranza(supabase, filasERP)
+    for (const d of filasERP) {
+      const prods = productosDe.get(d.nombre_fantasia) ?? []
+      const r = reconstruirCobranza(d as unknown as DeudorEntrada, ventasCobranza.get(d.nombre_fantasia) ?? [])
+      // Por tramo con la cuenta del ERP (desde el pedido): es la que usó para
+      // repartir su deuda en `deuda_menor_14_dias`…`deuda_mas_90_dias`.
+      const porTramo: Record<TramoKey, number> = { b14: 0, b29: 0, b44: 0, b59: 0, b89: 0, b90: 0 }
+      for (const doc of r.vencidos.filter(v => v.esMaquila)) {
+        const t = tramoDeMora(doc.diasMoraERP)
+        if (t) porTramo[t] += doc.monto
+      }
+      const porVencer = r.porVencer.filter(v => v.esMaquila).reduce((s, v) => s + v.monto, 0)
+      filas.push({
+        nombre_fantasia: d.nombre_fantasia,
+        solo_maquila: prods.length > 0 && prods.every(esLineaMaquila),
+        vencida: Math.round(r.maquilaVencida),
+        por_vencer: Math.round(porVencer),
+        ...Object.fromEntries(Object.entries(porTramo).map(([k, v]) => [k, Math.round(v)])),
+        actualizado_at: inicio,
+      })
+    }
+  }
+
+  if (filas.length > 0) {
+    const { error } = await supabase.from('deudores_maquila').upsert(filas, { onConflict: 'nombre_fantasia' })
+    if (error) throw new Error(`deudores_maquila: ${error.message}`)
+  }
+  // Lo que no se tocó en esta pasada es de un cliente que ya no debe maquila.
+  const { error: errBorrar } = await supabase.from('deudores_maquila').delete().lt('actualizado_at', inicio)
+  if (errBorrar) throw new Error(`deudores_maquila: ${errBorrar.message}`)
+  return filas.length
 }
 
 export interface ClienteDeudaComercial {
