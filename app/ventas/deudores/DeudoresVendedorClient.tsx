@@ -75,6 +75,8 @@ interface Props {
   /** KPI "Barriles": sale del informe Barriles en Cliente, no de sumar las
    *  filas de deudores (ver lib/barrilesFuera.ts). */
   barrilesFuera: BarrilesFuera
+  /** Teléfono por vendedor canónico (sólo admin) para el reporte por región. */
+  telefonosVendedor?: Record<string, string>
 }
 
 /**
@@ -442,6 +444,104 @@ function ResumenCarteras({ filas, total, activo, onSelect }: {
   )
 }
 
+// ── Reporte de cobranza por región (admin → vendedor) ────────────────────────
+// Un mensaje de WhatsApp por región con los clientes que tienen deuda vencida,
+// cuánto deben y hace cuántos días, agrupados por antigüedad para que el
+// vendedor parta por lo más urgente (pedido de Claudio, 2026-11-03). Retail
+// queda fuera: es la cartera de Claudio, no hay a quién mandársela.
+const CARTERAS_REPORTE = CARTERAS.filter(v => v !== 'Claudio Heufemann')
+
+const GRUPOS_REPORTE = [
+  { titulo: '🔴 *Más de 30 días*', desde: 30 },
+  { titulo: '🟠 *15 a 29 días*',   desde: 15 },
+  { titulo: '🟡 *Hasta 14 días*',  desde: 0 },
+]
+
+function mensajeReporteVendedor(vendedor: string, lista: Deudor[]): string {
+  const vencidos = lista
+    .filter(d => d.deuda_comercial > 0)
+    .map(d => ({ d, dias: diasMoraDe(d) }))
+  const totalVencido = vencidos.reduce((s, f) => s + f.d.deuda_comercial, 0)
+  const porVencer = lista.reduce((s, d) => s + saldoNoVencidoDe(d), 0)
+  const hoy = new Date().toLocaleDateString('es-CL', { day: 'numeric', month: 'long', timeZone: 'America/Santiago' })
+  const nombre = vendedor.split(' ')[0]
+
+  const bloques: string[] = []
+  GRUPOS_REPORTE.forEach((g, i) => {
+    const hasta = i === 0 ? Infinity : GRUPOS_REPORTE[i - 1].desde
+    const filas = vencidos
+      .filter(f => f.dias >= g.desde && f.dias < hasta)
+      .sort((a, b) => b.d.deuda_comercial - a.d.deuda_comercial)
+    if (!filas.length) return
+    const monto = filas.reduce((s, f) => s + f.d.deuda_comercial, 0)
+    bloques.push(
+      `${g.titulo} — ${formatCurrency(monto)}\n` +
+      filas.map(({ d, dias }) => {
+        const barriles = d.barriles_adeudados > 0 ? ` · ${d.barriles_adeudados} barril${d.barriles_adeudados === 1 ? '' : 'es'}` : ''
+        return `• ${d.nombre_fantasia}: ${formatCurrency(d.deuda_comercial)} (${etiquetaDias(dias)})${barriles}`
+      }).join('\n'),
+    )
+  })
+
+  return [
+    `Hola ${nombre}, ¿cómo estás? Te paso la cobranza pendiente de *${etiquetaVendedor(vendedor)}* al ${hoy}.`,
+    `*Deuda vencida: ${formatCurrency(totalVencido)}* en ${vencidos.length} cliente${vencidos.length === 1 ? '' : 's'}`,
+    ...bloques,
+    porVencer > 0 ? `Además hay ${formatCurrency(porVencer)} por vencer (todavía dentro de plazo).` : '',
+    'El detalle por factura lo ves en la app, en Deudores. ¿Me ayudas a gestionar estos cobros esta semana y me cuentas cómo vas? ¡Gracias!',
+  ].filter(Boolean).join('\n\n')
+}
+
+function ReporteRegiones({ universo, telefonos, onAbrir }: {
+  universo: Deudor[]
+  telefonos: Record<string, string>
+  onAbrir: (r: { target: WATarget; mensaje: string }) => void
+}) {
+  const regiones = useMemo(() => CARTERAS_REPORTE.map(v => {
+    const lista = universo.filter(d => vendedorCanonico(d.vendedor) === v)
+    const vencidos = lista.filter(d => d.deuda_comercial > 0)
+    return { v, lista, n: vencidos.length, monto: vencidos.reduce((s, d) => s + d.deuda_comercial, 0) }
+  }).sort((a, b) => b.monto - a.monto), [universo])
+
+  return (
+    <div style={{ background: MC.card, borderRadius: 16, border: `1px solid ${MC.border}`, padding: 14, marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+        <MessageCircle size={15} color={MC.whatsapp} />
+        <p style={{ fontSize: 11, fontWeight: 800, color: MC.muted, letterSpacing: '0.06em' }}>ENVIAR COBRANZA AL VENDEDOR</p>
+      </div>
+      <p style={{ fontSize: 12, color: MC.faint, marginBottom: 12 }}>
+        Arma un WhatsApp con los clientes con deuda vencida de la región, cuánto deben y hace cuántos días.
+      </p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 8 }}>
+        {regiones.map(r => (
+          <button key={r.v} disabled={r.n === 0}
+            onClick={() => onAbrir({
+              target: {
+                nombre: etiquetaVendedor(r.v),
+                telefono: telefonos[r.v] ?? null,
+                subtitulo: `${r.n} cliente${r.n === 1 ? '' : 's'} con deuda vencida`,
+              },
+              mensaje: mensajeReporteVendedor(r.v, r.lista),
+            })}
+            style={{ display: 'flex', alignItems: 'center', gap: 9, minHeight: 52, padding: '8px 12px', borderRadius: 12,
+              textAlign: 'left', font: 'inherit', cursor: r.n === 0 ? 'default' : 'pointer', opacity: r.n === 0 ? 0.5 : 1,
+              background: MC.greenSoft, border: '1px solid rgba(5,150,105,0.25)' }}>
+            <MessageCircle size={17} color={MC.whatsapp} style={{ flexShrink: 0 }} />
+            <div style={{ minWidth: 0 }}>
+              <p style={{ fontSize: 13, fontWeight: 800, color: MC.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {nombreCorto(r.v)}
+              </p>
+              <p style={{ fontSize: 11.5, color: MC.muted, whiteSpace: 'nowrap' }}>
+                {r.n === 0 ? 'Sin deuda vencida' : `${r.n} · ${formatCurrency(r.monto)}`}
+              </p>
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ── Tarjeta compacta (móvil) ───────────────────────────────────────────────────
 function DeudorCard({ d, abierto, onToggle }: {
   d: Deudor; abierto: boolean; onToggle: () => void
@@ -767,12 +867,13 @@ function SaldoNoVencidoModal({ deudores, isAdmin, tema, onClose }: {
   )
 }
 
-export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clientesPorVendedor, totalClientesPropios, maquilaPorCliente, barrilesFuera }: Props) {
+export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clientesPorVendedor, totalClientesPropios, maquilaPorCliente, barrilesFuera, telefonosVendedor = {} }: Props) {
   const router = useRouter()
   const isDesktop = useIsDesktop()
   const { user } = useUser()
   const [showSettings, setShowSettings] = useState(false)
   const [showSaldoNoVencido, setShowSaldoNoVencido] = useState(false)
+  const [reporte, setReporte] = useState<{ target: WATarget; mensaje: string } | null>(null)
 
   // 'todos' = las 4 carteras sumadas; o el nombre canónico de un vendedor.
   const [cartera, setCartera] = useState<string>('todos')
@@ -866,7 +967,7 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clien
   }
 
   if (isDesktop) {
-    return <DeudoresTablaDesktop deudores={deudores} isAdmin={isAdmin} clientesPorVendedor={clientesPorVendedor} barrilesFuera={barrilesFuera} />
+    return <DeudoresTablaDesktop deudores={deudores} isAdmin={isAdmin} clientesPorVendedor={clientesPorVendedor} barrilesFuera={barrilesFuera} telefonosVendedor={telefonosVendedor} />
   }
 
   const subtitulo = !isAdmin
@@ -974,6 +1075,7 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clien
 
         {/* Desglose + filtro por vendedor (sólo admin) */}
         {isAdmin && <ResumenCarteras filas={filas} total={total} activo={cartera} onSelect={v => setCartera(c => (c === v ? 'todos' : v))} />}
+        {isAdmin && <ReporteRegiones universo={universo} telefonos={telefonosVendedor} onAbrir={setReporte} />}
 
         {/* Chips de tramo de mora (mismos 6 tramos del ERP) */}
         <div style={{ marginBottom: 12 }}>
@@ -1062,6 +1164,7 @@ export default function DeudoresVendedorClient({ initialDeudores, isAdmin, clien
       {showSaldoNoVencido && (
         <SaldoNoVencidoModal deudores={base} isAdmin={isAdmin} tema="claro" onClose={() => setShowSaldoNoVencido(false)} />
       )}
+      {reporte && <WAModal target={reporte.target} mensaje={reporte.mensaje} onClose={() => setReporte(null)} />}
     </div>
   )
 }
@@ -1132,9 +1235,11 @@ const TD = {
   purple: '#9333EA', purpleSoft: '#FAF5FF', hover: '#F8FAFC', head: '#F8FAFC',
 }
 
-function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor, barrilesFuera }: {
+function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor, barrilesFuera, telefonosVendedor }: {
   deudores: Deudor[]; isAdmin: boolean; clientesPorVendedor: Record<string, number>; barrilesFuera: BarrilesFuera
+  telefonosVendedor: Record<string, string>
 }) {
+  const [reporte, setReporte] = useState<{ target: WATarget; mensaje: string } | null>(null)
   const [cartera, setCartera] = useState<string>('todos')
   const [filterDeudaVencida, setFilterDeudaVencida] = useState<'todos' | 'vencida' | 'sin-vencida'>('todos')
   const [filterTramo, setFilterTramo] = useState<Tramo | 'todos'>('todos')
@@ -1355,6 +1460,7 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor, barriles
           })}
         </div>
       )}
+      {isAdmin && <ReporteRegiones universo={universo} telefonos={telefonosVendedor} onAbrir={setReporte} />}
 
       <div className="grid-stack-mobile" style={{
         background: TD.card, border: `1px solid ${TD.border}`,
@@ -1643,6 +1749,7 @@ function DeudoresTablaDesktop({ deudores, isAdmin, clientesPorVendedor, barriles
       </p>
 
       {waTarget && <WAModal target={waTarget} onClose={() => setWaTarget(null)} />}
+      {reporte && <WAModal target={reporte.target} mensaje={reporte.mensaje} onClose={() => setReporte(null)} />}
       {showSaldoNoVencido && (
         <SaldoNoVencidoModal deudores={filteredDeudores} isAdmin={isAdmin} tema="claro" onClose={() => setShowSaldoNoVencido(false)} />
       )}

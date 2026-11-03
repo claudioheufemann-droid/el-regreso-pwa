@@ -1,7 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getServerUser } from '@/lib/auth'
 import { redirect } from 'next/navigation'
-import { vendedorCanonico } from '@/lib/types'
+import { vendedorCanonico, VENDEDORES_CARTERA_COBRANZA } from '@/lib/types'
 import { calcularMaquila, conVencimientoReal, puedeVerDeudaGlobal } from '@/lib/deudaComercial'
 import { barrilesFueraPorCartera } from '@/lib/barrilesFuera'
 import DeudoresVendedorClient from './DeudoresVendedorClient'
@@ -31,11 +31,24 @@ export default async function DeudoresVentasPage() {
   // la columna cruda y se agrupa por nombre canónico porque clientes.vendedor
   // usa nombres históricos/alias ("Los Lagos", el mail de Nicol, "Marion"…) —
   // agrupar acá evita que la misma cartera se cuente partida en dos.
-  const [{ data: deudores }, { data: clientesRows }, barrilesFuera] = await Promise.all([
+  const [{ data: deudores }, { data: clientesRows }, barrilesFuera, { data: usuariosConTelefono }] = await Promise.all([
     query,
     supabase.from('clientes').select('vendedor'),
     barrilesFueraPorCartera(supabase),
+    // Teléfono de cada vendedor para el reporte de cobranza por región (sólo
+    // lo usa quien ve todas las carteras).
+    esAdmin
+      ? supabase.from('users').select('telefono, vendedores_erp').not('telefono', 'is', null)
+      : Promise.resolve({ data: [] as { telefono: string | null; vendedores_erp: string[] | null }[] }),
   ])
+
+  const telefonosVendedor: Record<string, string> = {}
+  for (const u of usuariosConTelefono ?? []) {
+    for (const v of u.vendedores_erp ?? []) {
+      const canonico = vendedorCanonico(v)
+      if (u.telefono && (VENDEDORES_CARTERA_COBRANZA as readonly string[]).includes(canonico)) telefonosVendedor[canonico] = u.telefono
+    }
+  }
 
   // Maquila (co-packing a terceros): el ERP la factura al mismo cliente, así
   // que entra en `deuda_vencida`, pero no es cobranza del área comercial y hay
@@ -73,6 +86,7 @@ export default async function DeudoresVentasPage() {
       clientesPorVendedor={clientesPorVendedor}
       totalClientesPropios={clientesPorVendedor[miVendedorCanonico] ?? 0}
       maquilaPorCliente={maquilaPorCliente}
+      telefonosVendedor={telefonosVendedor}
       barrilesFuera={esAdmin ? barrilesFuera : {
         total: barrilesFuera.porCartera[miVendedorCanonico] ?? 0,
         porCartera: { [miVendedorCanonico]: barrilesFuera.porCartera[miVendedorCanonico] ?? 0 },

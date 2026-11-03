@@ -146,8 +146,11 @@ const ALERTA_LABEL: Record<AlertTipo, { label: string; color: string }> = {
 }
 
 // ── Modal ─────────────────────────────────────────────────────────────────────
-export default function WAModal({ target, onClose }: { target: WATarget; onClose: () => void }) {
-  const [msg, setMsg] = useState(() => generarMensajeWA(target))
+/** `mensaje`: texto ya armado por quien abre el modal (ej. el reporte de
+ *  cobranza a un vendedor); si no viene, se genera desde `target`. */
+export default function WAModal({ target, mensaje, onClose }: { target: WATarget; mensaje?: string; onClose: () => void }) {
+  const mensajeOriginal = () => mensaje ?? generarMensajeWA(target)
+  const [msg, setMsg] = useState(mensajeOriginal)
 
   const waHref = target.telefono
     ? `https://wa.me/${target.telefono.replace(/\D/g,'')}?text=${encodeURIComponent(msg)}`
@@ -211,7 +214,7 @@ export default function WAModal({ target, onClose }: { target: WATarget; onClose
               resize:'vertical', outline:'none', fontFamily:'inherit', boxSizing:'border-box' }}/>
         </div>
 
-        <button onClick={()=>setMsg(generarMensajeWA(target))}
+        <button onClick={()=>setMsg(mensajeOriginal())}
           style={{ background:'none', border:'none', cursor:'pointer', color:'var(--muted)', fontSize:11,
             textDecoration:'underline', textAlign:'left', padding:0 }}>
           Restablecer mensaje original
