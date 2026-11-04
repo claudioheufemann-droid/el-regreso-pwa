@@ -6,7 +6,14 @@ import { getCartera, miCarteraDe } from './carteraData'
 export const dynamic = 'force-dynamic'
 
 export default async function ClientesPage() {
-  const [appUser, clientes] = await Promise.all([getServerUser(), getCartera()])
+  // Si la carga falla se avisa en pantalla con "Reintentar" en vez de
+  // mostrar una cartera vacía o con todos inactivos.
+  const [appUser, carga] = await Promise.all([
+    getServerUser(),
+    getCartera().then(lista => ({ lista, error: false }), () => ({ lista: [], error: true })),
+  ])
+  const clientes = carga.lista
+  const errorCarga = carga.error
 
   // Admin ve toda la empresa. Un vendedor ve SÓLO los clientes de su región
   // (pedido de Claudio, 30-oct-2026): la zona sale de users.region y, si no
@@ -21,6 +28,7 @@ export default async function ClientesPage() {
       clientes={visibles}
       carterasVisibles={appUser?.isAdmin ? [...CARTERAS.map(c => c.key), 'otros'] : miCartera ? [miCartera] : []}
       hoyISO={new Date().toISOString().slice(0, 10)}
+      errorCarga={errorCarga}
     />
   )
 }

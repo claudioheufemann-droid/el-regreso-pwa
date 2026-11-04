@@ -14,6 +14,8 @@ interface Props {
   clientes: ClienteCartera[]
   carterasVisibles: CarteraKey[]
   hoyISO: string
+  /** El historial no se pudo leer: se avisa en vez de mostrar todo inactivo. */
+  errorCarga?: boolean
 }
 
 type FiltroEstado = 'activo' | 'inactivo' | 'todos'
@@ -100,9 +102,6 @@ function conteo(lista: ClienteCartera[]) {
   return { total: lista.length, activos, inactivos: inactivos + sinCompras, sinCompras }
 }
 
-// Tabla de zonas: nombre · activos · inactivos · total (cabe en 375 px sin cortar "Metropolitana")
-const COLS_ZONA = 'minmax(0, 1fr) 54px 64px 50px'
-
 // Columnas del listado en escritorio: cliente · última compra · frecuencia · 12 meses · histórico · flecha
 const COLS_DESK = 'minmax(0, 2.4fr) minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.1fr) 20px'
 
@@ -113,10 +112,11 @@ const CSS = `
 @media (min-width:900px){.ct-desk{display:grid}.ct-mob{display:none}}
 .ct-row{background:transparent}
 .ct-row:hover{background:${C.soft}}
+.ct-tile{transition:border-color .15s, background .15s}
 `
 
 // ── Componente ──────────────────────────────────────────────────────────────
-export default function CarteraClient({ clientes, carterasVisibles, hoyISO }: Props) {
+export default function CarteraClient({ clientes, carterasVisibles, hoyISO, errorCarga }: Props) {
   const router = useRouter()
   const unaSolaCartera = carterasVisibles.length === 1
   const [cartera, setCartera] = useState<CarteraKey | 'todas'>(unaSolaCartera ? carterasVisibles[0] : 'todas')
@@ -218,7 +218,7 @@ export default function CarteraClient({ clientes, carterasVisibles, hoyISO }: Pr
   }, [lista, buscando, nombreZona, hoyISO])
 
   const filasZona: { key: CarteraKey | 'todas'; nombre: string; color: string; datos: ReturnType<typeof conteo> }[] = [
-    { key: 'todas', nombre: 'Todas', color: C.text, datos: conteo(clientes) },
+    { key: 'todas', nombre: 'Toda la empresa', color: C.text, datos: conteo(clientes) },
     ...CARTERAS.filter(c => carterasVisibles.includes(c.key))
       .map(c => ({ key: c.key, nombre: c.nombre, color: c.color, datos: conteo(porCartera.get(c.key) ?? []) })),
     ...(carterasVisibles.includes('otros') && (porCartera.get('otros')?.length ?? 0) > 0
@@ -300,58 +300,56 @@ export default function CarteraClient({ clientes, carterasVisibles, hoyISO }: Pr
           )}
         </div>
 
-        {!buscando && (
-          <>
-            {/* Resumen de la zona elegida */}
-            <Card>
-              <Eyebrow>{nombreZona}</Eyebrow>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', marginTop: 10 }}>
-                <BigStat label="Clientes" valor={resumen.total} color={C.text} />
-                <BigStat label="Activos" valor={resumen.activos} color={C.green} borde />
-                <BigStat label="Inactivos" valor={resumen.inactivos} color={C.muted} borde />
-              </div>
-              <div style={{ height: 6, borderRadius: 6, background: C.line, marginTop: 14, overflow: 'hidden' }}>
-                <div style={{ width: `${pctActivos}%`, height: '100%', borderRadius: 6, background: C.green, transition: 'width .4s' }} />
-              </div>
-              <p style={{ fontSize: 12, color: C.muted, marginTop: 8 }}>
-                {Math.round(pctActivos)}% activos
-                {resumen.sinCompras > 0 && <> · {resumen.sinCompras} de los inactivos nunca han comprado</>}
-              </p>
-            </Card>
+        {errorCarga && (
+          <div role="alert" style={{
+            display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, padding: '12px 14px',
+            borderRadius: 14, background: C.redSoft, border: `1px solid ${C.red}33`,
+          }}>
+            <div style={{ flex: '1 1 200px', minWidth: 0 }}>
+              <div style={{ fontSize: 14, fontWeight: 800, color: C.red }}>No se pudo cargar la cartera</div>
+              <div style={{ fontSize: 12.5, color: C.muted, marginTop: 2 }}>Los números no están disponibles ahora. Vuelve a intentar en un momento.</div>
+            </div>
+            <button onClick={() => router.refresh()} style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6, minHeight: 40, padding: '0 14px',
+              borderRadius: 10, background: C.card, border: `1px solid ${C.red}33`,
+              color: C.red, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+            }}>
+              <RotateCw size={14} /> Reintentar
+            </button>
+          </div>
+        )}
 
-            {/* Clientes por zona — tabla, tocar una fila filtra todo */}
-            {!unaSolaCartera && (
-              <Card pad={0}>
-                <div style={{ padding: '14px 16px 8px' }}><Eyebrow>Clientes por zona</Eyebrow></div>
-                <div style={{
-                  display: 'grid', gridTemplateColumns: COLS_ZONA, gap: 8,
-                  padding: '6px 16px', fontSize: 11, fontWeight: 700, color: C.faint, textTransform: 'uppercase', letterSpacing: 0.4,
-                  borderBottom: `1px solid ${C.line}`,
-                }}>
-                  <span>Zona</span><span style={{ textAlign: 'right' }}>Activos</span>
-                  <span style={{ textAlign: 'right' }}>Inactivos</span><span style={{ textAlign: 'right' }}>Total</span>
+        {!buscando && !errorCarga && (
+          <>
+            {/* Vendedor con una sola zona: resumen grande de su cartera */}
+            {unaSolaCartera ? (
+              <Card>
+                <Eyebrow>{nombreZona}</Eyebrow>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', marginTop: 10 }}>
+                  <BigStat label="Activos" valor={resumen.activos} color={C.green} />
+                  <BigStat label="Inactivos" valor={resumen.inactivos} color={C.muted} borde />
+                  <BigStat label="Clientes" valor={resumen.total} color={C.text} borde />
                 </div>
-                {filasZona.map((z, i) => {
-                  const activa = cartera === z.key
-                  return (
-                    <button key={z.key} onClick={() => elegirCartera(z.key)} aria-pressed={activa} className={activa ? undefined : 'ct-row'} style={{
-                      width: '100%', display: 'grid', gridTemplateColumns: COLS_ZONA, gap: 8, alignItems: 'center',
-                      padding: '0 14px 0 16px', minHeight: 46, border: 'none', cursor: 'pointer', textAlign: 'left',
-                      borderTop: i === 0 ? 'none' : `1px solid ${C.line}`,
-                      background: activa ? C.blueSoft : undefined,
-                      boxShadow: activa ? `inset 3px 0 0 ${C.blue}` : 'none',
-                    }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                        <span style={{ width: 8, height: 8, borderRadius: 4, background: z.color, flexShrink: 0 }} />
-                        <span style={{ fontSize: 14, fontWeight: activa ? 800 : 600, color: activa ? C.blue : C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{z.nombre}</span>
-                      </span>
-                      <Num v={z.datos.activos} color={C.green} bold />
-                      <Num v={z.datos.inactivos} color={C.muted} />
-                      <Num v={z.datos.total} color={C.text} />
-                    </button>
-                  )
-                })}
+                <BarraActivos pct={pctActivos} color={C.green} alto={6} />
+                <p style={{ fontSize: 12, color: C.muted, marginTop: 8 }}>
+                  {Math.round(pctActivos)}% activos
+                  {resumen.sinCompras > 0 && <> · {resumen.sinCompras} nunca han comprado</>}
+                </p>
               </Card>
+            ) : (
+              /* Admin: una tarjeta por zona; tocarla filtra todo lo de abajo */
+              <section>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 8, padding: '0 2px' }}>
+                  <Eyebrow>Clientes activos por zona</Eyebrow>
+                  <span style={{ fontSize: 11.5, color: C.faint, fontWeight: 600 }}>toca una zona para filtrar</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8 }}>
+                  {filasZona.map(z => (
+                    <ZonaTile key={z.key} nombre={z.nombre} color={z.color} datos={z.datos}
+                      activa={cartera === z.key} onClick={() => elegirCartera(z.key)} />
+                  ))}
+                </div>
+              </section>
             )}
 
             {/* Dónde vendemos */}
@@ -389,10 +387,16 @@ export default function CarteraClient({ clientes, carterasVisibles, hoyISO }: Pr
         )}
 
         {/* Listado */}
-        <Card pad={0}>
+        {!errorCarga && <Card pad={0}>
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, padding: '12px 16px', borderBottom: `1px solid ${C.line}` }}>
             <div style={{ flex: '1 1 160px', minWidth: 0 }}>
               <div style={{ fontSize: 15, fontWeight: 800 }}>{tituloLista}</div>
+              {!buscando && !unaSolaCartera && (
+                <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
+                  {nombreZona} · {resumen.total.toLocaleString('es-CL')} clientes · {resumen.inactivos.toLocaleString('es-CL')} inactivos
+                  {resumen.sinCompras > 0 && <> ({resumen.sinCompras.toLocaleString('es-CL')} nunca compraron)</>}
+                </div>
+              )}
               {comuna && !buscando && (
                 <button onClick={() => setComuna(null)} style={{ background: 'none', border: 'none', padding: 0, color: C.blue, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
                   Quitar filtro de comuna
@@ -463,9 +467,9 @@ export default function CarteraClient({ clientes, carterasVisibles, hoyISO }: Pr
               ))}
             </>
           )}
-        </Card>
+        </Card>}
 
-        {lista.length > visibles && (
+        {!errorCarga && lista.length > visibles && (
           <button onClick={() => setVisibles(v => v + PAGINA)} style={{
             width: '100%', minHeight: 46, borderRadius: 12, cursor: 'pointer',
             background: C.card, border: `1px solid ${C.line}`, color: C.blue, fontSize: 14, fontWeight: 700,
@@ -506,11 +510,42 @@ function BigStat({ label, valor, color, borde }: { label: string; valor: number;
   )
 }
 
-function Num({ v, color, bold }: { v: number; color: string; bold?: boolean }) {
+function BarraActivos({ pct, color, alto = 5 }: { pct: number; color: string; alto?: number }) {
   return (
-    <span style={{ textAlign: 'right', fontSize: 14, fontWeight: bold ? 800 : 600, color, fontVariantNumeric: 'tabular-nums' }}>
-      {v.toLocaleString('es-CL')}
-    </span>
+    <div style={{ height: alto, borderRadius: alto, background: C.line, marginTop: 12, overflow: 'hidden' }}>
+      <div style={{ width: `${pct}%`, height: '100%', borderRadius: alto, background: color, transition: 'width .4s' }} />
+    </div>
+  )
+}
+
+/** Tarjeta de zona: activos en grande, "de N" y barra con el % activo. */
+function ZonaTile({ nombre, color, datos, activa, onClick }: {
+  nombre: string; color: string; datos: ReturnType<typeof conteo>; activa: boolean; onClick: () => void
+}) {
+  const pct = datos.total ? (datos.activos / datos.total) * 100 : 0
+  return (
+    <button onClick={onClick} aria-pressed={activa} className="ct-tile" style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'stretch', textAlign: 'left', minWidth: 0,
+      padding: '12px 14px 12px', borderRadius: 14, cursor: 'pointer', color: C.text,
+      background: activa ? C.blueSoft : C.card,
+      border: `1.5px solid ${activa ? C.blue : C.line}`,
+      boxShadow: activa ? 'none' : '0 1px 2px rgba(15,23,42,.04)',
+    }}>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+        <span style={{ width: 8, height: 8, borderRadius: 4, background: color, flexShrink: 0 }} />
+        <span style={{ fontSize: 13, fontWeight: 700, color: activa ? C.blue : C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nombre}</span>
+      </span>
+      <span style={{ display: 'flex', alignItems: 'baseline', gap: 5, marginTop: 8 }}>
+        <span style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.5px', lineHeight: 1, color: datos.activos ? C.green : C.faint, fontVariantNumeric: 'tabular-nums' }}>
+          {datos.activos.toLocaleString('es-CL')}
+        </span>
+        <span style={{ fontSize: 12, fontWeight: 600, color: C.muted, fontVariantNumeric: 'tabular-nums' }}>
+          de {datos.total.toLocaleString('es-CL')}
+        </span>
+      </span>
+      <BarraActivos pct={pct} color={color === C.text ? C.green : color} />
+      <span style={{ fontSize: 11.5, fontWeight: 600, color: C.muted, marginTop: 6 }}>{Math.round(pct)}% activos</span>
+    </button>
   )
 }
 

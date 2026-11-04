@@ -28,10 +28,15 @@ type ClienteRow = {
 
 // PostgREST corta en 1.000 filas por respuesta: clientes ya pasa de eso
 // (1.022 al 30-oct-2026) y el resumen está cerca, así que ambos se paginan.
-async function paginar<T>(fetchPage: (from: number, to: number) => PromiseLike<{ data: T[] | null }>): Promise<T[]> {
+// Si una página falla se LANZA el error: antes se tragaba, la RPC del
+// historial chocaba con el timeout de 3 s del rol anon y la pantalla mostraba
+// a los 1.005 clientes como "nunca compró" (4-nov-2026). Lanzar también evita
+// que unstable_cache guarde ese resultado vacío por 10 minutos.
+async function paginar<T>(fetchPage: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>): Promise<T[]> {
   const out: T[] = []
   for (let off = 0; ; off += 1000) {
-    const { data } = await fetchPage(off, off + 999)
+    const { data, error } = await fetchPage(off, off + 999)
+    if (error) throw new Error(error.message)
     if (!data?.length) break
     out.push(...data)
     if (data.length < 1000) break
@@ -43,7 +48,7 @@ async function paginar<T>(fetchPage: (from: number, to: number) => PromiseLike<{
 // (~1-2 s), así que se comparte entre usuarios con TTL de 10 min.
 const getResumenCached = unstable_cache(
   () => paginar<ResumenRow>((a, b) => anon().rpc('cartera_clientes_resumen').order('nombre_fantasia').range(a, b)),
-  ['cartera-clientes-resumen'],
+  ['cartera-clientes-resumen-v2'],
   { tags: ['ventas'], revalidate: 600 },
 )
 
