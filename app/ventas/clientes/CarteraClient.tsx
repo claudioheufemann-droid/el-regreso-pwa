@@ -113,6 +113,10 @@ const CSS = `
 .ct-row{background:transparent}
 .ct-row:hover{background:${C.soft}}
 .ct-tile{transition:border-color .15s, background .15s}
+/* 8 tarjetas (total + 7 zonas): 2 por fila en el celular, 4 en pantallas
+   anchas → filas completas en ambos, sin una tarjeta suelta al final. */
+.ct-zonas{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+@media (min-width:640px){.ct-zonas{grid-template-columns:repeat(4,minmax(0,1fr))}}
 `
 
 // ── Componente ──────────────────────────────────────────────────────────────
@@ -340,12 +344,12 @@ export default function CarteraClient({ clientes, carterasVisibles, hoyISO, erro
               /* Admin: una tarjeta por zona; tocarla filtra todo lo de abajo */
               <section>
                 <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 8, padding: '0 2px' }}>
-                  <Eyebrow>Clientes activos por zona</Eyebrow>
+                  <Eyebrow>Clientes por zona</Eyebrow>
                   <span style={{ fontSize: 11.5, color: C.faint, fontWeight: 600 }}>toca una zona para filtrar</span>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8 }}>
+                <div className="ct-zonas" style={{ gap: 8 }}>
                   {filasZona.map(z => (
-                    <ZonaTile key={z.key} nombre={z.nombre} color={z.color} datos={z.datos}
+                    <ZonaTile key={z.key} nombre={z.nombre} color={z.color} datos={z.datos} total={z.key === 'todas'}
                       activa={cartera === z.key} onClick={() => elegirCartera(z.key)} />
                   ))}
                 </div>
@@ -518,34 +522,50 @@ function BarraActivos({ pct, color, alto = 5 }: { pct: number; color: string; al
   )
 }
 
-/** Tarjeta de zona: activos en grande, "de N" y barra con el % activo. */
-function ZonaTile({ nombre, color, datos, activa, onClick }: {
-  nombre: string; color: string; datos: ReturnType<typeof conteo>; activa: boolean; onClick: () => void
+/** Tarjeta de zona: activos e inactivos lado a lado, barra con el % activo
+ *  y el total. "Toda la empresa" va en oscuro para que se lea como el total. */
+function ZonaTile({ nombre, color, datos, activa, total, onClick }: {
+  nombre: string; color: string; datos: ReturnType<typeof conteo>; activa: boolean; total?: boolean; onClick: () => void
 }) {
   const pct = datos.total ? (datos.activos / datos.total) * 100 : 0
+  const t = total
+    ? { bg: '#0F172A', text: '#FFFFFF', muted: '#94A3B8', activos: '#34D399', inactivos: '#CBD5E1', track: '#334155', bar: '#34D399', borde: '#0F172A' }
+    : { bg: activa ? C.blueSoft : C.card, text: activa ? C.blue : C.text, muted: C.muted, activos: C.green, inactivos: C.text, track: C.line, bar: color, borde: activa ? C.blue : C.line }
   return (
     <button onClick={onClick} aria-pressed={activa} className="ct-tile" style={{
       display: 'flex', flexDirection: 'column', alignItems: 'stretch', textAlign: 'left', minWidth: 0,
-      padding: '12px 14px 12px', borderRadius: 14, cursor: 'pointer', color: C.text,
-      background: activa ? C.blueSoft : C.card,
-      border: `1.5px solid ${activa ? C.blue : C.line}`,
-      boxShadow: activa ? 'none' : '0 1px 2px rgba(15,23,42,.04)',
+      padding: '12px 14px', borderRadius: 14, cursor: 'pointer', color: t.text, background: t.bg,
+      border: `1.5px solid ${t.borde}`,
+      boxShadow: activa ? `0 0 0 3px ${C.blue}40` : '0 1px 2px rgba(15,23,42,.05)',
     }}>
       <span style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
-        <span style={{ width: 8, height: 8, borderRadius: 4, background: color, flexShrink: 0 }} />
-        <span style={{ fontSize: 13, fontWeight: 700, color: activa ? C.blue : C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nombre}</span>
+        <span style={{ width: 8, height: 8, borderRadius: 4, background: total ? t.bar : color, flexShrink: 0 }} />
+        <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 800, color: t.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{nombre}</span>
+        <span style={{ fontSize: 12, fontWeight: 800, color: t.muted, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{Math.round(pct)}%</span>
       </span>
-      <span style={{ display: 'flex', alignItems: 'baseline', gap: 5, marginTop: 8 }}>
-        <span style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-0.5px', lineHeight: 1, color: datos.activos ? C.green : C.faint, fontVariantNumeric: 'tabular-nums' }}>
-          {datos.activos.toLocaleString('es-CL')}
-        </span>
-        <span style={{ fontSize: 12, fontWeight: 600, color: C.muted, fontVariantNumeric: 'tabular-nums' }}>
-          de {datos.total.toLocaleString('es-CL')}
-        </span>
+      <span style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8, marginTop: 10 }}>
+        <Cifra valor={datos.activos} label="activos" color={datos.activos ? t.activos : t.muted} labelColor={t.muted} />
+        <Cifra valor={datos.inactivos} label="inactivos" color={t.inactivos} labelColor={t.muted} />
       </span>
-      <BarraActivos pct={pct} color={color === C.text ? C.green : color} />
-      <span style={{ fontSize: 11.5, fontWeight: 600, color: C.muted, marginTop: 6 }}>{Math.round(pct)}% activos</span>
+      <span style={{ display: 'block', height: 5, borderRadius: 5, background: t.track, marginTop: 10, overflow: 'hidden' }}>
+        <span style={{ display: 'block', width: `${pct}%`, height: '100%', borderRadius: 5, background: t.bar, transition: 'width .4s' }} />
+      </span>
+      <span style={{ fontSize: 11.5, fontWeight: 600, color: t.muted, marginTop: 7, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {datos.total.toLocaleString('es-CL')} clientes
+        {datos.sinCompras > 0 && <> · {datos.sinCompras.toLocaleString('es-CL')} sin compras</>}
+      </span>
     </button>
+  )
+}
+
+function Cifra({ valor, label, color, labelColor }: { valor: number; label: string; color: string; labelColor: string }) {
+  return (
+    <span style={{ display: 'block', minWidth: 0 }}>
+      <span style={{ display: 'block', fontSize: 24, fontWeight: 800, letterSpacing: '-0.5px', lineHeight: 1, color, fontVariantNumeric: 'tabular-nums' }}>
+        {valor.toLocaleString('es-CL')}
+      </span>
+      <span style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: labelColor, marginTop: 3 }}>{label}</span>
+    </span>
   )
 }
 
