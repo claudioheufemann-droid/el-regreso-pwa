@@ -116,6 +116,34 @@ export function normalizarPeriodo(r: FilaVista): FilaMeta {
   }
 }
 
+/**
+ * Venta del Retail (cartera ERP 'Claudio Heufemann') en una semana o período
+ * del plan. Sólo gerencia: viene de la RPC plan_metas_retail_aporte, que no
+ * devuelve nada a quien no es admin. NO suma a las metas de los vendedores.
+ */
+export interface RetailCorte {
+  tipo: Escala
+  /** N° de semana o de período, igual que FilaMeta.semana. */
+  n: number
+  fechaInicio: string
+  fechaFin: string
+  neto: number
+  netoPorEntregar: number
+  litros: number
+}
+
+export function normalizarRetail(r: FilaVista): RetailCorte {
+  return {
+    tipo: r.tipo === 'periodo' ? 'periodo' : 'semana',
+    n: num(r.n),
+    fechaInicio: String(r.fecha_inicio),
+    fechaFin: String(r.fecha_fin),
+    neto: num(r.neto),
+    netoPorEntregar: num(r.neto_por_entregar),
+    litros: num(r.litros),
+  }
+}
+
 // ── Formato chileno ──────────────────────────────────────────────────────────
 
 export const clp = (n: number) => '$' + Math.round(n).toLocaleString('es-CL')

@@ -2,7 +2,7 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { getServerUser } from '@/lib/auth'
 import { createClient } from '@/lib/supabase/server'
-import { TEMPORADA, normalizarFila, normalizarPeriodo, type FilaVista } from './tipos'
+import { TEMPORADA, normalizarFila, normalizarPeriodo, normalizarRetail, type FilaVista } from './tipos'
 import MetasTemporadaClient from './MetasTemporadaClient'
 
 export const dynamic = 'force-dynamic'
@@ -27,7 +27,13 @@ export default async function MetasTemporadaPage() {
     semanal = semanal.eq('user_id', impersonadoId)
     mensual = mensual.eq('user_id', impersonadoId)
   }
-  const [{ data, error }, { data: dataPeriodos }] = await Promise.all([semanal, mensual])
+  // Aporte del Retail: SÓLO gerencia. isAdmin se apaga en "Ver como vendedor",
+  // así que la vista simulada tampoco lo pide; la RPC además no devuelve nada
+  // a quien no es admin.
+  const retail = user.isAdmin
+    ? supabase.rpc('plan_metas_retail_aporte', { p_temporada: TEMPORADA })
+    : Promise.resolve({ data: null })
+  const [{ data, error }, { data: dataPeriodos }, { data: dataRetail }] = await Promise.all([semanal, mensual, retail])
 
   // Fecha de hoy en Chile, calculada una sola vez en el servidor para que el
   // render del cliente no dependa de la zona horaria del teléfono.
@@ -37,6 +43,7 @@ export default async function MetasTemporadaPage() {
     <MetasTemporadaClient
       filas={(data ?? []).map(r => normalizarFila(r as FilaVista))}
       periodos={(dataPeriodos ?? []).map(r => normalizarPeriodo(r as FilaVista))}
+      retail={user.isAdmin ? ((dataRetail ?? []) as FilaVista[]).map(normalizarRetail) : []}
       esAdmin={user.isAdmin}
       hoy={hoy}
       error={error ? error.message : null}

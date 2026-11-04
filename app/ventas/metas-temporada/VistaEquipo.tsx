@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import { ArrowDown, ArrowUp, ChevronDown, Download } from 'lucide-react'
 import {
-  type FilaMeta, type Acumulado,
+  type FilaMeta, type Acumulado, type RetailCorte,
   clp, entero, pctTxt, pct,
   semanaEnCurso, semanaTope, acumular, acumuladoTemporada, acumuladoPeriodo, periodoDeSemana, fechaCorta,
   nivelPorPct, nivelDeSemana, NIVEL_COLOR, NIVEL_BARRA, NIVEL_LABEL,
@@ -15,6 +15,7 @@ import {
 } from './ui'
 import { etiquetaVendedor, nombreCorto } from '@/lib/types'
 import DetalleClientes, { nombreEnFrase } from './DetalleClientes'
+import AporteRetail from './AporteRetail'
 
 export interface VendedorPlan {
   userId: string
@@ -45,9 +46,12 @@ function periodoMedido(v: VendedorPlan, actual: FilaMeta | null, hoy: string) {
 type Orden = 'semana' | 'acumulado'
 
 export default function VistaEquipo({
-  vendedores, hoy, corte, onElegir,
+  vendedores, retail, hoy, corte, onElegir,
 }: {
-  vendedores: VendedorPlan[]; hoy: string; corte: Corte; onElegir: (userId: string) => void
+  vendedores: VendedorPlan[]
+  /** Sólo llega con datos para admins (vacío = no se muestra el bloque). */
+  retail: RetailCorte[]
+  hoy: string; corte: Corte; onElegir: (userId: string) => void
 }) {
   const { escala, valor: semana } = corte
   // Acumulado y pie siempre desde las semanas; selector, ranking y matriz en la escala elegida.
@@ -96,6 +100,16 @@ export default function VistaEquipo({
         {/* Nivel del equipo: mismos cortes (<50 / 50–80 / ≥80) sobre la suma de lo elegido. */}
         {semanaRef && <ResumenSemana prefijo="Equipo · " fila={semanaRef} suma={semanaEquipo} hoy={hoy} />}
       </section>
+
+      {retail.length > 0 && (
+        <AporteRetail
+          retail={retail.filter(r => r.tipo === escala)}
+          equipo={todasEscala}
+          escala={escala}
+          elegido={semana}
+          nombre={semanaRef?.nombre ?? ''}
+        />
+      )}
 
       <section className="border-t border-[var(--cc-line)] pb-5 pt-5">
         <Titulo

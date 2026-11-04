@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, RefreshCw } from 'lucide-react'
-import { type FilaMeta, type Escala, semanaInicial } from './tipos'
+import { type FilaMeta, type Escala, type RetailCorte, semanaInicial } from './tipos'
 import VistaVendedor, { SinMetas } from './VistaVendedor'
 import VistaEquipo, { type VendedorPlan } from './VistaEquipo'
 import { etiquetaVendedor, nombreCorto } from '@/lib/types'
@@ -17,9 +17,9 @@ const EQUIPO = '__equipo__'
  * de Tailwind (ver globals.css). El resto de Ventas sigue oscuro.
  */
 export default function MetasTemporadaClient({
-  filas, periodos, esAdmin, hoy, error,
+  filas, periodos, retail, esAdmin, hoy, error,
 }: {
-  filas: FilaMeta[]; periodos: FilaMeta[]; esAdmin: boolean; hoy: string; error: string | null
+  filas: FilaMeta[]; periodos: FilaMeta[]; retail: RetailCorte[]; esAdmin: boolean; hoy: string; error: string | null
 }) {
   const router = useRouter()
   const [elegido, setElegido] = useState<string>(EQUIPO)
@@ -84,7 +84,7 @@ export default function MetasTemporadaClient({
   } else if (seleccionado) {
     contenido = <VistaVendedor key={seleccionado.userId} filas={seleccionado.filas} periodos={seleccionado.periodos} hoy={hoy} corte={corte} />
   } else if (vendedores.length) {
-    contenido = <VistaEquipo vendedores={vendedores} hoy={hoy} corte={corte} onElegir={elegir} />
+    contenido = <VistaEquipo vendedores={vendedores} retail={retail} hoy={hoy} corte={corte} onElegir={elegir} />
   } else {
     contenido = <SinMetas />
   }
