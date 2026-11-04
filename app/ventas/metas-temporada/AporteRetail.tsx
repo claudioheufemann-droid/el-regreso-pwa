@@ -5,7 +5,7 @@ import {
   type Acumulado, type FilaMeta, type Escala, type RetailCorte,
   clp, litros, pct, pctTxt, acumular, nivelPorPct, NIVEL_COLOR, NIVEL_BARRA,
 } from './tipos'
-import { Barra, BarraNivel, PctNivel, PorEntregar, Titulo, ORO } from './ui'
+import { Barra, PctNivel, PorEntregar, Titulo, ORO } from './ui'
 
 /**
  * Aporte del Retail a las metas — SÓLO gerencia (pedido de Claudio, 2026-11-04).
@@ -78,7 +78,10 @@ export default function AporteRetail({
 
       {transcurridas.length > 0 && (
         <div className="mt-5 border-t border-[var(--cc-line)] pt-4">
-          <p className="mb-2 text-[14px] font-bold text-[var(--cc-ink)]">{mes ? 'Mes a mes' : 'Semana a semana'}</p>
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+            <p className="text-[14px] font-bold text-[var(--cc-ink)]">{mes ? 'Mes a mes' : 'Semana a semana'}</p>
+            <Leyenda />
+          </div>
           <Tabla
             filas={transcurridas.map(f => ({ clave: f.n, etiqueta: f.ref.corto, eq: f.eq, rt: f.rt, marcada: f.n === elegido }))}
             total={{ etiqueta: 'Acum.', eq: acumEq, rt: acumRt }}
@@ -155,14 +158,41 @@ function Celda({ etiqueta, children }: { etiqueta: string; children: React.React
 }
 
 /** Barra apilada: tramo del equipo en color de nivel + tramo del Retail en dorado encima. */
-function BarraDoble({ equipo, total }: { equipo: number; total: number }) {
+function BarraDoble({ equipo, total, alto = 9 }: { equipo: number; total: number; alto?: number }) {
   const wEq = Math.max(0, Math.min(100, equipo))
   const wRt = Math.max(0, Math.min(100, total) - wEq)
   return (
-    <div className="flex h-[9px] w-full overflow-hidden rounded-full bg-[var(--cc-neutral-soft)]">
-      <div className="h-full" style={{ width: `${wEq}%`, background: NIVEL_BARRA[nivelPorPct(equipo)] }} />
-      <div className="h-full" style={{ width: `${wRt}%`, background: ORO }} />
+    <div
+      className="flex w-full overflow-hidden rounded-full bg-[var(--cc-neutral-soft)]"
+      style={{ height: alto }}
+      role="img"
+      aria-label={`Equipo ${pctTxt(equipo)} más Retail ${pctTxt(Math.max(0, total - equipo))}`}
+    >
+      <div className="h-full transition-[width] duration-500" style={{ width: `${wEq}%`, background: NIVEL_BARRA[nivelPorPct(equipo)] }} />
+      {/* Separador fino para que el tramo dorado se lea aparte aunque el equipo esté en verde/naranjo. */}
+      <div
+        className="h-full transition-[width] duration-500"
+        style={{ width: `${wRt}%`, background: ORO, boxShadow: wEq > 0 && wRt > 0 ? 'inset 2px 0 0 var(--cc-card-2)' : undefined }}
+      />
     </div>
+  )
+}
+
+function Leyenda() {
+  const punto = 'inline-block h-2 w-2 rounded-full'
+  return (
+    <span className="flex items-center gap-3 text-[12px] font-medium text-[var(--cc-ink-2)]">
+      <span className="inline-flex items-center gap-1.5">
+        {/* El tramo del equipo cambia de color según su avance (rojo/naranjo/verde). */}
+        <span
+          className="inline-block h-2 w-4 rounded-full"
+          style={{ background: `linear-gradient(90deg, ${NIVEL_BARRA.rojo}, ${NIVEL_BARRA.naranjo}, ${NIVEL_BARRA.verde})` }}
+        /> Equipo
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span className={punto} style={{ background: ORO }} /> Retail
+      </span>
+    </span>
   )
 }
 
@@ -210,10 +240,11 @@ function Linea({ etiqueta, eq, rt, marcada, total = false }: FilaTabla & { total
       <span className="hidden md:block"><PctNivel valor={pEq} /></span>
       <span className="hidden font-bold text-[var(--m-oro-texto)] md:block">+{pctTxt(pct(rNeto, eq.metaNeto))}</span>
       <span className="flex items-center justify-end gap-3 md:justify-start">
-        <span className="hidden flex-1 md:block"><BarraNivel valor={pTotal} alto={6} /></span>
+        <span className="hidden flex-1 md:block"><BarraDoble equipo={pEq} total={pTotal} alto={7} /></span>
         <span className="flex flex-col items-end md:block">
           <PctNivel valor={pTotal} />
           <span className="text-[11px] font-medium text-[var(--cc-ink-3)] md:hidden">eq. {pctTxt(pEq)}</span>
+          <span className="mt-1 block w-[56px] md:hidden"><BarraDoble equipo={pEq} total={pTotal} alto={4} /></span>
         </span>
       </span>
     </div>
