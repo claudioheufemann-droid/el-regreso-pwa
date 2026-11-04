@@ -9,7 +9,8 @@ import { type FilaMeta, clp, litros, entero, fechaCorta } from './tipos'
  * A quién le vendió cada región en la semana/mes elegido, cuál es el cliente
  * nuevo y qué le vendió a cada uno. Lee la función plan_metas_detalle_clientes
  * (mismas reglas que las vistas de Metas, así la suma cuadra con "Ventas / Meta"
- * y con el "Vendido" de cajas y barriles).
+ * y con el "Vendido" de cajas y barriles). Viene ordenada del pedido más
+ * reciente al más antiguo; la hora es la de ingreso a la app (ventas_pedido_ingreso).
  */
 interface ProductoCliente {
   producto: string
@@ -26,6 +27,8 @@ interface ClienteDetalle {
   litros: number
   pedidos: number
   ultimaFecha: string
+  /** "HH:MM" en que el último pedido entró a la app (el ERP no exporta la hora); null si no se conoce. */
+  ultimaHora: string | null
   esNuevo: boolean
   cajasKombucha: number
   cajasCerveza: number
@@ -99,6 +102,7 @@ export function ClientesDelCorte({
           litros: Number(r.litros) || 0,
           pedidos: Number(r.pedidos) || 0,
           ultimaFecha: String(r.ultima_fecha ?? ''),
+          ultimaHora: typeof r.ultima_hora === 'string' && r.ultima_hora ? r.ultima_hora : null,
           esNuevo: r.es_nuevo === true,
           cajasKombucha: Number(r.cajas_kombucha) || 0,
           cajasCerveza: Number(r.cajas_cerveza) || 0,
@@ -211,6 +215,7 @@ function FilaCliente({ d, abierto, onToggle }: { d: ClienteDetalle; abierto: boo
           <span className="truncate text-[12px] font-medium tabular-nums text-[var(--cc-ink-2)]">
             {unidades || `${litros(d.litros)} L`} · {d.pedidos} {d.pedidos === 1 ? 'pedido' : 'pedidos'}
             {d.ultimaFecha && ` · ${fechaCorta(d.ultimaFecha)}`}
+            {d.ultimaFecha && d.ultimaHora && ` ${d.ultimaHora}`}
           </span>
         </span>
         <span className="flex shrink-0 flex-col items-end">
