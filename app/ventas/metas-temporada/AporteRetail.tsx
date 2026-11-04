@@ -198,7 +198,8 @@ function Leyenda() {
 
 // ── Tabla semana a semana ────────────────────────────────────────────────────
 
-const COLS = 'grid-cols-[44px_minmax(0,1fr)_minmax(0,1fr)_64px] md:grid-cols-[56px_minmax(0,1fr)_minmax(0,1.1fr)_72px_72px_minmax(0,1.2fr)]'
+// Móvil: la meta va bajo la venta del equipo ("de $X") para no pasar de 4 columnas en 390px.
+const COLS = 'grid-cols-[40px_minmax(0,1fr)_minmax(0,1fr)_64px] md:grid-cols-[56px_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_76px_72px_minmax(0,1.2fr)]'
 
 interface FilaTabla { clave: number; etiqueta: string; eq: Acumulado; rt: RetailCorte | null; marcada: boolean }
 
@@ -207,9 +208,10 @@ function Tabla({ filas, total }: { filas: FilaTabla[]; total: { etiqueta: string
     <div>
       <div className={`grid ${COLS} gap-x-3 border-b border-[var(--cc-line)] pb-1.5 text-[11px] font-semibold uppercase tracking-[0.04em] text-[var(--cc-ink-3)]`}>
         <span />
-        <span>Meta</span>
+        <span className="hidden md:block">Meta</span>
+        <span>Equipo</span>
         <span>Retail</span>
-        <span className="hidden md:block">Equipo</span>
+        <span className="hidden md:block">% Equipo</span>
         <span className="hidden md:block">Aporte</span>
         <span className="text-right md:text-left">Con Retail</span>
       </div>
@@ -230,7 +232,14 @@ function Linea({ etiqueta, eq, rt, marcada, total = false }: FilaTabla & { total
       } ${marcada ? 'bg-[var(--cc-gold-soft)]' : ''}`}
     >
       <span className={`pl-1 font-bold ${marcada || total ? 'text-[var(--cc-ink)]' : 'text-[var(--cc-ink-2)]'}`}>{etiqueta}</span>
-      <span className="truncate font-medium text-[var(--cc-ink-2)]">{clp(eq.metaNeto)}</span>
+      <span className="hidden truncate font-medium text-[var(--cc-ink-2)] md:block">{clp(eq.metaNeto)}</span>
+      <span className="flex min-w-0 flex-col">
+        <span className="truncate font-bold text-[var(--cc-ink)]">{clp(eq.realNeto)}</span>
+        <span className="truncate text-[12px] font-medium text-[var(--cc-ink-2)]">
+          <span className="hidden md:inline">{litros(eq.realLitros)} L</span>
+          <span className="md:hidden">de {clp(eq.metaNeto)}</span>
+        </span>
+      </span>
       <span className="flex min-w-0 flex-col">
         <span className="truncate font-bold text-[var(--cc-ink)]">{clp(rNeto)}</span>
         <span className="truncate text-[12px] font-medium text-[var(--cc-ink-2)]">
