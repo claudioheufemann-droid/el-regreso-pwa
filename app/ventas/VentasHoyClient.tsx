@@ -11,6 +11,7 @@ import SettingsPanel from '@/components/ui/SettingsPanel'
 import { Skeleton } from '@/components/ui/States'
 import NotificationsBell from '@/components/ui/NotificationsBell'
 import MiComision from './MiComision'
+import ExploradorProductos from './ExploradorProductos'
 import MiComisionVendedor from '@/app/terreno/MiComisionVendedor'
 import { etiquetaVendedor, inicialesVendedor } from '@/lib/types'
 import { RANGOS, type RangoKey, type HoyData, type VendedorRango, type DatosRango, type MetaPeriodo } from './hoyTypes'
@@ -2364,6 +2365,11 @@ export default function VentasHoyClient({ data, veComision = false, veComisionVe
               desde={d.desde} hasta={d.hasta} porEntrega={d.porEntrega} mostrarAnio={rango !== 'anio'} />
           ))}
         </div>
+
+        {/* Productos vendidos por semana / período con filtros y buscador.
+            Tiene su propio selector de rango (semana lun–dom o período
+            24→23), independiente de las pestañas de arriba. */}
+        <ExploradorProductos periodos={data.periodosDisponibles} />
 
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: isDesktop ? 20 : 14, minWidth: 0 }}>
