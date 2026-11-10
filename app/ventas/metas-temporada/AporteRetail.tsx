@@ -220,7 +220,9 @@ function Leyenda() {
 
 // Móvil: la meta va bajo la venta del equipo ("de $X") para no pasar de 4 columnas en 390px.
 // 1ª columna: "S1" + su rango de fechas debajo (puede partir en dos líneas: "27 oct –" / "2 nov").
-const COLS = 'grid-cols-[58px_minmax(0,1fr)_minmax(0,1fr)_64px] md:grid-cols-[92px_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_76px_72px_minmax(0,1.2fr)]'
+// Escritorio: Meta y al lado Equipo + Retail (pedido de Claudio, 2026-11-10). En móvil
+// esa suma va bajo el % de la última columna.
+const COLS = 'grid-cols-[58px_minmax(0,1fr)_minmax(0,1fr)_78px] md:grid-cols-[92px_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_76px_72px_minmax(0,1.2fr)]'
 
 interface FilaTabla { clave: number; etiqueta: string; rango?: string; eq: Acumulado; rt: RetailCorte | null; marcada: boolean }
 
@@ -230,6 +232,7 @@ function Tabla({ filas, total }: { filas: FilaTabla[]; total: { etiqueta: string
       <div className={`grid ${COLS} gap-x-3 border-b border-[var(--cc-line)] pb-1.5 text-[11px] font-semibold uppercase tracking-[0.04em] text-[var(--cc-ink-3)]`}>
         <span />
         <span className="hidden md:block">Meta</span>
+        <span className="hidden md:block">Equipo + Retail</span>
         <span>Equipo</span>
         <span>Retail</span>
         <span className="hidden md:block">% Equipo</span>
@@ -257,6 +260,10 @@ function Linea({ etiqueta, rango, eq, rt, marcada, total = false }: FilaTabla & 
         {rango && <span className="text-[11px] font-medium leading-tight text-[var(--cc-ink-3)]">{rango}</span>}
       </span>
       <span className="hidden truncate font-medium text-[var(--cc-ink-2)] md:block">{clp(eq.metaNeto)}</span>
+      <span className="hidden min-w-0 flex-col md:flex">
+        <span className="truncate font-bold text-[var(--cc-ink)]">{clp(eq.realNeto + rNeto)}</span>
+        <span className="truncate text-[12px] font-medium text-[var(--cc-ink-2)]">{litros(eq.realLitros + (rt?.litros ?? 0))} L</span>
+      </span>
       <span className="flex min-w-0 flex-col">
         <span className="truncate font-bold text-[var(--cc-ink)]">{clp(eq.realNeto)}</span>
         <span className="truncate text-[12px] font-medium text-[var(--cc-ink-2)]">
@@ -276,6 +283,7 @@ function Linea({ etiqueta, rango, eq, rt, marcada, total = false }: FilaTabla & 
         <span className="hidden flex-1 md:block"><BarraDoble equipo={pEq} total={pTotal} alto={7} /></span>
         <span className="flex flex-col items-end md:block">
           <PctNivel valor={pTotal} />
+          <span className="text-[11px] font-bold text-[var(--cc-ink)] md:hidden">{clp(eq.realNeto + rNeto)}</span>
           <span className="text-[11px] font-medium text-[var(--cc-ink-3)] md:hidden">eq. {pctTxt(pEq)}</span>
           <span className="mt-1 block w-[56px] md:hidden"><BarraDoble equipo={pEq} total={pTotal} alto={4} /></span>
         </span>
