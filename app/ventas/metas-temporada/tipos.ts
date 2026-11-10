@@ -169,6 +169,25 @@ export function rangoFechas(inicio: string, fin: string) {
   return `${a.d} ${MESES[a.m - 1]} – ${b.d} ${MESES[b.m - 1]}`
 }
 
+/**
+ * Período comercial 24→23 al que pertenece un día, nombrado por el mes en que
+ * termina: 24 oct – 23 nov = Noviembre. `clave` = 'YYYY-MM' de ese mes.
+ */
+export function periodoComercial(iso: string) {
+  const { y, m, d } = partes(iso)
+  const mesFin = d >= 24 ? (m % 12) + 1 : m
+  const anioFin = d >= 24 && m === 12 ? y + 1 : y
+  const mesIni = mesFin === 1 ? 12 : mesFin - 1
+  const anioIni = mesFin === 1 ? anioFin - 1 : anioFin
+  const dos = (n: number) => String(n).padStart(2, '0')
+  return {
+    clave: `${anioFin}-${dos(mesFin)}`,
+    nombre: MESES_LARGOS[mesFin - 1],
+    inicio: `${anioIni}-${dos(mesIni)}-24`,
+    fin: `${anioFin}-${dos(mesFin)}-23`,
+  }
+}
+
 /** "26 oct" */
 export function fechaCorta(iso: string) {
   const a = partes(iso)

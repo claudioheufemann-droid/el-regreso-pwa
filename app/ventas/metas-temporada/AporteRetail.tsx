@@ -3,7 +3,7 @@
 import { Lock, Store } from 'lucide-react'
 import {
   type Acumulado, type FilaMeta, type Escala, type RetailCorte,
-  clp, litros, pct, pctTxt, acumular, nivelPorPct, rangoFechas, NIVEL_COLOR, NIVEL_BARRA,
+  clp, litros, pct, pctTxt, acumular, nivelPorPct, rangoFechas, periodoComercial, NIVEL_COLOR, NIVEL_BARRA,
 } from './tipos'
 import { Barra, PctNivel, PorEntregar, Titulo, ORO } from './ui'
 
@@ -39,9 +39,19 @@ export default function AporteRetail({
   const actual = filas.find(f => f.n === elegido) ?? null
   const mes = escala === 'periodo'
 
-  // Acumulado de lo transcurrido (en meses, Octubre usa el 24→23 completo: igual que el resto de la pantalla).
-  const acumEq = acumular(transcurridas.flatMap(f => porCorte.get(f.n) ?? []))
-  const acumRt = sumarRetail(transcurridas.map(f => f.rt))
+  // Tabla (pedido de Claudio, 2026-11-10): en semanas sólo las del período 24→23
+  // de la semana elegida — lo que se mira es el mes en curso, no la temporada —
+  // y en ambas escalas se saca todo corte sin venta (ni equipo ni Retail), como
+  // un 24–25 oct en fin de semana: no aporta nada verlo. La elegida queda siempre.
+  const periodoTabla = !mes && actual ? periodoComercial(actual.ref.fechaInicio) : null
+  const enTabla = transcurridas.filter(f =>
+    (!periodoTabla || periodoComercial(f.ref.fechaInicio).clave === periodoTabla.clave) &&
+    (f.n === elegido || f.eq.realNeto + (f.rt?.neto ?? 0) > 0),
+  )
+
+  // Acumulado de lo que se ve en la tabla (en meses, Octubre usa el 24→23 completo: igual que el resto de la pantalla).
+  const acumEq = acumular(enTabla.flatMap(f => porCorte.get(f.n) ?? []))
+  const acumRt = sumarRetail(enTabla.map(f => f.rt))
 
   return (
     <section
@@ -76,18 +86,25 @@ export default function AporteRetail({
         </p>
       )}
 
-      {transcurridas.length > 0 && (
+      {enTabla.length > 0 && (
         <div className="mt-5 border-t border-[var(--cc-line)] pt-4">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-            <p className="text-[14px] font-bold text-[var(--cc-ink)]">{mes ? 'Mes a mes' : 'Semana a semana'}</p>
+            <p className="text-[14px] font-bold text-[var(--cc-ink)]">
+              {mes ? 'Mes a mes' : 'Semana a semana'}
+              {periodoTabla && (
+                <span className="font-medium text-[var(--cc-ink-2)]">
+                  {' '}· {periodoTabla.nombre} ({rangoFechas(periodoTabla.inicio, periodoTabla.fin)})
+                </span>
+              )}
+            </p>
             <Leyenda />
           </div>
           <Tabla
-            filas={transcurridas.map(f => ({
+            filas={enTabla.map(f => ({
               clave: f.n, etiqueta: f.ref.corto, rango: rangoFechas(f.ref.fechaInicio, f.ref.fechaFin),
               eq: f.eq, rt: f.rt, marcada: f.n === elegido,
             }))}
-            total={{ etiqueta: 'Acum.', eq: acumEq, rt: acumRt }}
+            total={{ etiqueta: 'Acum.', rango: periodoTabla?.nombre, eq: acumEq, rt: acumRt }}
           />
         </div>
       )}
@@ -207,7 +224,7 @@ const COLS = 'grid-cols-[58px_minmax(0,1fr)_minmax(0,1fr)_64px] md:grid-cols-[92
 
 interface FilaTabla { clave: number; etiqueta: string; rango?: string; eq: Acumulado; rt: RetailCorte | null; marcada: boolean }
 
-function Tabla({ filas, total }: { filas: FilaTabla[]; total: { etiqueta: string; eq: Acumulado; rt: RetailCorte | null } }) {
+function Tabla({ filas, total }: { filas: FilaTabla[]; total: { etiqueta: string; rango?: string; eq: Acumulado; rt: RetailCorte | null } }) {
   return (
     <div>
       <div className={`grid ${COLS} gap-x-3 border-b border-[var(--cc-line)] pb-1.5 text-[11px] font-semibold uppercase tracking-[0.04em] text-[var(--cc-ink-3)]`}>
@@ -220,7 +237,7 @@ function Tabla({ filas, total }: { filas: FilaTabla[]; total: { etiqueta: string
         <span className="text-right md:text-left">Con Retail</span>
       </div>
       {filas.map(f => <Linea key={f.clave} {...f} />)}
-      <Linea clave={-1} etiqueta={total.etiqueta} eq={total.eq} rt={total.rt} marcada={false} total />
+      <Linea clave={-1} etiqueta={total.etiqueta} rango={total.rango} eq={total.eq} rt={total.rt} marcada={false} total />
     </div>
   )
 }
