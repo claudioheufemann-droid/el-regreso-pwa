@@ -3,7 +3,7 @@
 import { Lock, Store } from 'lucide-react'
 import {
   type Acumulado, type FilaMeta, type Escala, type RetailCorte,
-  clp, litros, pct, pctTxt, acumular, nivelPorPct, NIVEL_COLOR, NIVEL_BARRA,
+  clp, litros, pct, pctTxt, acumular, nivelPorPct, rangoFechas, NIVEL_COLOR, NIVEL_BARRA,
 } from './tipos'
 import { Barra, PctNivel, PorEntregar, Titulo, ORO } from './ui'
 
@@ -83,7 +83,10 @@ export default function AporteRetail({
             <Leyenda />
           </div>
           <Tabla
-            filas={transcurridas.map(f => ({ clave: f.n, etiqueta: f.ref.corto, eq: f.eq, rt: f.rt, marcada: f.n === elegido }))}
+            filas={transcurridas.map(f => ({
+              clave: f.n, etiqueta: f.ref.corto, rango: rangoFechas(f.ref.fechaInicio, f.ref.fechaFin),
+              eq: f.eq, rt: f.rt, marcada: f.n === elegido,
+            }))}
             total={{ etiqueta: 'Acum.', eq: acumEq, rt: acumRt }}
           />
         </div>
@@ -199,9 +202,10 @@ function Leyenda() {
 // ── Tabla semana a semana ────────────────────────────────────────────────────
 
 // Móvil: la meta va bajo la venta del equipo ("de $X") para no pasar de 4 columnas en 390px.
-const COLS = 'grid-cols-[40px_minmax(0,1fr)_minmax(0,1fr)_64px] md:grid-cols-[56px_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_76px_72px_minmax(0,1.2fr)]'
+// 1ª columna: "S1" + su rango de fechas debajo (puede partir en dos líneas: "27 oct –" / "2 nov").
+const COLS = 'grid-cols-[58px_minmax(0,1fr)_minmax(0,1fr)_64px] md:grid-cols-[92px_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_76px_72px_minmax(0,1.2fr)]'
 
-interface FilaTabla { clave: number; etiqueta: string; eq: Acumulado; rt: RetailCorte | null; marcada: boolean }
+interface FilaTabla { clave: number; etiqueta: string; rango?: string; eq: Acumulado; rt: RetailCorte | null; marcada: boolean }
 
 function Tabla({ filas, total }: { filas: FilaTabla[]; total: { etiqueta: string; eq: Acumulado; rt: RetailCorte | null } }) {
   return (
@@ -221,7 +225,7 @@ function Tabla({ filas, total }: { filas: FilaTabla[]; total: { etiqueta: string
   )
 }
 
-function Linea({ etiqueta, eq, rt, marcada, total = false }: FilaTabla & { total?: boolean }) {
+function Linea({ etiqueta, rango, eq, rt, marcada, total = false }: FilaTabla & { total?: boolean }) {
   const rNeto = rt?.neto ?? 0
   const pEq = pct(eq.realNeto, eq.metaNeto)
   const pTotal = pct(eq.realNeto + rNeto, eq.metaNeto)
@@ -231,7 +235,10 @@ function Linea({ etiqueta, eq, rt, marcada, total = false }: FilaTabla & { total
         total ? 'border-t border-t-[var(--cc-line)] font-bold' : ''
       } ${marcada ? 'bg-[var(--cc-gold-soft)]' : ''}`}
     >
-      <span className={`pl-1 font-bold ${marcada || total ? 'text-[var(--cc-ink)]' : 'text-[var(--cc-ink-2)]'}`}>{etiqueta}</span>
+      <span className="flex min-w-0 flex-col pl-1">
+        <span className={`font-bold ${marcada || total ? 'text-[var(--cc-ink)]' : 'text-[var(--cc-ink-2)]'}`}>{etiqueta}</span>
+        {rango && <span className="text-[11px] font-medium leading-tight text-[var(--cc-ink-3)]">{rango}</span>}
+      </span>
       <span className="hidden truncate font-medium text-[var(--cc-ink-2)] md:block">{clp(eq.metaNeto)}</span>
       <span className="flex min-w-0 flex-col">
         <span className="truncate font-bold text-[var(--cc-ink)]">{clp(eq.realNeto)}</span>
