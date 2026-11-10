@@ -297,7 +297,9 @@ function MetasVendedor({ r }: { r: FilaRanking }) {
 
 // ── Matriz de semáforos ──────────────────────────────────────────────────────
 
-const MARCAS = new Set([1, 5, 10, 15, 20, 25])
+// Las semanas se parten en el corte 23/24 (semanas cortas con número propio), así que
+// la temporada tiene ~30: el número exacto sale de los datos.
+const MARCAS = new Set([1, 5, 10, 15, 20, 25, 30])
 
 function MatrizSemaforos({
   ranking, semanaActual, semanaElegida, porMes, onSemana, onElegir,
@@ -307,7 +309,7 @@ function MatrizSemaforos({
 }) {
   const marcada = (s: number) => s === semanaActual || s === semanaElegida
   const cerca = (s: number) => [semanaActual, semanaElegida].some(m => m !== null && Math.abs(s - m) <= 2)
-  const numSemanas = Math.max(porMes ? 1 : 25, ...ranking.flatMap(r => r.enEscala.map(f => f.semana)))
+  const numSemanas = Math.max(1, ...ranking.flatMap(r => r.enEscala.map(f => f.semana)))
   const cortos = new Map(ranking.flatMap(r => r.enEscala.map(f => [f.semana, f.corto] as const)))
   const semanas = Array.from({ length: numSemanas }, (_, i) => i + 1)
   const columnas = `minmax(64px, 140px) repeat(${numSemanas}, minmax(0, 1fr))`

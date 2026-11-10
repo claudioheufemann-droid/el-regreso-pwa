@@ -112,7 +112,7 @@ export function opcionesSemana(filas: FilaMeta[]): SemanaOpcion[] {
 }
 
 /**
- * [Semana | Mes 24→23]  ‹ Semana 3 · 19–25 oct › — el interruptor cambia la
+ * [Semana | Mes 24→23]  ‹ Semana 3 · 19–23 oct › — el interruptor cambia la
  * escala (semanas del plan o períodos comerciales 24→23); las flechas se mueven
  * de a uno y un <select> nativo invisible encima del rótulo permite saltar
  * directo (en el teléfono abre la rueda del sistema). "Ir a hoy" aparece solo
@@ -388,7 +388,7 @@ export function TablaSemanas({
 }) {
   const [todas, setTodas] = useState(false)
   const porMes = semanas[0]?.tipo === 'periodo'
-  // Los 6 meses caben siempre; solo las 25 semanas se recortan.
+  // Los 6 meses caben siempre; solo las semanas (~30) se recortan.
   const limite = porMes ? Infinity : Math.max(semanaTope(semanas), 1) + SEMANAS_ADELANTE
   const ocultas = semanas.filter(f => f.semana > limite)
   const visibles = todas ? semanas : semanas.filter(f => f.semana <= limite)
