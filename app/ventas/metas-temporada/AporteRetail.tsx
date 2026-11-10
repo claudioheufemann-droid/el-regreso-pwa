@@ -53,6 +53,13 @@ export default function AporteRetail({
   const acumEq = acumular(enTabla.flatMap(f => porCorte.get(f.n) ?? []))
   const acumRt = sumarRetail(enTabla.map(f => f.rt))
 
+  // Meta del período completo (pedido de Claudio, 2026-11-10): todas sus semanas,
+  // también las que no parten. Ninguna semana cruza el 23/24, así que la suma calza.
+  const metaPeriodo = periodoTabla
+    ? acumular(filas.filter(f => periodoComercial(f.ref.fechaInicio).clave === periodoTabla.clave)
+        .flatMap(f => porCorte.get(f.n) ?? []))
+    : null
+
   return (
     <section
       className="mb-5 rounded-[14px] border border-[var(--cc-line)] bg-[var(--cc-card-2)] p-4 md:p-5"
@@ -106,6 +113,14 @@ export default function AporteRetail({
             }))}
             total={{ etiqueta: 'Acum.', rango: periodoTabla?.nombre, eq: acumEq, rt: acumRt }}
           />
+          {periodoTabla && metaPeriodo && (
+            <MetaPeriodo
+              nombre={periodoTabla.nombre}
+              meta={metaPeriodo}
+              ventaNeto={acumEq.realNeto + acumRt.neto}
+              ventaLitros={acumEq.realLitros + acumRt.litros}
+            />
+          )}
         </div>
       )}
     </section>
@@ -288,6 +303,29 @@ function Linea({ etiqueta, rango, eq, rt, marcada, total = false }: FilaTabla & 
           <span className="mt-1 block w-[56px] md:hidden"><BarraDoble equipo={pEq} total={pTotal} alto={4} /></span>
         </span>
       </span>
+    </div>
+  )
+}
+
+/** Pie de la tabla: meta del período 24→23 completo contra lo que llevan Equipo + Retail. */
+function MetaPeriodo({ nombre, meta, ventaNeto, ventaLitros }: { nombre: string; meta: Acumulado; ventaNeto: number; ventaLitros: number }) {
+  const p = pct(ventaNeto, meta.metaNeto)
+  const falta = meta.metaNeto - ventaNeto
+  const fuerte = 'font-bold text-[var(--cc-ink)]'
+  return (
+    <div className="mt-3 flex flex-col gap-1 rounded-[10px] bg-[var(--cc-neutral-soft)] px-3 py-2.5 text-[13px] font-medium tabular-nums text-[var(--cc-ink-2)] md:flex-row md:items-center md:justify-between md:gap-4">
+      <p>
+        Meta {nombre}: <strong className={`text-[15px] ${fuerte}`}>{clp(meta.metaNeto)}</strong>
+        <span> · {litros(meta.metaLitros)} L</span>
+      </p>
+      <p>
+        Equipo + Retail <strong className={fuerte}>{clp(ventaNeto)}</strong> ({litros(ventaLitros)} L) ·{' '}
+        <PctNivel valor={p} />
+        {' · '}
+        {falta > 0
+          ? <>faltan <strong className={fuerte}>{clp(falta)}</strong></>
+          : <>meta cubierta{falta < 0 && <>, sobran <strong className={fuerte}>{clp(-falta)}</strong></>}</>}
+      </p>
     </div>
   )
 }
