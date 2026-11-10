@@ -1,5 +1,5 @@
-﻿// El Regreso Control â€” Service Worker
-// Maneja push notifications + cachÃ© offline + badge de Ã­cono con nÃºmero
+// El Regreso Control — Service Worker
+// Maneja push notifications + caché offline + badge de ícono con número
 
 const CACHE_NAME = 'el-regreso-v145'
 const OFFLINE_URL = '/offline'
@@ -13,9 +13,9 @@ const STATIC_ASSETS = [
 ]
 
 // Pantallas de terreno: se precachean best-effort (una por una, sin que el
-// fallo de una tumbe a las demÃ¡s) para que un vendedor que ya abriÃ³ la app
-// con seÃ±al pueda entrar a "Nueva visita" aunque despuÃ©s se quede sin
-// cobertura por completo â€” no solo cuando ya tenÃ­a la pantalla en cachÃ© por
+// fallo de una tumbe a las demás) para que un vendedor que ya abrió la app
+// con señal pueda entrar a "Nueva visita" aunque después se quede sin
+// cobertura por completo — no solo cuando ya tenía la pantalla en caché por
 // haber navegado antes.
 const TERRENO_ASSETS = [
   '/terreno',
@@ -26,7 +26,7 @@ const TERRENO_ASSETS = [
   '/terreno/ruta',
 ]
 
-// â”€â”€ Install â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Install ────────────────────────────────────────────────────────────
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) =>
@@ -39,7 +39,7 @@ self.addEventListener('install', (event) => {
   self.skipWaiting()
 })
 
-// â”€â”€ Activate â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Activate ───────────────────────────────────────────────────────────
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
@@ -49,7 +49,7 @@ self.addEventListener('activate', (event) => {
   self.clients.claim()
 })
 
-// â”€â”€ Fetch: network-first â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Fetch: network-first ───────────────────────────────────────────────
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return
   const url = new URL(event.request.url)
@@ -76,7 +76,7 @@ self.addEventListener('fetch', (event) => {
   )
 })
 
-// â”€â”€ Helpers de badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Helpers de badge ──────────────────────────────────────────────────
 async function actualizarBadge() {
   try {
     const notifs = await self.registration.getNotifications()
@@ -91,7 +91,7 @@ async function actualizarBadge() {
   } catch {}
 }
 
-// â”€â”€ Push: mostrar notificaciÃ³n + badge numÃ©rico en Ã­cono â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Push: mostrar notificación + badge numérico en ícono ──────────────
 self.addEventListener('push', (event) => {
   let data = {
     title: 'El Regreso Control',
@@ -112,7 +112,7 @@ self.addEventListener('push', (event) => {
     : (data.url || '/')
 
   event.waitUntil(
-    // 1. Mostrar la notificaciÃ³n
+    // 1. Mostrar la notificación
     self.registration.showNotification(data.title, {
       body: data.body,
       icon: '/icons/icon-192x192.png',
@@ -126,16 +126,16 @@ self.addEventListener('push', (event) => {
         { action: 'dismiss', title: 'Ignorar' },
       ] : [],
     })
-    // 2. DespuÃ©s de mostrarla, actualizar el badge con el total acumulado
+    // 2. Después de mostrarla, actualizar el badge con el total acumulado
     .then(() => actualizarBadge())
   )
 })
 
-// â”€â”€ Click en notificaciÃ³n â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Click en notificación ──────────────────────────────────────────────
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
   if (event.action === 'dismiss') {
-    // Solo actualizar el badge (bajÃ³ en 1 al cerrar)
+    // Solo actualizar el badge (bajó en 1 al cerrar)
     event.waitUntil(actualizarBadge())
     return
   }
@@ -145,10 +145,10 @@ self.addEventListener('notificationclick', (event) => {
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true })
       .then((clientList) => {
-        // Recalcular badge (la notif ya se cerrÃ³)
+        // Recalcular badge (la notif ya se cerró)
         actualizarBadge()
 
-        // Si ya hay ventana abierta, navegar ahÃ­
+        // Si ya hay ventana abierta, navegar ahí
         for (const client of clientList) {
           if (client.url.includes(location.origin) && 'focus' in client) {
             client.navigate(url)
@@ -162,7 +162,7 @@ self.addEventListener('notificationclick', (event) => {
   )
 })
 
-// â”€â”€ Cuando la app se abre â†’ limpiar badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Cuando la app se abre → limpiar badge ─────────────────────────────
 self.addEventListener('message', (event) => {
   if (event.data?.type === 'CLEAR_BADGE') {
     if (self.navigator?.clearAppBadge) {
@@ -170,7 +170,7 @@ self.addEventListener('message', (event) => {
     }
   }
   if (event.data?.type === 'APP_OPENED') {
-    // El usuario abriÃ³ la app: limpiar badge y cerrar todas las notifs visibles
+    // El usuario abrió la app: limpiar badge y cerrar todas las notifs visibles
     event.waitUntil(
       self.registration.getNotifications().then(notifs => {
         notifs.forEach(n => n.close())
