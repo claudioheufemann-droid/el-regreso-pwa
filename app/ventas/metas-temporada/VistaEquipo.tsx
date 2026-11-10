@@ -101,16 +101,6 @@ export default function VistaEquipo({
         {semanaRef && <ResumenSemana prefijo="Equipo · " fila={semanaRef} suma={semanaEquipo} hoy={hoy} />}
       </section>
 
-      {retail.length > 0 && (
-        <AporteRetail
-          retail={retail.filter(r => r.tipo === escala)}
-          equipo={todasEscala}
-          escala={escala}
-          elegido={semana}
-          nombre={semanaRef?.nombre ?? ''}
-        />
-      )}
-
       <section className="border-t border-[var(--cc-line)] pb-5 pt-5">
         <Titulo
           extra={
@@ -131,6 +121,17 @@ export default function VistaEquipo({
         </Titulo>
         <TablaRanking ranking={ordenado} nombre={semanaRef?.nombre ?? ''} />
       </section>
+
+      {/* Colchón Retail (sólo gerencia) va bajo el ranking: primero los vendedores, después el colchón. */}
+      {retail.length > 0 && (
+        <AporteRetail
+          retail={retail.filter(r => r.tipo === escala)}
+          equipo={todasEscala}
+          escala={escala}
+          elegido={semana}
+          nombre={semanaRef?.nombre ?? ''}
+        />
+      )}
 
       <MatrizSemaforos
         ranking={ordenado}
