@@ -112,7 +112,8 @@ export default function MetasTemporadaClient({
               <div
                 role="tablist"
                 aria-label="Ver metas de"
-                className="flex w-full gap-0.5 rounded-[14px] bg-[#EEEAE2] p-1 md:w-auto md:gap-1"
+                // Móvil: las pestañas pasan a 2 filas en vez de cortar "Metrop…".
+                className="flex w-full flex-wrap gap-0.5 rounded-[14px] bg-[#EEEAE2] p-1 md:w-auto md:flex-nowrap md:gap-1"
               >
                 <Pestana activa={!seleccionado} onClick={() => elegir(EQUIPO)}>Equipo</Pestana>
                 {vendedores.map(v => (
@@ -144,7 +145,7 @@ function Pestana({ activa, onClick, children }: { activa: boolean; onClick: () =
       // Colores por clase, no inline: las reglas de contraste de [data-theme="light"]
       // (globals.css) reescriben cualquier `color:#FFFFFF` inline y el texto activo
       // quedaba oscuro sobre fondo oscuro.
-      className={`min-h-[44px] min-w-0 flex-1 truncate rounded-[10px] px-1 text-[13px] font-bold tracking-[-0.01em] sm:px-3 sm:text-[14px] md:min-w-[112px] md:flex-none md:px-5 md:text-[16px] ${
+      className={`min-h-[44px] flex-auto whitespace-nowrap rounded-[10px] px-3 text-[14px] font-bold tracking-[-0.01em] md:min-w-[112px] md:flex-none md:px-5 md:text-[16px] ${
         activa
           ? 'bg-[var(--cc-ink)] text-[var(--cc-on-gold)] shadow-[0_1px_3px_rgba(17,13,9,0.25)]'
           : 'text-[var(--cc-ink-2)] hover:bg-white/60 hover:text-[var(--cc-ink)]'

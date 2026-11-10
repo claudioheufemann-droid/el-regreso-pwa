@@ -69,16 +69,19 @@ export function Titulo({ children, extra }: { children: React.ReactNode; extra?:
 
 export function EncabezadoSemana({ prefijo, fila, nivel }: { prefijo?: string; fila: FilaMeta; nivel: Nivel | null }) {
   return (
-    <div className="mb-4 flex items-center justify-between gap-3">
+    <div className="mb-4 flex items-start justify-between gap-3 md:items-center">
+      {/* Móvil: título en una línea y fechas + estado debajo (antes la fecha quedaba partida). */}
       <p className="min-w-0 text-[var(--cc-ink)]">
-        <span className="text-[22px] font-bold tracking-[-0.02em]">{prefijo ?? ''}{fila.nombre}</span>
-        <span className="text-[16px] font-medium text-[var(--cc-ink-2)]"> · {rangoFechas(fila.fechaInicio, fila.fechaFin)}</span>
-        <span className="ml-3 inline-flex items-center gap-1.5 align-middle text-[13px] font-medium text-[var(--cc-ink-2)]">
-          <span
-            className="size-2 rounded-full"
-            style={{ background: fila.estado === 'en_curso' ? 'var(--cc-gold)' : 'var(--cc-neutral)' }}
-          />
-          {fila.estado === 'en_curso' ? 'En curso' : fila.estado === 'cerrada' ? 'Cerrada' : 'Por venir'}
+        <span className="text-[21px] font-bold leading-tight tracking-[-0.02em] md:text-[22px]">{prefijo ?? ''}{fila.nombre}</span>
+        <span className="mt-0.5 block text-[15px] font-medium text-[var(--cc-ink-2)] md:mt-0 md:inline md:text-[16px]">
+          <span className="hidden md:inline"> · </span>{rangoFechas(fila.fechaInicio, fila.fechaFin)}
+          <span className="ml-3 inline-flex items-center gap-1.5 align-middle text-[13px] font-medium text-[var(--cc-ink-2)]">
+            <span
+              className="size-2 rounded-full"
+              style={{ background: fila.estado === 'en_curso' ? 'var(--cc-gold)' : 'var(--cc-neutral)' }}
+            />
+            {fila.estado === 'en_curso' ? 'En curso' : fila.estado === 'cerrada' ? 'Cerrada' : 'Por venir'}
+          </span>
         </span>
       </p>
       <ChipNivel nivel={nivel} />
@@ -278,7 +281,7 @@ export function PorEntregar({ monto, className = '' }: { monto: number; classNam
   return (
     <span className={`inline-flex min-w-0 items-center gap-1.5 text-[13px] font-medium tabular-nums text-[var(--cc-ink-2)] ${className}`}>
       <Truck size={13} className="shrink-0 text-[var(--cc-gold)]" />
-      <span className="truncate">Incluye <strong className="font-bold text-[var(--cc-ink)]">{clp(monto)}</strong> por entregar</span>
+      <span className="min-w-0">Incluye <strong className="font-bold text-[var(--cc-ink)]">{clp(monto)}</strong> por entregar</span>
     </span>
   )
 }
@@ -440,11 +443,12 @@ function FilaSemana({ fila, abierta, onToggle }: { fila: FilaMeta; abierta: bool
           <span className="truncate text-[13px] font-medium text-[var(--cc-ink-2)] md:text-[14px]">
             {rangoFechas(fila.fechaInicio, fila.fechaFin)}{enCurso ? ' · En curso' : ''}
           </span>
-          <span className="truncate text-[14px] font-medium tabular-nums text-[var(--cc-ink-2)]">
+          <span className="min-w-0 text-[14px] font-medium tabular-nums text-[var(--cc-ink-2)] md:truncate">
             {futura ? (
               <>Meta <span className="font-semibold text-[var(--cc-ink)]">{clp(fila.metaNeto)}</span></>
             ) : (
-              <><strong className="font-bold text-[var(--cc-ink)]">{clp(fila.realNeto)}</strong> / {clp(fila.metaNeto)}</>
+              // En móvil la meta baja de línea en vez de cortarse con "…".
+              <><strong className="font-bold text-[var(--cc-ink)]">{clp(fila.realNeto)}</strong> <span className="whitespace-nowrap">/ {clp(fila.metaNeto)}</span></>
             )}
           </span>
         </span>

@@ -243,7 +243,83 @@ interface FilaTabla { clave: number; etiqueta: string; rango?: string; eq: Acumu
 
 function Tabla({ filas, total }: { filas: FilaTabla[]; total: { etiqueta: string; rango?: string; eq: Acumulado; rt: RetailCorte | null } }) {
   return (
-    <div>
+    <>
+      {/* Móvil: una tarjeta por semana con las 8 columnas de escritorio (antes se cortaban con "…"). */}
+      <div className="flex flex-col md:hidden">
+        {filas.map(f => <TarjetaSemana key={f.clave} {...f} />)}
+        <TarjetaSemana clave={-1} etiqueta={total.etiqueta} rango={total.rango} eq={total.eq} rt={total.rt} marcada={false} total />
+      </div>
+      <TablaEscritorio filas={filas} total={total} />
+    </>
+  )
+}
+
+/**
+ *  S6  2–8 nov                          107%
+ *                                  con Retail
+ *  ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
+ *  EQUIPO              RETAIL
+ *  $5.793.639  55%     $5.560.659  +53%
+ *  1.234,5 L           1.619,8 L
+ *  META                EQUIPO + RETAIL
+ *  $10.530.000         $11.354.298 · 2.854,3 L
+ */
+function TarjetaSemana({ etiqueta, rango, eq, rt, marcada, total = false }: FilaTabla & { total?: boolean }) {
+  const rNeto = rt?.neto ?? 0
+  const rLitros = rt?.litros ?? 0
+  const pEq = pct(eq.realNeto, eq.metaNeto)
+  const pTotal = pct(eq.realNeto + rNeto, eq.metaNeto)
+  const rotulo = 'text-[11px] font-semibold uppercase tracking-[0.04em] text-[var(--cc-ink-3)]'
+  const monto = 'text-[15px] font-bold text-[var(--cc-ink)]'
+  const sub = 'text-[12px] font-medium text-[var(--cc-ink-2)]'
+  return (
+    <div
+      className={`-mx-2 flex flex-col gap-2 rounded-[10px] px-2 py-3 tabular-nums ${
+        total ? 'mt-1 border-t-2 border-[var(--cc-line)]' : 'border-b border-[var(--cc-line-soft)]'
+      } ${marcada ? 'bg-[var(--cc-gold-soft)]' : ''}`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <p className="min-w-0 text-[var(--cc-ink)]">
+          <span className="text-[16px] font-bold">{total ? 'Acumulado' : etiqueta}</span>
+          {rango && <span className="block text-[12px] font-medium text-[var(--cc-ink-2)]">{rango}</span>}
+        </p>
+        <p className="flex shrink-0 flex-col items-end leading-tight">
+          <PctNivel valor={pTotal} className="text-[20px]" />
+          <span className={sub}>con Retail</span>
+        </p>
+      </div>
+      <BarraDoble equipo={pEq} total={pTotal} alto={6} />
+      <div className="grid grid-cols-2 gap-x-3 gap-y-2.5">
+        <div className="min-w-0">
+          <p className={rotulo}>Equipo</p>
+          <p className={monto}>{clp(eq.realNeto)}</p>
+          <p className={sub}>{litros(eq.realLitros)} L · <PctNivel valor={pEq} /></p>
+        </div>
+        <div className="min-w-0">
+          <p className={rotulo}>Retail</p>
+          <p className={monto}>{clp(rNeto)}</p>
+          <p className={sub}>
+            {litros(rLitros)} L · <span className="font-bold text-[var(--m-oro-texto)]">+{pctTxt(pct(rNeto, eq.metaNeto))}</span>
+          </p>
+        </div>
+        <div className="min-w-0">
+          <p className={rotulo}>Meta</p>
+          <p className="text-[15px] font-semibold text-[var(--cc-ink-2)]">{clp(eq.metaNeto)}</p>
+          <p className={sub}>{litros(eq.metaLitros)} L</p>
+        </div>
+        <div className="min-w-0">
+          <p className={rotulo}>Equipo + Retail</p>
+          <p className={monto}>{clp(eq.realNeto + rNeto)}</p>
+          <p className={sub}>{litros(eq.realLitros + rLitros)} L</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function TablaEscritorio({ filas, total }: { filas: FilaTabla[]; total: { etiqueta: string; rango?: string; eq: Acumulado; rt: RetailCorte | null } }) {
+  return (
+    <div className="hidden md:block">
       <div className={`grid ${COLS} gap-x-3 border-b border-[var(--cc-line)] pb-1.5 text-[11px] font-semibold uppercase tracking-[0.04em] text-[var(--cc-ink-3)]`}>
         <span />
         <span className="hidden md:block">Meta</span>

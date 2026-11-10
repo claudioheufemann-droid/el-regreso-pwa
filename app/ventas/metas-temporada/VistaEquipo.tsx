@@ -104,13 +104,13 @@ export default function VistaEquipo({
       <section className="border-t border-[var(--cc-line)] pb-5 pt-5">
         <Titulo
           extra={
-            <div className="flex items-center gap-1">
+            <div className="flex flex-wrap items-center gap-1">
               <BotonOrden activo={orden === 'semana'} desc={desc} onClick={() => cambiarOrden('semana')}>{escala === 'periodo' ? '% mes' : '% semana'}</BotonOrden>
               <BotonOrden activo={orden === 'acumulado'} desc={desc} onClick={() => cambiarOrden('acumulado')}>% acumulado</BotonOrden>
               <button
                 type="button"
                 onClick={() => exportarCsv(ordenado)}
-                className="ml-1 inline-flex min-h-[34px] items-center gap-1.5 rounded-[8px] border border-[var(--cc-line)] px-3 text-[13px] font-bold text-[var(--cc-ink)] hover:bg-[var(--cc-card-2)]"
+                className="ml-1 inline-flex min-h-[34px] items-center gap-1.5 whitespace-nowrap rounded-[8px] border border-[var(--cc-line)] px-3 text-[13px] font-bold text-[var(--cc-ink)] hover:bg-[var(--cc-card-2)]"
               >
                 <Download size={13} className="text-[var(--cc-gold)]" /> CSV
               </button>
@@ -158,7 +158,7 @@ function BotonOrden({ activo, desc, onClick, children }: { activo: boolean; desc
       type="button"
       onClick={onClick}
       aria-pressed={activo}
-      className="inline-flex min-h-[34px] items-center gap-1 rounded-[8px] px-2.5 text-[13px] font-bold transition-colors"
+      className="inline-flex min-h-[34px] items-center gap-1 whitespace-nowrap rounded-[8px] px-2.5 text-[13px] font-bold transition-colors"
       style={{
         background: activo ? 'var(--cc-gold-soft)' : 'transparent',
         color: activo ? 'var(--m-oro-texto)' : 'var(--cc-ink-2)',
@@ -172,8 +172,9 @@ function BotonOrden({ activo, desc, onClick, children }: { activo: boolean; desc
 
 // ── Ranking ──────────────────────────────────────────────────────────────────
 
+// Sólo escritorio: en móvil cada vendedor es una tarjeta apilada (FilaRankingMovil).
 const COLS_RANKING =
-  'grid-cols-[20px_minmax(0,1fr)_auto_16px] lg:grid-cols-[24px_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,0.8fr)_72px_minmax(0,1.1fr)_64px_20px]'
+  'lg:grid-cols-[24px_minmax(0,1.2fr)_minmax(0,1.2fr)_minmax(0,0.8fr)_72px_minmax(0,1.1fr)_64px_20px]'
 
 function TablaRanking({ ranking, nombre }: { ranking: FilaRanking[]; nombre: string }) {
   // Tocar una región abre a quién le vendió (y el cliente nuevo); "Ver metas de…" despliega sus metas ahí mismo.
@@ -199,17 +200,20 @@ function TablaRanking({ ranking, nombre }: { ranking: FilaRanking[]; nombre: str
             type="button"
             onClick={() => setAbierto(abierto === r.userId ? null : r.userId)}
             aria-expanded={abierto === r.userId}
-            className={`grid w-full ${COLS_RANKING} min-h-[60px] items-center gap-x-4 border-b border-[var(--cc-line-soft)] px-3 py-2.5 text-left hover:bg-[var(--cc-card-2)] lg:min-h-[52px] lg:py-2 ${abierto === r.userId ? 'bg-[var(--cc-card-2)]' : ''}`}
+            className={`w-full border-b border-[var(--cc-line-soft)] px-3 py-3 text-left hover:bg-[var(--cc-card-2)] lg:grid ${COLS_RANKING} lg:min-h-[52px] lg:items-center lg:gap-x-4 lg:py-2 ${abierto === r.userId ? 'bg-[var(--cc-card-2)]' : ''}`}
           >
-            <span className="text-[14px] font-bold tabular-nums text-[var(--cc-ink-3)]">{i + 1}</span>
+            {/* Móvil: tarjeta apilada, sin cortar nada con "…" (misma info que escritorio). */}
+            <FilaRankingMovil r={r} pos={i + 1} abierta={abierto === r.userId} />
 
-            <span className="flex min-w-0 flex-col lg:contents">
+            <span className="hidden text-[14px] font-bold tabular-nums text-[var(--cc-ink-3)] lg:block">{i + 1}</span>
+
+            <span className="hidden lg:contents">
               <span className="min-w-0">
                 <span className="block truncate text-[15px] font-bold text-[var(--cc-ink)]">{etiquetaVendedor(r.vendedor)}</span>
                 <span className="block truncate text-[13px] font-medium text-[var(--cc-ink-2)]">{r.territorio}</span>
               </span>
               <span className="flex min-w-0 flex-col">
-                <span className="truncate text-[13px] font-medium tabular-nums text-[var(--cc-ink-2)] sm:text-[14px]">
+                <span className="truncate text-[14px] font-medium tabular-nums text-[var(--cc-ink-2)]">
                   {!a ? '—' : futura ? (
                     <>Meta <strong className="font-bold text-[var(--cc-ink)]">{clp(a.metaNeto)}</strong></>
                   ) : (
@@ -218,14 +222,10 @@ function TablaRanking({ ranking, nombre }: { ranking: FilaRanking[]; nombre: str
                 </span>
                 {a && !futura && <PorEntregar monto={a.realNetoPorEntregar} className="text-[12px]" />}
               </span>
-              <span className="hidden lg:block">{a && !futura && <BarraNivel valor={a.pctNeto} alto={7} />}</span>
-              {/* En móvil, el acumulado va en una tercera línea */}
-              <span className="truncate text-[12px] font-medium tabular-nums text-[var(--cc-ink-2)] lg:hidden">
-                {ap ? <>Acum. al {fechaCorta(ap.corte)} {clp(ap.realNeto)} / {clp(ap.metaNeto)} · <PctNivel valor={pAcum} /></> : 'Acum. —'}
-              </span>
+              <span className="block">{a && !futura && <BarraNivel valor={a.pctNeto} alto={7} />}</span>
             </span>
 
-            <span className="flex flex-col items-end gap-0.5 lg:items-start">
+            <span className="hidden flex-col items-start gap-0.5 lg:flex">
               <span
                 className="flex items-center gap-1.5 text-[15px] font-bold tabular-nums"
                 style={{ color: nivel ? NIVEL_COLOR[nivel] : 'var(--cc-ink-3)' }}
@@ -233,9 +233,6 @@ function TablaRanking({ ranking, nombre }: { ranking: FilaRanking[]; nombre: str
               >
                 <span className="size-2.5 rounded-full" style={{ background: nivel ? NIVEL_BARRA[nivel] : 'var(--cc-neutral)' }} />
                 {a && !futura ? pctTxt(a.pctNeto) : '—'}
-              </span>
-              <span className="text-[12px] font-medium tabular-nums text-[var(--cc-ink-2)] lg:hidden">
-                {!a ? '' : futura ? `meta ${entero(a.metaClientes)} nuevos` : `${entero(a.realClientes)}/${entero(a.metaClientes)} nuevos`}
               </span>
             </span>
 
@@ -260,7 +257,7 @@ function TablaRanking({ ranking, nombre }: { ranking: FilaRanking[]; nombre: str
             </span>
             <ChevronDown
               size={17}
-              className={`justify-self-end text-[var(--cc-ink-2)] transition-transform ${abierto === r.userId ? 'rotate-180' : ''}`}
+              className={`hidden justify-self-end text-[var(--cc-ink-2)] transition-transform lg:block ${abierto === r.userId ? 'rotate-180' : ''}`}
             />
           </button>
           {abierto === r.userId && a && (
@@ -277,6 +274,85 @@ function TablaRanking({ ranking, nombre }: { ranking: FilaRanking[]; nombre: str
         )
       })}
     </div>
+  )
+}
+
+/**
+ * Ranking en móvil: una tarjeta por vendedor con la misma información que las
+ * 8 columnas de escritorio, en líneas que se ajustan al ancho (nada con "…").
+ *   1  Región Metropolitana                ● 52%  ˅
+ *      Metropolitana · 3/4 clientes nuevos
+ *      ▬▬▬▬▬▬▬▬░░░░░░░░
+ *      $1.577.441 de $3.030.000
+ *      🚚 Incluye $… por entregar
+ *      ┌ Acum. Noviembre al 10 nov ─────── 48% ┐
+ *      └ $4.363.334 de $9.000.000 (meta a la fecha)
+ */
+function FilaRankingMovil({ r, pos, abierta }: { r: FilaRanking; pos: number; abierta: boolean }) {
+  const a = r.actual
+  const futura = a?.estado === 'futura'
+  const nivel = a ? nivelDeSemana(a) : null
+  const ap = r.acumPeriodo
+  const pAcum = ap ? pct(ap.realNeto, ap.metaNeto) : 0
+  const fuerte = 'font-bold text-[var(--cc-ink)]'
+  return (
+    <span className="flex gap-3 lg:hidden">
+      <span className="w-4 shrink-0 pt-0.5 text-[14px] font-bold tabular-nums text-[var(--cc-ink-3)]">{pos}</span>
+      <span className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <span className="flex items-start justify-between gap-2">
+          <span className="min-w-0">
+            <span className="block text-[15px] font-bold leading-snug text-[var(--cc-ink)]">{etiquetaVendedor(r.vendedor)}</span>
+            <span className="block text-[13px] font-medium text-[var(--cc-ink-2)]">
+              {r.territorio}
+              {a && (
+                <> · <span className="whitespace-nowrap">{futura
+                  ? <>meta {entero(a.metaClientes)} nuevos</>
+                  : <><strong className={fuerte}>{entero(a.realClientes)}</strong>/{entero(a.metaClientes)} nuevos</>}</span></>
+              )}
+            </span>
+          </span>
+          <span className="flex shrink-0 items-center gap-1.5">
+            <span
+              className="flex items-center gap-1.5 text-[17px] font-bold tabular-nums"
+              style={{ color: nivel ? NIVEL_COLOR[nivel] : 'var(--cc-ink-3)' }}
+              title={nivel ? NIVEL_LABEL[nivel] : undefined}
+            >
+              <span className="size-2.5 rounded-full" style={{ background: nivel ? NIVEL_BARRA[nivel] : 'var(--cc-neutral)' }} />
+              {a && !futura ? pctTxt(a.pctNeto) : '—'}
+            </span>
+            <ChevronDown size={17} className={`text-[var(--cc-ink-2)] transition-transform ${abierta ? 'rotate-180' : ''}`} />
+          </span>
+        </span>
+
+        {a && !futura && <BarraNivel valor={a.pctNeto} alto={6} />}
+
+        <span className="text-[14px] font-medium tabular-nums text-[var(--cc-ink-2)]">
+          {!a ? '—' : futura ? (
+            <>Meta <strong className={fuerte}>{clp(a.metaNeto)}</strong></>
+          ) : (
+            <><strong className={fuerte}>{clp(a.realNeto)}</strong> <span className="whitespace-nowrap">de {clp(a.metaNeto)}</span></>
+          )}
+        </span>
+        {a && !futura && <PorEntregar monto={a.realNetoPorEntregar} className="text-[12px]" />}
+
+        <span className="mt-0.5 flex flex-col gap-0.5 rounded-[8px] bg-[var(--cc-neutral-soft)] px-2.5 py-1.5 text-[12px] font-medium tabular-nums text-[var(--cc-ink-2)]">
+          {ap ? (
+            <>
+              <span className="flex items-baseline justify-between gap-2">
+                <span>Acum. {ap.nombre} al {fechaCorta(ap.corte)}</span>
+                <PctNivel valor={pAcum} className="text-[13px]" />
+              </span>
+              <span>
+                <strong className={`text-[13px] ${fuerte}`}>{clp(ap.realNeto)}</strong>{' '}
+                <span className="whitespace-nowrap">de {clp(ap.metaNeto)}</span> <span className="whitespace-nowrap">(meta a la fecha)</span>
+              </span>
+            </>
+          ) : (
+            <span>Acumulado del período —</span>
+          )}
+        </span>
+      </span>
+    </span>
   )
 }
 
