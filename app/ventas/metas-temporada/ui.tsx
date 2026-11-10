@@ -533,12 +533,21 @@ function DetalleProductos({ id, fila }: { id: string; fila: FilaMeta }) {
 
 // ── Acumulado y pie ──────────────────────────────────────────────────────────
 
-export function FranjaAcumulado({ a, etiqueta = 'Acumulado a la fecha' }: { a: Acumulado; etiqueta?: string }) {
+/**
+ * Acumulado del período 24→23 elegido: lo vendido en el período a la fecha
+ * contra la meta del mes completo (la misma "Meta Noviembre" del Colchón Retail).
+ */
+export function FranjaAcumulado({ a, periodo, quien }: { a: Acumulado; periodo: FilaMeta | null; quien?: string }) {
   const p = pct(a.realNeto, a.metaNeto)
   return (
     <section className="grid grid-cols-2 gap-y-3 border-t border-[var(--cc-line)] pt-5 lg:grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1fr)] lg:divide-x lg:divide-[var(--cc-line)]">
       <div className="col-span-2 min-w-0 lg:col-span-1 lg:pr-6">
-        <p className="mb-1 text-[14px] font-bold text-[var(--cc-ink)]">{etiqueta}</p>
+        <p className="mb-1 text-[14px] font-bold text-[var(--cc-ink)]">
+          Acumulado {quien ? `${quien} · ` : ''}{periodo?.nombre ?? 'del período'} a la fecha
+          {periodo && (
+            <span className="font-medium text-[var(--cc-ink-2)]"> · {rangoFechas(periodo.fechaInicio, periodo.fechaFin)} · meta del mes</span>
+          )}
+        </p>
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
           <p className="tabular-nums text-[var(--cc-ink-2)]">
             <span className="text-[24px] font-bold tracking-[-0.02em] text-[var(--cc-ink)]">{clp(a.realNeto)}</span>

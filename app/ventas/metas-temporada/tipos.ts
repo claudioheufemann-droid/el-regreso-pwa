@@ -267,6 +267,17 @@ export function periodoDeSemana(periodos: FilaMeta[], semana: FilaMeta, hoy: str
 }
 
 /**
+ * Período 24→23 que se está mirando (Claudio, 2026-11-10: el "acumulado a la
+ * fecha" es lo vendido en el período, no en la temporada): el mes elegido, o el
+ * que contiene la semana elegida. Sin elección, el que contiene hoy.
+ */
+export function periodoElegido(periodos: FilaMeta[], elegida: FilaMeta | null, hoy: string) {
+  if (elegida?.tipo === 'periodo') return elegida
+  if (elegida) return periodoDeSemana(periodos, elegida, hoy)
+  return periodos.find(p => p.fechaInicio <= hoy && hoy <= p.fechaFin) ?? null
+}
+
+/**
  * Acumulado del período 24→23 a la fecha: lo vendido en el período contra la
  * meta que correspondía hasta hoy. La meta de cada semana se prorratea por día
  * calendario, igual que la vista arma la meta del período, así que en un

@@ -5,7 +5,7 @@ import { ArrowDown, ArrowUp, ChevronDown, Download } from 'lucide-react'
 import {
   type FilaMeta, type Acumulado, type RetailCorte,
   clp, entero, pctTxt, pct,
-  semanaEnCurso, semanaTope, acumular, acumuladoTemporada, acumuladoPeriodo, periodoDeSemana, fechaCorta,
+  semanaEnCurso, semanaTope, acumular, acumuladoPeriodo, periodoDeSemana, periodoElegido, fechaCorta,
   nivelPorPct, nivelDeSemana, NIVEL_COLOR, NIVEL_BARRA, NIVEL_LABEL,
 } from './tipos'
 import {
@@ -31,8 +31,8 @@ interface FilaRanking extends VendedorPlan {
   enEscala: FilaMeta[]
   /** Fila de la semana/período elegido en el selector (no necesariamente el en curso). */
   actual: FilaMeta | null
-  /** Acumulado de la temporada (para el despliegue de sus metas). */
-  acum: Acumulado
+  /** Fila del período 24→23 que se mide (venta del período y meta del mes completo). */
+  periodo: FilaMeta | null
   /** Acumulado del período 24→23 que se está midiendo, a la fecha (null si aún no parte). */
   acumPeriodo: (Acumulado & { corte: string; nombre: string }) | null
 }
@@ -71,7 +71,7 @@ export default function VistaEquipo({
       const acumPeriodo = periodo && periodo.estado !== 'futura'
         ? { ...acumuladoPeriodo(periodo, v.filas, hoy), nombre: periodo.nombre }
         : null
-      return { ...v, enEscala, actual, acum: acumuladoTemporada(v.filas), acumPeriodo }
+      return { ...v, enEscala, actual, periodo, acumPeriodo }
     }),
     [vendedores, escala, semana, hoy],
   )
@@ -90,6 +90,11 @@ export default function VistaEquipo({
   }
 
   const semanaEquipo = acumular(ranking.flatMap(r => (r.actual ? [r.actual] : [])))
+  // Franja: período 24→23 de lo elegido (venta del período / meta del mes completo).
+  const todosPeriodos = vendedores.flatMap(v => v.periodos)
+  const periodoRef = periodoElegido(todosPeriodos, semanaRef, hoy)
+  const acumPeriodoEquipo = acumular(periodoRef ? todosPeriodos.filter(p => p.semana === periodoRef.semana) : [])
+  // Pie: avance de toda la temporada.
   const acumEquipo = acumular(todas.filter(f => f.semana <= tope))
   const total = acumular(todas)
 
@@ -145,7 +150,7 @@ export default function VistaEquipo({
         onElegir={onElegir}
       />
 
-      <FranjaAcumulado a={acumEquipo} etiqueta="Acumulado del equipo a la fecha" />
+      <FranjaAcumulado a={acumPeriodoEquipo} periodo={periodoRef} quien="del equipo" />
       <PieTemporada metaNeto={total.metaNeto} metaLitros={total.metaLitros} realNeto={acumEquipo.realNeto} />
     </div>
   )
@@ -366,7 +371,7 @@ function MetasVendedor({ r }: { r: FilaRanking }) {
       <p className="pb-2 text-[13px] font-bold text-[var(--cc-ink)]">{porMes ? 'Meses de la temporada (24→23)' : 'Semanas de la temporada'}</p>
       <TablaSemanas semanas={semanas} abierta={abierta} onToggle={n => setAbierta(abierta === n ? null : n)} />
       <div className="mt-4">
-        <FranjaAcumulado a={r.acum} />
+        <FranjaAcumulado a={acumular(r.periodo ? [r.periodo] : [])} periodo={r.periodo} />
       </div>
     </div>
   )

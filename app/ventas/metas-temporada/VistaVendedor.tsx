@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { AlertTriangle, Target } from 'lucide-react'
 import {
   type FilaMeta, type Escala,
-  semanaEnCurso, semanaInicial, acumuladoTemporada, acumular, dosRojasSeguidas,
+  semanaEnCurso, semanaInicial, acumuladoTemporada, acumular, dosRojasSeguidas, periodoElegido,
 } from './tipos'
 import {
   type Corte,
@@ -38,6 +38,8 @@ export default function VistaVendedor({
   const elegida = enEscala.find(f => f.semana === corte.valor) ?? enEscala.find(f => f.semana === semanaInicial(enEscala)) ?? null
   const total = acumular(semanas)
   const acumulado = acumuladoTemporada(semanas)
+  // Franja: período 24→23 de lo elegido (venta del período / meta del mes completo).
+  const periodo = periodoElegido(periodos, elegida, hoy)
   const abiertaAqui = abierta?.escala === corte.escala ? abierta.n : null
 
   return (
@@ -58,7 +60,7 @@ export default function VistaVendedor({
         />
       </section>
 
-      <FranjaAcumulado a={acumulado} />
+      <FranjaAcumulado a={acumular(periodo ? [periodo] : [])} periodo={periodo} />
       <PieTemporada metaNeto={total.metaNeto} metaLitros={total.metaLitros} realNeto={acumulado.realNeto} />
     </div>
   )
