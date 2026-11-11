@@ -7,7 +7,7 @@ import { Search, X, Download, ChevronDown, ChevronLeft, MapPin, ExternalLink, Ro
 import { createClient } from '@/lib/supabase/client'
 import {
   ACTIVO_DIAS, CARTERAS, CARTERA_OTROS, infoCartera,
-  type CarteraKey, type ClienteCartera, type DetalleCliente, type EstadoCliente,
+  type CarteraKey, type ClienteCartera, type CompraHistorial, type DetalleCliente, type EstadoCliente,
 } from './carteraTipos'
 
 interface Props {
@@ -654,7 +654,6 @@ function FichaCliente({ c }: { c: ClienteCartera }) {
   const [detalle, setDetalle] = useState<DetalleCliente | null>(() => cacheDetalle.get(c.nombre) ?? null)
   const [error, setError] = useState<string | null>(null)
   const [intento, setIntento] = useState(0)
-  const [sel, setSel] = useState(0)
   const cargando = !detalle && !error
 
   // Carga al abrir (una sola vez por cliente gracias al caché); `intento`
@@ -666,7 +665,7 @@ function FichaCliente({ c }: { c: ClienteCartera }) {
       if (!vivo) return
       if (err || !data) { setError('No se pudo cargar el historial.'); return }
       const d = data as Partial<DetalleCliente>
-      const limpio: DetalleCliente = { anios: d.anios ?? [], productos: d.productos ?? [], compras: d.compras ?? [] }
+      const limpio: DetalleCliente = { anios: d.anios ?? [], productos: d.productos ?? [], historial: d.historial ?? [] }
       cacheDetalle.set(c.nombre, limpio)
       setDetalle(limpio)
     })
@@ -675,8 +674,6 @@ function FichaCliente({ c }: { c: ClienteCartera }) {
   const reintentar = () => { setError(null); setIntento(n => n + 1) }
 
   const maxLitrosAnio = Math.max(1, ...(detalle?.anios.map(a => a.litros) ?? [1]))
-  const compraSel = detalle?.compras[sel] ?? null
-  const anioActual = new Date().getFullYear().toString()
 
   return (
     <div style={{ padding: '0 16px 16px' }}>
@@ -708,48 +705,7 @@ function FichaCliente({ c }: { c: ClienteCartera }) {
 
       {detalle && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12 }}>
-          {/* Qué compró en sus últimas compras */}
-          <Panel titulo="Qué compró">
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, padding: '0 12px 10px' }}>
-              {detalle.compras.map((p, i) => (
-                <button key={p.fecha} onClick={() => setSel(i)} style={{
-                  minHeight: 32, padding: '0 10px', borderRadius: 8, cursor: 'pointer', fontSize: 12.5, fontWeight: 700,
-                  background: sel === i ? C.blue : C.card,
-                  border: `1px solid ${sel === i ? C.blue : C.line}`,
-                  color: sel === i ? '#FFFFFF' : C.text,
-                }}>
-                  {fFecha(p.fecha).replace(/ \d{4}$/, '')}{p.fecha.slice(0, 4) !== anioActual ? ` ${p.fecha.slice(2, 4)}` : ''}
-                </button>
-              ))}
-            </div>
-            {compraSel && (
-              <>
-                <Tabla cols="minmax(0, 1fr) 70px 90px" head={['Producto', 'Litros', 'Neto']}>
-                  {compraSel.items.map((it, i) => (
-                    <FilaTabla key={i} cols="minmax(0, 1fr) 70px 90px">
-                      <span style={{ minWidth: 0 }}>
-                        <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.producto ?? '—'}</span>
-                        {it.envase && <span style={{ display: 'block', fontSize: 11.5, color: C.muted, marginTop: 1 }}>{it.envase}</span>}
-                      </span>
-                      <span style={{ textAlign: 'right', color: it.litros > 0 ? C.text : C.faint }}>{it.litros > 0 ? fLitros(it.litros) : '—'}</span>
-                      <span style={{ textAlign: 'right' }}>{fPesos(it.monto)}</span>
-                    </FilaTabla>
-                  ))}
-                </Tabla>
-                <div style={{
-                  display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 70px 90px', gap: 8, padding: '9px 12px',
-                  borderTop: `1px solid ${C.line}`, fontSize: 13, fontWeight: 800, fontVariantNumeric: 'tabular-nums',
-                }}>
-                  <span style={{ minWidth: 0 }}>
-                    Total {fFecha(compraSel.fecha)}
-                    {compraSel.pedidos && <span style={{ fontWeight: 500, color: C.muted }}> · N° {compraSel.pedidos}</span>}
-                  </span>
-                  <span style={{ textAlign: 'right' }}>{fLitros(compraSel.litros)}</span>
-                  <span style={{ textAlign: 'right' }}>{fPesos(compraSel.monto)}</span>
-                </div>
-              </>
-            )}
-          </Panel>
+          <HistorialCompras historial={detalle.historial} />
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
             <Panel titulo="Lo que más compra">
@@ -792,6 +748,118 @@ function FichaCliente({ c }: { c: ClienteCartera }) {
         </Link>
       )}
     </div>
+  )
+}
+
+// ── Historial de compras: una fila por compra con sus N° de factura; al
+// tocarla se despliega lo que llevó (pedido de Claudio, 11-nov-2026).
+const COMPRAS_VISIBLES = 10
+const COLS_COMPRA = 'minmax(0, 1fr) 64px 92px 16px'
+
+/** "Factura N° 12928" / "Facturas N° 12928 · 12930" / "Pedido N° 53363 (sin factura)". */
+function etiquetaDocs(docs: CompraHistorial['docs']): string {
+  const facturas = docs.map(d => d.factura).filter((f): f is string => !!f)
+  if (facturas.length === docs.length) {
+    return `${facturas.length > 1 ? 'Facturas' : 'Factura'} N° ${facturas.join(' · ')}`
+  }
+  if (facturas.length === 0) {
+    const pedidos = docs.map(d => d.pedidos).filter(Boolean).join(' · ')
+    return pedidos ? `Pedido N° ${pedidos} (sin factura)` : 'Sin factura'
+  }
+  return `Facturas N° ${docs.map(d => d.factura ?? `pedido ${d.pedidos ?? '—'}`).join(' · ')}`
+}
+
+function HistorialCompras({ historial }: { historial: CompraHistorial[] }) {
+  // La más reciente parte abierta: es lo que más se consulta.
+  const [abiertas, setAbiertas] = useState<Set<string>>(() => new Set(historial[0] ? [historial[0].fecha] : []))
+  const [verTodas, setVerTodas] = useState(false)
+  const visibles = verTodas ? historial : historial.slice(0, COMPRAS_VISIBLES)
+  const toggle = (fecha: string) => setAbiertas(prev => {
+    const s = new Set(prev)
+    if (s.has(fecha)) s.delete(fecha)
+    else s.add(fecha)
+    return s
+  })
+
+  return (
+    <Panel titulo={`${historial.length} ${historial.length === 1 ? 'compra' : 'compras'}`}>
+      <div style={{
+        display: 'grid', gridTemplateColumns: COLS_COMPRA, gap: 8, padding: '6px 12px', background: C.soft,
+        borderTop: `1px solid ${C.line}`, fontSize: 10.5, fontWeight: 700, color: C.faint, textTransform: 'uppercase', letterSpacing: 0.3,
+      }}>
+        <span>Fecha · factura</span>
+        <span style={{ textAlign: 'right' }}>Litros</span>
+        <span style={{ textAlign: 'right' }}>Neto</span>
+        <span />
+      </div>
+      {visibles.map(compra => {
+        const abierta = abiertas.has(compra.fecha)
+        return (
+          <div key={compra.fecha} style={{ borderTop: `1px solid ${C.line}` }}>
+            <button onClick={() => toggle(compra.fecha)} aria-expanded={abierta} className={abierta ? undefined : 'ct-row'} style={{
+              width: '100%', display: 'grid', gridTemplateColumns: COLS_COMPRA, gap: 8, alignItems: 'center',
+              padding: '9px 12px', minHeight: 48, border: 'none', cursor: 'pointer', textAlign: 'left',
+              background: abierta ? C.blueSoft : undefined, color: C.text, fontVariantNumeric: 'tabular-nums',
+            }}>
+              <span style={{ minWidth: 0 }}>
+                <span style={{ display: 'block', fontSize: 13.5, fontWeight: 700 }}>{fFecha(compra.fecha)}</span>
+                <span style={{ display: 'block', fontSize: 12, fontWeight: 600, color: C.blue, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {etiquetaDocs(compra.docs)}
+                </span>
+              </span>
+              <span style={{ textAlign: 'right', fontSize: 13, color: compra.litros > 0 ? C.text : C.faint }}>{compra.litros > 0 ? fLitros(compra.litros) : '—'}</span>
+              <span style={{ textAlign: 'right', fontSize: 13, fontWeight: 700 }}>{fPesos(compra.monto)}</span>
+              <ChevronDown size={15} color={abierta ? C.blue : C.faint} style={{ transform: abierta ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
+            </button>
+            {abierta && (
+              <div style={{ background: C.soft, borderTop: `1px solid ${C.line}`, padding: '4px 0 6px' }}>
+                {compra.docs.map((doc, di) => (
+                  <div key={doc.factura ?? `p${doc.pedidos ?? di}`}>
+                    <div style={{ padding: '7px 12px 3px 24px', fontSize: 11.5, fontWeight: 700, color: C.muted }}>
+                      {doc.factura ? `Factura N° ${doc.factura}` : 'Sin factura'}
+                      {doc.pedidos && <span style={{ fontWeight: 500 }}> · Pedido N° {doc.pedidos}</span>}
+                    </div>
+                    {doc.items.map((it, i) => (
+                      <div key={i} style={{
+                        display: 'grid', gridTemplateColumns: COLS_COMPRA, gap: 8, alignItems: 'center',
+                        padding: '5px 12px 5px 24px', fontSize: 12.5, color: C.text, fontVariantNumeric: 'tabular-nums',
+                      }}>
+                        <span style={{ minWidth: 0 }}>
+                          <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.producto ?? '—'}</span>
+                          {it.envase && <span style={{ display: 'block', fontSize: 11, color: C.muted }}>{it.envase}</span>}
+                        </span>
+                        <span style={{ textAlign: 'right', color: it.litros > 0 ? C.text : C.faint }}>{it.litros > 0 ? fLitros(it.litros) : '—'}</span>
+                        <span style={{ textAlign: 'right' }}>{fPesos(it.monto)}</span>
+                        <span />
+                      </div>
+                    ))}
+                    {compra.docs.length > 1 && (
+                      <div style={{
+                        display: 'grid', gridTemplateColumns: COLS_COMPRA, gap: 8, padding: '4px 12px 6px 24px',
+                        fontSize: 12.5, fontWeight: 800, color: C.text, fontVariantNumeric: 'tabular-nums',
+                      }}>
+                        <span>Total factura</span>
+                        <span style={{ textAlign: 'right' }}>{fLitros(doc.litros)}</span>
+                        <span style={{ textAlign: 'right' }}>{fPesos(doc.monto)}</span>
+                        <span />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      })}
+      {historial.length > COMPRAS_VISIBLES && (
+        <button onClick={() => setVerTodas(v => !v)} style={{
+          width: '100%', minHeight: 44, border: 'none', borderTop: `1px solid ${C.line}`, background: C.card,
+          color: C.blue, fontSize: 13, fontWeight: 700, cursor: 'pointer',
+        }}>
+          {verTodas ? 'Ver sólo las últimas' : `Ver las ${historial.length} compras`}
+        </button>
+      )}
+    </Panel>
   )
 }
 

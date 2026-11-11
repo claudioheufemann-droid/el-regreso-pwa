@@ -68,9 +68,14 @@ export interface ClienteCartera {
 export interface DetalleCliente {
   anios: { anio: number; litros: number; monto: number; compras: number }[]
   productos: { producto: string; litros: number; monto: number; veces: number; ultima: string }[]
-  /** Últimas compras, una por día (con los N° de pedido del ERP de ese día). */
-  compras: {
-    fecha: string; pedidos: string | null; litros: number; monto: number
-    items: { producto: string | null; envase: string | null; litros: number; monto: number }[]
-  }[]
+  /** Todas las compras, una por día, con sus facturas y lo que llevó en cada una. */
+  historial: CompraHistorial[]
+}
+
+export interface ItemCompra { producto: string | null; envase: string | null; litros: number; monto: number }
+
+export interface CompraHistorial {
+  fecha: string; litros: number; monto: number
+  /** Un documento por factura; si aún no se factura, por N° de pedido. */
+  docs: { factura: string | null; pedidos: string | null; litros: number; monto: number; items: ItemCompra[] }[]
 }
